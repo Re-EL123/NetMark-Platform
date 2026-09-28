@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#4CAF50',
+    color: '#D7263D',
   },
   subtitle: {
     marginTop: 8,
@@ -343,8 +343,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   vehicleChipSelected: {
-    backgroundColor: '#4CAF50',
-    borderColor: '#4CAF50',
+    backgroundColor: '#D7263D',
+    borderColor: '#D7263D',
   },
   vehicleChipText: {
     color: '#333',
@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   button: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#D7263D',
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   linkText: {
-    color: '#4CAF50',
+    color: '#D7263D',
     fontSize: 14,
   },
 });

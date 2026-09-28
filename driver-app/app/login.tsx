@@ -5,7 +5,7 @@ import { Link, router } from 'expo-router';
 import { AppScreen } from '@/components/AppBackground';
 import { notify } from '@/utils/notify';
 
-const logoSource = require('../assets/green-world-logo.png');
+const logoSource = require('../assets/netmark-logo.png');
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -36,7 +36,7 @@ export default function LoginScreen() {
       <View style={styles.card}>
         <View style={styles.header}>
           <Image source={logoSource} style={styles.brandLogo} resizeMode="contain" />
-          <Text style={styles.title}>Green World Driver</Text>
+          <Text style={styles.title}>NetMark Driver</Text>
           <Text style={styles.subtitle}>Login to your account</Text>
         </View>
 
@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#4CAF50',
+    color: '#D7263D',
     marginBottom: 8,
   },
   subtitle: {
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   button: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#D7263D',
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   linkText: {
-    color: '#4CAF50',
+    color: '#D7263D',
     fontSize: 14,
   },
 });

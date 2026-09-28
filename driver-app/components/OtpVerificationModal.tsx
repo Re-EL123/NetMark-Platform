@@ -65,7 +65,7 @@ export function OtpVerificationModal({
       >
         <View style={styles.modalCard}>
           <View style={styles.iconCircle}>
-            <MaterialIcons name="verified-user" size={36} color="#4CAF50" />
+            <MaterialIcons name="verified-user" size={36} color="#D7263D" />
           </View>
 
           <Text style={styles.modalTitle}>Proof of Delivery</Text>
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: "#E8F5E9",
+    backgroundColor: "#FCEFF1",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
@@ -175,14 +175,14 @@ const styles = StyleSheet.create({
     width: 180,
     height: 56,
     borderWidth: 2,
-    borderColor: "#4CAF50",
+    borderColor: "#D7263D",
     borderRadius: 12,
     textAlign: "center",
     fontSize: 32,
     fontWeight: "bold",
     letterSpacing: 12,
-    color: "#2E7D32",
-    backgroundColor: "#F1F8E9",
+    color: "#A11D2F",
+    backgroundColor: "#FCEFF1",
   },
   notesInput: {
     width: "100%",
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   confirmBtn: {
-    backgroundColor: "#4CAF50",
+    backgroundColor: "#D7263D",
   },
   confirmBtnText: {
     color: "#fff",

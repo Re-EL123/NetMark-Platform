@@ -10,9 +10,9 @@ import {
   type ViewStyle
 } from "react-native";
 
-export const APP_BACKGROUND_COLOR = "#003d1c";
+export const APP_BACKGROUND_COLOR = "#1A0A0D";
 
-const logoSource = require("../assets/green-world-logo.png");
+const logoSource = require("../assets/netmark-logo.png");
 
 type Motion = "float" | "drift" | "pulse" | "spin";
 

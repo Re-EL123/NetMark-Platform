@@ -90,7 +90,7 @@ function getStoreId(store) {
     return store?._id || store?.id || store?.storeId || '';
 }
 
-const DEFAULT_STORE_IMAGE = 'img/green-world-logo.png';
+const DEFAULT_STORE_IMAGE = 'img/netmark-logo.png';
 
 function resolveMediaUrl(url) {
     if (!url || typeof url !== 'string') {
@@ -192,7 +192,7 @@ function mergeCatalogProducts(apiProducts = []) {
             basePrice: match?.basePrice ?? featured.basePrice,
             category: match?.category || featured.category,
             imageUrl: featured.imageUrl,
-            description: match?.description || `${featured.name} — ${featured.size}. Official Green World product.`,
+            description: match?.description || `${featured.name} — ${featured.size}. Official NetMark product.`,
         };
     });
 

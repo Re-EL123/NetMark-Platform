@@ -4,13 +4,13 @@ async function loadHome() {
     content.innerHTML = `
         <section class="hero hero-animated">
             <div class="login-bg" aria-hidden="true">
-                <img src="img/green-world-logo.png" alt="" class="login-bg-logo login-bg-logo-1">
-                <img src="img/green-world-logo.png" alt="" class="login-bg-logo login-bg-logo-2">
-                <img src="img/green-world-logo.png" alt="" class="login-bg-logo login-bg-logo-3">
-                <img src="img/green-world-logo.png" alt="" class="login-bg-logo login-bg-logo-4">
+                <img src="img/netmark-logo.png" alt="" class="login-bg-logo login-bg-logo-1">
+                <img src="img/netmark-logo.png" alt="" class="login-bg-logo login-bg-logo-2">
+                <img src="img/netmark-logo.png" alt="" class="login-bg-logo login-bg-logo-3">
+                <img src="img/netmark-logo.png" alt="" class="login-bg-logo login-bg-logo-4">
             </div>
             <div class="container hero-content">
-                <h1>Welcome to Green World</h1>
+                <h1>Welcome to NetMark</h1>
                 <p>Your trusted partner for health and wellness products</p>
                 <button class="btn btn-primary btn-lg" onclick="app.navigateTo('shop')">
                     Start Shopping
@@ -109,7 +109,7 @@ async function viewFeaturedProduct(productId) {
             basePrice: catalog.basePrice,
             category: catalog.category,
             imageUrl: catalog.imageUrl,
-            description: `${catalog.name} — ${catalog.size}. Official Green World product.`,
+            description: `${catalog.name} — ${catalog.size}. Official NetMark product.`,
         };
         showModal('Product Details', `
             <div class="product-detail">
@@ -165,7 +165,7 @@ async function loadFeaturedStores() {
             const stores = Array.isArray(response.data) ? response.data : response.data?.stores || [];
             grid.innerHTML = stores.map(store => `
                 <div class="store-card">
-                    <img src="${getStoreImage(store)}" alt="${store.name}" class="store-logo" onerror="this.onerror=null;this.src='img/green-world-logo.png'">
+                    <img src="${getStoreImage(store)}" alt="${store.name}" class="store-logo" onerror="this.onerror=null;this.src='img/netmark-logo.png'">
                     <h3 class="store-name">${store.name}</h3>
                     <p class="store-location">${store.address?.city || ''}, ${store.address?.state || ''}</p>
                     <button class="btn btn-outline" onclick="viewStoreBySlug('${getStoreSlug(store)}')">Visit Store</button>

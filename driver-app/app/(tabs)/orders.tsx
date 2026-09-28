@@ -125,7 +125,7 @@ export default function OrdersScreen() {
             refreshing={refreshing}
             onRefresh={onRefresh}
             tintColor="#fff"
-            colors={["#4CAF50"]}
+            colors={["#D7263D"]}
           />
         }
         ListEmptyComponent={
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold"
   },
   badge: {
-    backgroundColor: "#4CAF50",
+    backgroundColor: "#D7263D",
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 15
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
     flex: 1
   },
   acceptButton: {
-    backgroundColor: "#4CAF50",
+    backgroundColor: "#D7263D",
     padding: 12,
     borderRadius: 8,
     alignItems: "center"

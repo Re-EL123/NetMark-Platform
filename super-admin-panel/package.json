@@ -1,7 +1,7 @@
 {
   "name": "super-admin-panel",
   "version": "1.0.0",
-  "description": "Green World Super Admin Panel",
+  "description": "NetMark Super Admin Panel",
   "scripts": {
     "dev": "serve . -p 3000",
     "build": "echo 'Static files ready for deployment'"

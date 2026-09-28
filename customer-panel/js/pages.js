@@ -12,15 +12,15 @@ function contentPage(title, body) {
 }
 
 function loadAboutPage() {
-    document.getElementById('mainContent').innerHTML = contentPage('About Green World', `
-        <p>Green World is a multi-store wellness platform for verified GreenWorld distributors. Customers can shop products, book health appointments, and receive deliveries from local distributor stores.</p>
+    document.getElementById('mainContent').innerHTML = contentPage('About NetMark', `
+        <p>NetMark is a multi-store wellness platform for verified NetMark distributors. Customers can shop products, book health appointments, and receive deliveries from local distributor stores.</p>
         <p>Every online store is operated by a verified distributor with an official Head Office code and an active yearly subscription.</p>
     `);
 }
 
 function loadContactPage() {
     document.getElementById('mainContent').innerHTML = contentPage('Contact us', `
-        <p>For product, appointment, or delivery questions, contact the store you ordered from first. For platform support, email the Green World team through your registered account email.</p>
+        <p>For product, appointment, or delivery questions, contact the store you ordered from first. For platform support, email the NetMark team through your registered account email.</p>
         <p>Store owners and distributors should use their dashboard for order and appointment management.</p>
     `);
 }
@@ -28,7 +28,7 @@ function loadContactPage() {
 function loadFaqPage() {
     document.getElementById('mainContent').innerHTML = contentPage('Frequently asked questions', `
         <h3>Can a customer own a store?</h3>
-        <p>No. Only a verified GreenWorld distributor with a valid distributor code can activate a store after paying the yearly subscription.</p>
+        <p>No. Only a verified NetMark distributor with a valid distributor code can activate a store after paying the yearly subscription.</p>
         <h3>How much is store activation?</h3>
         <p>The initial yearly subscription is ${formatCurrency(CONSTANTS.SUBSCRIPTION_FEE)} and lasts 12 months.</p>
         <h3>Which wellness services can I book?</h3>

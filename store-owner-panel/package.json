@@ -1,7 +1,7 @@
 {
   "name": "store-owner-panel",
   "version": "1.0.0",
-  "description": "Green World Store Owner Panel",
+  "description": "NetMark Store Owner Panel",
   "scripts": {
     "dev": "serve . -p 3001",
     "build": "echo 'Static files ready for deployment'"

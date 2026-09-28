@@ -64,7 +64,7 @@ export default function HomeScreen() {
   const getAvailabilityColor = () => {
     switch (driverProfile?.availability) {
       case "available":
-        return "#4CAF50";
+        return "#D7263D";
       case "busy":
         return "#FF9800";
       default:
@@ -116,7 +116,7 @@ export default function HomeScreen() {
           refreshing={refreshing}
           onRefresh={onRefresh}
           tintColor="#fff"
-          colors={["#4CAF50"]}
+          colors={["#D7263D"]}
         />
       }
     >
@@ -153,7 +153,7 @@ export default function HomeScreen() {
               backgroundColor:
                 driverProfile.availability === "available"
                   ? "#f44336"
-                  : "#4CAF50"
+                  : "#9E9E9E"
             }
           ]}
           onPress={toggleAvailability}
@@ -206,7 +206,7 @@ export default function HomeScreen() {
           style={styles.actionButton}
           onPress={() => router.push("/orders")}
         >
-          <MaterialIcons name="list" size={24} color="#4CAF50" />
+          <MaterialIcons name="list" size={24} color="#D7263D" />
           <Text style={styles.actionButtonText}>
             View Available Deliveries
           </Text>
@@ -216,7 +216,7 @@ export default function HomeScreen() {
           style={styles.actionButton}
           onPress={() => router.push("/active-delivery")}
         >
-          <MaterialIcons name="local-shipping" size={24} color="#4CAF50" />
+          <MaterialIcons name="local-shipping" size={24} color="#D7263D" />
           <Text style={styles.actionButtonText}>Active Delivery</Text>
         </TouchableOpacity>
 
@@ -224,7 +224,7 @@ export default function HomeScreen() {
           style={styles.actionButton}
           onPress={() => router.push("/earnings")}
         >
-          <MaterialIcons name="attach-money" size={24} color="#4CAF50" />
+          <MaterialIcons name="attach-money" size={24} color="#D7263D" />
           <Text style={styles.actionButtonText}>View Earnings</Text>
         </TouchableOpacity>
       </View>
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 20,
-    backgroundColor: "#4CAF50",
+    backgroundColor: "#D7263D",
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#4CAF50",
+    color: "#D7263D",
     marginBottom: 5
   },
   statLabel: {

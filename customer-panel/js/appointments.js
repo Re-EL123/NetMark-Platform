@@ -9,7 +9,7 @@ async function loadAppointments() {
         <div class="container">
             <div class="appointment-form">
                 <h2>Book an Appointment</h2>
-                <p class="help-text mb-20">Choose a GreenWorld wellness service, store, date and available time slot.</p>
+                <p class="help-text mb-20">Choose a NetMark wellness service, store, date and available time slot.</p>
                 <button class="btn btn-primary mb-20" onclick="showBookAppointmentModal()">
                     Book New Appointment
                 </button>

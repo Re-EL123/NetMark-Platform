@@ -8,7 +8,7 @@ async function loadStores() {
             <div class="container">
                 <div class="section-header">
                     <h2>Our Stores</h2>
-                    <p>Browse verified GreenWorld distributor stores and shop from a store near you.</p>
+                    <p>Browse verified NetMark distributor stores and shop from a store near you.</p>
                 </div>
 
                 <div class="filters">
@@ -87,10 +87,10 @@ function storeCardHtml(store) {
 
     return `
         <div class="store-card">
-            <img src="${getStoreImage(store)}" alt="${store.name}" class="store-logo" onerror="this.onerror=null;this.src='img/green-world-logo.png'">
+            <img src="${getStoreImage(store)}" alt="${store.name}" class="store-logo" onerror="this.onerror=null;this.src='img/netmark-logo.png'">
             <h3 class="store-name">${store.name}</h3>
             <p class="store-location">${location}</p>
-            <p class="store-description">${store.description || 'Discover GreenWorld products and wellness appointments from this store.'}</p>
+            <p class="store-description">${store.description || 'Discover NetMark products and wellness appointments from this store.'}</p>
             ${open
                 ? `<button class="btn btn-outline" onclick="viewStoreBySlug('${getStoreSlug(store)}')">Visit Store</button>`
                 : '<span class="badge badge-danger">Currently unavailable</span>'}
@@ -216,11 +216,11 @@ function renderStorePage(store, products) {
 
     document.getElementById('storePageContent').innerHTML = `
         <div class="storefront-header">
-            <img src="${getStoreImage(store)}" alt="${store.name}" class="store-logo" onerror="this.onerror=null;this.src='img/green-world-logo.png'">
+            <img src="${getStoreImage(store)}" alt="${store.name}" class="store-logo" onerror="this.onerror=null;this.src='img/netmark-logo.png'">
             <div>
                 <p class="store-location">/store/${getStoreSlug(store)}</p>
                 <h1>${store.name}</h1>
-                <p>${store.description || 'Shop GreenWorld products and book wellness appointments at this store.'}</p>
+                <p>${store.description || 'Shop NetMark products and book wellness appointments at this store.'}</p>
                 <p class="store-location">${location || 'South Africa'}</p>
                 <p>Delivery fee: ${formatCurrency(deliveryFee)}</p>
                 ${open ? '' : '<p><span class="badge badge-danger">This store is locked until the yearly subscription is renewed.</span></p>'}

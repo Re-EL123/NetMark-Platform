@@ -5,24 +5,24 @@
 }
 
 :root {
-    --green-dark: #006428;
-    --green: #008836;
-    --green-bright: #1cce40;
-    --green-light: #eef5f0;
-    --yellow-green: #C7EA46;
+    --red-dark: #A11D2F;
+    --red: #D7263D;
+    --red-bright: #F2334E;
+    --red-light: #FCEFF1;
+    --grey-accent: #6B7280;
     --white: #FFFFFF;
     --black: #000000;
 
-    --primary-color: var(--green);
-    --primary-dark: var(--green-dark);
-    --secondary-color: var(--yellow-green);
+    --primary-color: var(--red);
+    --primary-dark: var(--red-dark);
+    --secondary-color: var(--grey-accent);
     --danger-color: #E53935;
-    --warning-color: var(--yellow-green);
-    --success-color: var(--green);
-    --dark-color: var(--green-dark);
-    --light-color: var(--green-light);
-    --border-color: #e6ede6;
-    --background-color: #f4f6f5;
+    --warning-color: var(--grey-accent);
+    --success-color: #1F2937;
+    --dark-color: var(--red-dark);
+    --light-color: var(--red-light);
+    --border-color: #E5E7EB;
+    --background-color: #F5F6F7;
     --text-primary: #222222;
     --text-secondary: #4B5563;
 }
@@ -127,7 +127,7 @@ body {
 }
 
 .dropdown-menu a:hover {
-    background: rgba(0, 136, 54, 0.08);
+    background: rgba(215, 38, 61, 0.08);
     color: var(--primary-color);
 }
 
@@ -153,9 +153,9 @@ body {
 /* Icon helpers */
 .brand-icon { color: var(--primary-color); vertical-align: middle; margin-right: 8px; }
 .nav-icon, .quick-icon, .toast-icon i { color: var(--primary-color); }
-.icon-dark { color: var(--green-dark); }
-.icon-light { color: var(--green); }
-.icon-yellow { color: var(--yellow-green); }
+.icon-dark { color: var(--red-dark); }
+.icon-light { color: var(--red); }
+.icon-yellow { color: var(--grey-accent); }
 
 .btn-icon .badge {
     position: absolute;
@@ -272,7 +272,7 @@ body {
 }
 
 .badge-primary {
-    background: rgba(0, 136, 54, 0.12);
+    background: rgba(215, 38, 61, 0.12);
     color: var(--primary-color);
 }
 
@@ -405,7 +405,7 @@ body {
 
 /* Footer */
 .footer {
-    background: var(--green-dark);
+    background: var(--red-dark);
     color: white;
     padding: 40px 0 20px;
     margin-top: 60px;
@@ -583,7 +583,7 @@ select:focus,
 textarea:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(0, 136, 54, 0.12);
+    box-shadow: 0 0 0 3px rgba(215, 38, 61, 0.12);
 }
 
 /* Badges */
@@ -595,7 +595,7 @@ textarea:focus {
     border-radius: 12px;
 }
 
-.badge-success { background: #e8f5e9; color: #2e7d32; }
+.badge-success { background: #F3F4F6; color: #1F2937; }
 .badge-warning { background: #fff3e0; color: #e65100; }
 .badge-danger { background: #ffebee; color: #c62828; }
 .badge-info { background: #e3f2fd; color: #1565c0; }

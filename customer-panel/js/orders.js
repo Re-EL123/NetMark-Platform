@@ -63,12 +63,12 @@ function renderCustomerOrders(orders) {
                 `).join('')}
             </div>
             ${order.deliveryOtp && order.orderStatus !== 'delivered' && order.orderStatus !== 'cancelled' ? `
-                <div style="background: #E8F5E9; border: 1px dashed #4CAF50; border-radius: 6px; padding: 10px 14px; margin: 12px 0 6px; display: flex; justify-content: space-between; align-items: center;">
+                <div style="background: #F3F4F6; border: 1px dashed #1F2937; border-radius: 6px; padding: 10px 14px; margin: 12px 0 6px; display: flex; justify-content: space-between; align-items: center;">
                     <div>
-                        <span style="font-size: 11px; text-transform: uppercase; color: #2E7D32; font-weight: bold; display: block;">Delivery PIN (Proof of Delivery)</span>
+                        <span style="font-size: 11px; text-transform: uppercase; color: #1F2937; font-weight: bold; display: block;">Delivery PIN (Proof of Delivery)</span>
                         <span style="font-size: 12px; color: #555;">Give this 4-digit code to your driver upon arrival</span>
                     </div>
-                    <div style="font-size: 20px; font-weight: bold; letter-spacing: 4px; color: #2E7D32; background: #fff; padding: 4px 10px; border-radius: 4px; border: 1px solid #A5D6A7;">
+                    <div style="font-size: 20px; font-weight: bold; letter-spacing: 4px; color: #1F2937; background: #fff; padding: 4px 10px; border-radius: 4px; border: 1px solid #D1D5DB;">
                         ${order.deliveryOtp}
                     </div>
                 </div>

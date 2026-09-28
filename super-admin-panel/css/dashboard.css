@@ -92,7 +92,7 @@
 
 .quick-action-btn:hover {
     border-color: var(--primary-color);
-    background: rgba(0, 136, 54, 0.05);
+    background: rgba(215, 38, 61, 0.05);
 }
 
 .quick-action-btn .icon {

@@ -1,6 +1,6 @@
 export default {
   expo: {
-    name: "Green World Driver",
+    name: "NetMark Driver",
     slug: "driver-app", // must match the EAS project slug
     version: "1.0.0",
     orientation: "portrait",
@@ -9,7 +9,7 @@ export default {
     splash: {
       image: "./assets/splash.png",
       resizeMode: "contain",
-      backgroundColor: "#4CAF50"
+      backgroundColor: "#1A0A0D"
     },
     assetBundlePatterns: ["**/*"],
     ios: {
@@ -26,7 +26,7 @@ export default {
       package: "com.greenworld.driver",
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
-        backgroundColor: "#4CAF50"
+        backgroundColor: "#1A0A0D"
       },
       permissions: ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
     },
@@ -40,7 +40,7 @@ export default {
         "expo-location",
         {
           locationAlwaysAndWhenInUsePermission:
-            "Allow Green World Driver to use your location."
+            "Allow NetMark Driver to use your location."
         }
       ]
     ],

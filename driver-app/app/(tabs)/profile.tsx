@@ -47,7 +47,7 @@ export default function ProfileScreen() {
   const handleSettings = () => {
     notify(
       "App Settings",
-      "Green World Driver App v1.0.0\nEnvironment: Production Lightsail\nGPS Tracking: Enabled\nCurrency: South African Rand (ZAR)"
+      "NetMark Driver App v1.0.0\nEnvironment: Production Lightsail\nGPS Tracking: Enabled\nCurrency: South African Rand (ZAR)"
     );
   };
 
@@ -165,7 +165,7 @@ export default function ProfileScreen() {
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
           <Text style={styles.sectionTitle}>Bank Details</Text>
           <TouchableOpacity onPress={() => setBankModalVisible(true)}>
-            <Text style={{ color: "#4CAF50", fontWeight: "600", fontSize: 14 }}>
+            <Text style={{ color: "#D7263D", fontWeight: "600", fontSize: 14 }}>
               {driverProfile?.bankDetails?.accountNumber ? "Edit" : "+ Add"}
             </Text>
           </TouchableOpacity>
@@ -209,8 +209,8 @@ export default function ProfileScreen() {
             style={[styles.infoCard, { alignItems: "center", paddingVertical: 18, borderStyle: "dashed", borderWidth: 1, borderColor: "#bbb" }]}
             onPress={() => setBankModalVisible(true)}
           >
-            <MaterialIcons name="add-circle-outline" size={28} color="#4CAF50" />
-            <Text style={{ marginTop: 6, color: "#4CAF50", fontWeight: "600" }}>
+            <MaterialIcons name="add-circle-outline" size={28} color="#D7263D" />
+            <Text style={{ marginTop: 6, color: "#D7263D", fontWeight: "600" }}>
               Add Bank Account for Payouts
             </Text>
             <Text style={{ fontSize: 12, color: "#888", marginTop: 2 }}>
@@ -225,22 +225,22 @@ export default function ProfileScreen() {
           style={styles.actionButton}
           onPress={() => setBankModalVisible(true)}
         >
-          <MaterialIcons name="account-balance" size={24} color="#4CAF50" />
+          <MaterialIcons name="account-balance" size={24} color="#D7263D" />
           <Text style={styles.actionButtonText}>Update Bank Details</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionButton} onPress={handleEditProfile}>
-          <MaterialIcons name="directions-car" size={24} color="#4CAF50" />
+          <MaterialIcons name="directions-car" size={24} color="#D7263D" />
           <Text style={styles.actionButtonText}>Vehicle & License Info</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionButton} onPress={handleSettings}>
-          <MaterialIcons name="settings" size={24} color="#4CAF50" />
+          <MaterialIcons name="settings" size={24} color="#D7263D" />
           <Text style={styles.actionButtonText}>Settings</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionButton} onPress={handleHelp}>
-          <MaterialIcons name="help" size={24} color="#4CAF50" />
+          <MaterialIcons name="help" size={24} color="#D7263D" />
           <Text style={styles.actionButtonText}>Help & Support</Text>
         </TouchableOpacity>
 
@@ -269,8 +269,8 @@ export default function ProfileScreen() {
 
 function getStatusColor(status?: string) {
   const colors: any = {
-    approved: { backgroundColor: "#4CAF50" },
-    active: { backgroundColor: "#4CAF50" },
+    approved: { backgroundColor: "#D7263D" },
+    active: { backgroundColor: "#D7263D" },
     pending: { backgroundColor: "#FF9800" },
     inactive: { backgroundColor: "#9E9E9E" }
   };
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent"
   },
   profileHeader: {
-    backgroundColor: "#4CAF50",
+    backgroundColor: "#D7263D",
     padding: 30,
     alignItems: "center"
   },
@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 36,
     fontWeight: "bold",
-    color: "#4CAF50"
+    color: "#D7263D"
   },
   nameText: {
     fontSize: 24,

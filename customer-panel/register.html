@@ -3,22 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Create Account - Green World</title>
+    <title>Create Account - NetMark</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/auth.css">
 </head>
 <body class="auth-page">
     <div class="login-bg" aria-hidden="true">
-        <img src="img/green-world-logo.png" alt="" class="login-bg-logo login-bg-logo-1">
-        <img src="img/green-world-logo.png" alt="" class="login-bg-logo login-bg-logo-2">
-        <img src="img/green-world-logo.png" alt="" class="login-bg-logo login-bg-logo-3">
-        <img src="img/green-world-logo.png" alt="" class="login-bg-logo login-bg-logo-4">
+        <img src="img/netmark-logo.png" alt="" class="login-bg-logo login-bg-logo-1">
+        <img src="img/netmark-logo.png" alt="" class="login-bg-logo login-bg-logo-2">
+        <img src="img/netmark-logo.png" alt="" class="login-bg-logo login-bg-logo-3">
+        <img src="img/netmark-logo.png" alt="" class="login-bg-logo login-bg-logo-4">
     </div>
 
     <div class="login-container wide">
         <div class="login-header">
-            <img src="img/green-world-logo.png" alt="Green World" class="brand-logo">
-            <p>Create your Green World account</p>
+            <img src="img/netmark-logo.png" alt="NetMark" class="brand-logo">
+            <p>Create your NetMark account</p>
         </div>
 
         <div id="errorMessage" class="error-message"></div>
@@ -36,7 +36,7 @@
                         <span>Distributor</span>
                     </label>
                 </div>
-                <small class="help-text">Customers can shop and book appointments, but cannot own a store. Distributors must enter a valid GreenWorld Head Office code.</small>
+                <small class="help-text">Customers can shop and book appointments, but cannot own a store. Distributors must enter a valid NetMark Head Office code.</small>
             </div>
 
             <div class="form-group" id="distributorCodeGroup" hidden>
@@ -123,7 +123,7 @@
             }
 
             if (role === 'distributor' && !distributorCode) {
-                showError('Please enter a valid GreenWorld distributor code.');
+                showError('Please enter a valid NetMark distributor code.');
                 return;
             }
 

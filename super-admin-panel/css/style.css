@@ -1,23 +1,23 @@
 :root {
-    --green-dark: #006428;
-    --green: #008836;
-    --green-bright: #1cce40;
-    --green-light: #eef5f0;
-    --yellow-green: #C7EA46;
+    --red-dark: #A11D2F;
+    --red: #D7263D;
+    --red-bright: #F2334E;
+    --red-light: #FCEFF1;
+    --grey-accent: #6B7280;
     --white: #FFFFFF;
     --black: #000000;
 
-    --primary-color: var(--green);
-    --primary-dark: var(--green-dark);
-    --secondary-color: var(--yellow-green);
-    --warning-color: var(--yellow-green);
+    --primary-color: var(--red);
+    --primary-dark: var(--red-dark);
+    --secondary-color: var(--grey-accent);
+    --warning-color: var(--grey-accent);
     --danger-color: #E53935;
-    --success-color: var(--green);
+    --success-color: #1F2937;
     --text-primary: #222222;
     --text-secondary: #4B5563;
-    --border-color: #e6ede6;
-    --background-color: #f4f6f5;
-    --light-color: var(--green-light);
+    --border-color: #E5E7EB;
+    --background-color: #F5F6F7;
+    --light-color: var(--red-light);
     --shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
     --transition: 0.18s ease;
 }
@@ -96,7 +96,7 @@ body {
 
 .nav-link:hover,
 .nav-link.active {
-    background: rgba(0, 136, 54, 0.12);
+    background: rgba(215, 38, 61, 0.12);
     color: var(--primary-color);
 }
 
@@ -229,9 +229,9 @@ body {
     vertical-align: middle;
 }
 
-.icon-dark { color: var(--green-dark); }
-.icon-light { color: var(--green); }
-.icon-yellow { color: var(--yellow-green); }
+.icon-dark { color: var(--red-dark); }
+.icon-light { color: var(--red); }
+.icon-yellow { color: var(--grey-accent); }
 
 .page-content {
     padding: 24px;
@@ -289,7 +289,7 @@ body {
 .form-group select:focus,
 .form-group textarea:focus {
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(0, 136, 54, 0.12);
+    box-shadow: 0 0 0 3px rgba(215, 38, 61, 0.12);
 }
 
 .card-title {
@@ -357,7 +357,7 @@ td {
 }
 
 .badge-success {
-    background: #E8F5E9;
+    background: #F3F4F6;
     color: var(--success-color);
 }
 
@@ -420,7 +420,7 @@ td {
 .spinner {
     width: 42px;
     height: 42px;
-    border: 4px solid rgba(0, 136, 54, 0.2);
+    border: 4px solid rgba(215, 38, 61, 0.2);
     border-top-color: var(--primary-color);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
@@ -489,7 +489,7 @@ td {
 }
 
 .stat-icon.primary {
-    background: rgba(0, 136, 54, 0.12);
+    background: rgba(215, 38, 61, 0.12);
     color: var(--primary-color);
 }
 
@@ -536,7 +536,7 @@ td {
 
 .quick-action-btn:hover {
     border-color: var(--primary-color);
-    background: rgba(0, 136, 54, 0.05);
+    background: rgba(215, 38, 61, 0.05);
 }
 
 .quick-action-btn .icon {

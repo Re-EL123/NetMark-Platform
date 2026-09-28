@@ -15,7 +15,7 @@ export default function Root({ children }: PropsWithChildren) {
         <style
           dangerouslySetInnerHTML={{
             __html:
-              "html, body, #root { background-color: #003d1c; height: 100%; }"
+              "html, body, #root { background-color: #1A0A0D; height: 100%; }"
           }}
         />
       </head>

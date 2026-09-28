@@ -1,5 +1,5 @@
 body.auth-page {
-    background: #003d1c;
+    background: #1A0A0D;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -170,7 +170,7 @@ body.auth-page {
 
 .role-option:has(input:checked) {
     border-color: var(--primary-color);
-    background: rgba(0, 136, 54, 0.08);
+    background: rgba(215, 38, 61, 0.08);
 }
 
 .role-option input {

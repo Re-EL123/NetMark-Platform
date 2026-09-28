@@ -41,10 +41,10 @@ async function loadProfile() {
                 <div class="content-card">
                     <h3>Account rules</h3>
                     ${user.role === 'distributor' ? `
-                        <p>You are a verified GreenWorld distributor. Pay the R3,500 yearly subscription to activate your store dashboard.</p>
+                        <p>You are a verified NetMark distributor. Pay the R3,500 yearly subscription to activate your store dashboard.</p>
                         <button class="btn btn-primary" onclick="app.navigateTo('activate-store')">Activate my store</button>
                     ` : `
-                        <p>Customer accounts cannot own or operate a store. If you are a verified GreenWorld distributor, register with your official distributor code.</p>
+                        <p>Customer accounts cannot own or operate a store. If you are a verified NetMark distributor, register with your official distributor code.</p>
                     `}
                 </div>
             </div>
@@ -288,7 +288,7 @@ async function loadActivateStore() {
                 <div class="container">
                     <div class="content-card">
                         <h2>Store activation is for distributors</h2>
-                        <p>Customer accounts cannot own a store. Register as a distributor with a valid GreenWorld Head Office code first.</p>
+                        <p>Customer accounts cannot own a store. Register as a distributor with a valid NetMark Head Office code first.</p>
                     </div>
                 </div>
             </section>

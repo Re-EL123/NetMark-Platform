@@ -79,7 +79,7 @@ export default function EarningsScreen() {
         <Text style={styles.summaryTitle}>Earnings Summary</Text>
         <View style={styles.summaryGrid}>
           <View style={styles.summaryItem}>
-            <MaterialIcons name="attach-money" size={32} color="#4CAF50" />
+            <MaterialIcons name="attach-money" size={32} color="#D7263D" />
             <Text style={styles.summaryValue}>
               {formatCurrency(summary?.totalEarnings || 0)}
             </Text>
@@ -93,7 +93,7 @@ export default function EarningsScreen() {
             <Text style={styles.summaryLabel}>Pending</Text>
           </View>
           <View style={styles.summaryItem}>
-            <MaterialIcons name="check-circle" size={32} color="#4CAF50" />
+            <MaterialIcons name="check-circle" size={32} color="#D7263D" />
             <Text style={styles.summaryValue}>
               {formatCurrency(summary?.paidEarnings || 0)}
             </Text>
@@ -123,7 +123,7 @@ export default function EarningsScreen() {
             refreshing={refreshing}
             onRefresh={onRefresh}
             tintColor="#fff"
-            colors={["#4CAF50"]}
+            colors={["#D7263D"]}
           />
         }
         ListEmptyComponent={
@@ -140,7 +140,7 @@ export default function EarningsScreen() {
 function getPayoutStatusColor(status: string) {
   const colors: any = {
     pending: { backgroundColor: "#FF9800" },
-    paid: { backgroundColor: "#4CAF50" },
+    paid: { backgroundColor: "#D7263D" },
     processing: { backgroundColor: "#2196F3" }
   };
   return colors[status] || { backgroundColor: "#9E9E9E" };
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     fontWeight: "500"
   },
   earningValue: {
-    color: "#4CAF50",
+    color: "#D7263D",
     fontWeight: "600"
   },
   emptyContainer: {

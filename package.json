@@ -1,7 +1,7 @@
 {
-  "name": "green-world-frontend",
+  "name": "netmark-frontend",
   "version": "1.0.0",
-  "description": "Green World Multi-Role Platform Frontend Monorepo",
+  "description": "NetMark Multi-Role Platform Frontend Monorepo",
   "private": true,
   "workspaces": [
     "super-admin-panel",
@@ -20,7 +20,7 @@
     "build:driver": "cd driver-app && npm run build",
     "install:all": "npm install && cd super-admin-panel && npm install && cd ../store-owner-panel && npm install && cd ../customer-panel && npm install && cd ../driver-app && npm install"
   },
-  "keywords": ["green-world", "ecommerce", "distribution"],
-  "author": "Green World",
+  "keywords": ["netmark", "ecommerce", "distribution"],
+  "author": "NetMark",
   "license": "PROPRIETARY"
 }
