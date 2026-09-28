@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Admin Dashboard - Green World</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+    <div id="app">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <img src="img/green-world-logo.png" alt="Green World" class="brand-logo">
+                <p>Super Admin</p>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="#dashboard" class="nav-link active" data-page="dashboard">
+                        <i data-feather="bar-chart-2" class="nav-icon"></i>
+                    <span>Dashboard</span>
+                </a>
+                    <a href="#users" class="nav-link" data-page="users">
+                        <i data-feather="users" class="nav-icon"></i>
+                    <span>Users</span>
+                </a>
+                    <a href="#distributors" class="nav-link" data-page="distributors">
+                        <i data-feather="briefcase" class="nav-icon"></i>
+                    <span>Distributors</span>
+                </a>
+                    <a href="#stores" class="nav-link" data-page="stores">
+                        <i data-feather="briefcase" class="nav-icon"></i>
+                    <span>Stores</span>
+                </a>
+                    <a href="#products" class="nav-link" data-page="products">
+                        <i data-feather="package" class="nav-icon"></i>
+                    <span>Products</span>
+                </a>
+                    <a href="#orders" class="nav-link" data-page="orders">
+                        <i data-feather="shopping-cart" class="nav-icon"></i>
+                    <span>Orders</span>
+                </a>
+                    <a href="#drivers" class="nav-link" data-page="drivers">
+                        <i data-feather="truck" class="nav-icon"></i>
+                    <span>Drivers</span>
+                </a>
+                    <a href="#appointments" class="nav-link" data-page="appointments">
+                        <i data-feather="calendar" class="nav-icon"></i>
+                    <span>Appointments</span>
+                </a>
+                    <a href="#subscriptions" class="nav-link" data-page="subscriptions">
+                        <i data-feather="credit-card" class="nav-icon"></i>
+                    <span>Subscriptions</span>
+                </a>
+                    <a href="#reports" class="nav-link" data-page="reports">
+                        <i data-feather="bar-chart-2" class="nav-icon"></i>
+                    <span>Reports</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button class="btn-logout" id="logoutBtn">
+                    <i data-feather="log-out" class="nav-icon"></i>
+                    <span>Logout</span>
+                </button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="header">
+                <button class="menu-toggle" id="menuToggle" aria-label="Toggle navigation">☰</button>
+                <div class="header-search">
+                    <input type="text" placeholder="Search..." id="globalSearch">
+                </div>
+                <div class="header-actions">
+                    <button class="btn-icon" id="notificationsBtn" aria-label="Notifications">
+                        <i data-feather="bell"></i>
+                        <span class="badge">3</span>
+                    </button>
+                    <div class="user-menu">
+                        <img src="https://ui-avatars.com/api/?name=Super%20Admin&background=4CAF50&color=fff" alt="User" class="user-avatar">
+                        <span class="user-name" id="userName">Super Admin</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="page-content" id="pageContent">
+                <!-- Dynamic content -->
+            </div>
+        </main>
+    </div>
+
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <span class="modal-close" id="modalClose">&times;</span>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+
+    <script src="js/config.js"></script>
+    <script src="js/firebase-config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/utils.js"></script>
+        <script src="https://unpkg.com/feather-icons"></script>
+        <script>feather.replace()</script>
+    <script src="js/app.js?v=20260708"></script>
+    <script src="js/dashboard.js?v=20260708"></script>
+    <script src="js/users.js?v=20260708"></script>
+    <script src="js/distributors.js?v=20260708"></script>
+    <script src="js/stores.js?v=20260708"></script>
+    <script src="js/products.js?v=20260708"></script>
+    <script src="js/orders.js?v=20260708"></script>
+    <script src="js/drivers.js?v=20260708"></script>
+    <script src="js/appointments.js?v=20260708"></script>
+    <script src="js/subscriptions.js?v=20260708"></script>
+    <script src="js/reports.js?v=20260708"></script>
+</body>
+</html>

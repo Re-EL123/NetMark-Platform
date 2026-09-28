@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Store Owner Registration - Green World</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        body {
+            background: #003d1c;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .login-bg {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .login-bg-logo {
+            position: absolute;
+            opacity: 0.14;
+            will-change: transform;
+        }
+
+        .login-bg-logo-1 {
+            width: min(42vw, 360px);
+            top: 8%;
+            left: 6%;
+            animation: logoFloat 18s ease-in-out infinite;
+        }
+
+        .login-bg-logo-2 {
+            width: min(52vw, 460px);
+            top: 38%;
+            right: 4%;
+            animation: logoDrift 24s ease-in-out infinite;
+            animation-delay: -6s;
+        }
+
+        .login-bg-logo-3 {
+            width: min(34vw, 300px);
+            bottom: 6%;
+            left: 28%;
+            animation: logoPulse 16s ease-in-out infinite;
+            animation-delay: -10s;
+        }
+
+        .login-bg-logo-4 {
+            width: min(60vw, 520px);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0.08;
+            animation: logoSpin 40s linear infinite;
+        }
+
+        @keyframes logoFloat {
+            0%, 100% { transform: translate(0, 0) rotate(0deg) scale(1); }
+            50% { transform: translate(24px, -28px) rotate(8deg) scale(1.06); }
+        }
+
+        @keyframes logoDrift {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            33% { transform: translate(-30px, 18px) rotate(-6deg); }
+            66% { transform: translate(18px, -22px) rotate(5deg); }
+        }
+
+        @keyframes logoPulse {
+            0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.12; }
+            50% { transform: scale(1.14) rotate(-10deg); opacity: 0.2; }
+        }
+
+        @keyframes logoSpin {
+            from { transform: translate(-50%, -50%) rotate(0deg) scale(1); }
+            to { transform: translate(-50%, -50%) rotate(360deg) scale(1.08); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .login-bg-logo {
+                animation: none;
+            }
+        }
+
+        .login-container {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+            width: 100%;
+            max-width: 480px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .login-header p {
+            color: #666;
+            font-size: 14px;
+            margin: 0;
+        }
+
+        .brand-logo {
+            display: block;
+            max-width: 160px;
+            width: 100%;
+            height: auto;
+            margin: 0 auto 16px;
+        }
+
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .form-actions {
+            margin-top: 20px;
+        }
+
+        .form-actions button {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+        }
+
+        .footer-text {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .footer-text a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-bg" aria-hidden="true">
+        <img src="img/green-world-logo.png" alt="" class="login-bg-logo login-bg-logo-1">
+        <img src="img/green-world-logo.png" alt="" class="login-bg-logo login-bg-logo-2">
+        <img src="img/green-world-logo.png" alt="" class="login-bg-logo login-bg-logo-3">
+        <img src="img/green-world-logo.png" alt="" class="login-bg-logo login-bg-logo-4">
+    </div>
+
+    <div class="login-container">
+        <div class="login-header">
+            <img src="img/green-world-logo.png" alt="Green World" class="brand-logo">
+            <p>Store Owner Registration</p>
+        </div>
+
+        <div id="errorMessage" class="error-message"></div>
+
+        <form id="registerForm">
+            <div class="form-group">
+                <label for="distributorCode">Distributor Code</label>
+                <input type="text" id="distributorCode" required>
+            </div>
+            <div class="form-group">
+                <label for="name">Full Name</label>
+                <input type="text" id="name" required>
+            </div>
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" required>
+            </div>
+            <div class="form-group">
+                <label for="phone">Phone</label>
+                <input type="tel" id="phone" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" required>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" id="registerBtn">Register</button>
+            </div>
+        </form>
+
+        <div class="footer-text">
+            Already have an account? <a href="login.html">Login here</a>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/firebase-config.js"></script>
+    <script src="js/api.js"></script>
+
+    <script src="https://unpkg.com/feather-icons"></script>
+    <script>feather.replace()</script>
+
+    <script>
+        const registerForm = document.getElementById('registerForm');
+        const distributorCodeInput = document.getElementById('distributorCode');
+        const nameInput = document.getElementById('name');
+        const emailInput = document.getElementById('email');
+        const phoneInput = document.getElementById('phone');
+        const passwordInput = document.getElementById('password');
+        const registerBtn = document.getElementById('registerBtn');
+        const errorMessage = document.getElementById('errorMessage');
+
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const distributorCode = distributorCodeInput.value.trim().toUpperCase();
+            const name = nameInput.value.trim();
+            const email = emailInput.value.trim();
+            const phone = phoneInput.value.trim();
+            const password = passwordInput.value;
+
+            if (!distributorCode || !name || !email || !phone || !password) {
+                showError('Please fill in all required fields.');
+                return;
+            }
+
+            // Basic password length check to align with Firebase rules
+            if (password.length < 6) {
+                showError('Password must be at least 6 characters.');
+                return;
+            }
+
+            try {
+                registerBtn.disabled = true;
+                registerBtn.textContent = 'Registering...';
+                hideError();
+
+                const response = await fetch(`${API_CONFIG.baseURL}/auth/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        distributorCode,
+                        name,
+                        email,
+                        phone,
+                        password,
+                        role: 'storeOwner'
+                    })
+                });
+
+                const data = await response.json();
+                console.log('Register response:', response.status, data);
+
+                if (!response.ok || !data.success) {
+                    // Build a helpful validation message if backend sent errors[]
+                    let message = data.message || 'Registration failed';
+
+                    if (Array.isArray(data.errors) && data.errors.length > 0) {
+                        const fieldMessages = data.errors.map(err => {
+                            if (typeof err === 'string') return err;
+                            const field = err.field || err.path || '';
+                            const msg = err.message || '';
+                            return field ? `${field}: ${msg}` : msg;
+                        });
+                        message = fieldMessages.join(', ');
+                    }
+
+                    throw new Error(message);
+                }
+
+                alert('Registration submitted. Your store owner account is pending verification.');
+                window.location.href = 'login.html';
+            } catch (error) {
+                console.error('Registration error:', error);
+                showError(error.message || 'Registration failed');
+            } finally {
+                registerBtn.disabled = false;
+                registerBtn.textContent = 'Register';
+            }
+        });
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('show');
+        }
+
+        function hideError() {
+            errorMessage.classList.remove('show');
+        }
+    </script>
+</body>
+</html>

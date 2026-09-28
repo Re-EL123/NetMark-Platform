@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "Green World Driver",
+    "slug": "greenworld-driver",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#4CAF50"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.greenworld.driver",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "We need your location to show nearby deliveries and track your delivery route.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "We need your location to show nearby deliveries and track your delivery route."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#4CAF50"
+      },
+      "package": "com.greenworld.driver",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Green World Driver to use your location."
+        }
+      ]
+    ]
+  }
+}

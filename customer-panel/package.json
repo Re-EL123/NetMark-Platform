@@ -1,0 +1,9 @@
+{
+  "name": "customer-panel",
+  "version": "1.0.0",
+  "description": "Green World Customer Storefront",
+  "scripts": {
+    "dev": "node dev-server.js",
+    "build": "echo 'Static files ready for deployment'"
+  }
+}

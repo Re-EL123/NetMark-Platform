@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Account - Green World</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/auth.css">
+</head>
+<body class="auth-page">
+    <div class="login-bg" aria-hidden="true">
+        <img src="img/green-world-logo.png" alt="" class="login-bg-logo login-bg-logo-1">
+        <img src="img/green-world-logo.png" alt="" class="login-bg-logo login-bg-logo-2">
+        <img src="img/green-world-logo.png" alt="" class="login-bg-logo login-bg-logo-3">
+        <img src="img/green-world-logo.png" alt="" class="login-bg-logo login-bg-logo-4">
+    </div>
+
+    <div class="login-container wide">
+        <div class="login-header">
+            <img src="img/green-world-logo.png" alt="Green World" class="brand-logo">
+            <p>Create your Green World account</p>
+        </div>
+
+        <div id="errorMessage" class="error-message"></div>
+
+        <form id="registerForm">
+            <div class="form-group">
+                <label>I am registering as</label>
+                <div class="role-toggle" role="radiogroup" aria-label="Account type">
+                    <label class="role-option">
+                        <input type="radio" name="accountType" value="customer" checked>
+                        <span>Customer</span>
+                    </label>
+                    <label class="role-option">
+                        <input type="radio" name="accountType" value="distributor">
+                        <span>Distributor</span>
+                    </label>
+                </div>
+                <small class="help-text">Customers can shop and book appointments, but cannot own a store. Distributors must enter a valid GreenWorld Head Office code.</small>
+            </div>
+
+            <div class="form-group" id="distributorCodeGroup" hidden>
+                <label for="distributorCode">Distributor Code *</label>
+                <input type="text" id="distributorCode" autocomplete="off">
+            </div>
+
+            <div class="form-group">
+                <label for="name">Full Name</label>
+                <input type="text" id="name" required autofocus>
+            </div>
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" required>
+            </div>
+            <div class="form-group">
+                <label for="phone">Phone</label>
+                <input type="tel" id="phone" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" minlength="6" required>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" id="registerBtn">Register</button>
+            </div>
+        </form>
+
+        <div class="footer-text">
+            Already have an account? <a href="login.html">Login here</a>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/firebase-config.js"></script>
+    <script src="js/api.js"></script>
+
+    <script>
+        const registerForm = document.getElementById('registerForm');
+        const nameInput = document.getElementById('name');
+        const emailInput = document.getElementById('email');
+        const phoneInput = document.getElementById('phone');
+        const passwordInput = document.getElementById('password');
+        const distributorCodeInput = document.getElementById('distributorCode');
+        const distributorCodeGroup = document.getElementById('distributorCodeGroup');
+        const registerBtn = document.getElementById('registerBtn');
+        const errorMessage = document.getElementById('errorMessage');
+
+        function selectedRole() {
+            return document.querySelector('input[name="accountType"]:checked')?.value || 'customer';
+        }
+
+        function toggleDistributorFields() {
+            const isDistributor = selectedRole() === 'distributor';
+            distributorCodeGroup.hidden = !isDistributor;
+            distributorCodeInput.required = isDistributor;
+        }
+
+        document.querySelectorAll('input[name="accountType"]').forEach((input) => {
+            input.addEventListener('change', toggleDistributorFields);
+        });
+
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const role = selectedRole();
+            const name = nameInput.value.trim();
+            const email = emailInput.value.trim();
+            const phone = phoneInput.value.trim();
+            const password = passwordInput.value;
+            const distributorCode = distributorCodeInput.value.trim().toUpperCase();
+
+            if (!name || !email || !phone || !password) {
+                showError('Please fill in all required fields');
+                return;
+            }
+
+            if (password.length < 6) {
+                showError('Password must be at least 6 characters.');
+                return;
+            }
+
+            if (role === 'distributor' && !distributorCode) {
+                showError('Please enter a valid GreenWorld distributor code.');
+                return;
+            }
+
+            try {
+                registerBtn.disabled = true;
+                registerBtn.textContent = 'Registering...';
+                hideError();
+
+                const payload = {
+                    name,
+                    email,
+                    password,
+                    phone,
+                    role,
+                };
+
+                if (role === 'distributor') {
+                    payload.distributorCode = distributorCode;
+                }
+
+                const response = await fetch(`${API_CONFIG.baseURL}/auth/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    let message = data.message || 'Registration failed';
+                    if (Array.isArray(data.errors) && data.errors.length > 0) {
+                        message = data.errors.map((err) => {
+                            if (typeof err === 'string') return err;
+                            const field = err.field || err.path || '';
+                            const msg = err.message || '';
+                            return field ? `${field}: ${msg}` : msg;
+                        }).join(', ');
+                    }
+                    throw new Error(message);
+                }
+
+                alert(role === 'distributor'
+                    ? 'Distributor account created. You can shop now. Activate a store later with the yearly subscription.'
+                    : 'Registration successful. Please login to continue.');
+                window.location.href = 'login.html';
+            } catch (error) {
+                console.error('Registration error:', error);
+                const message = error.message === 'Failed to fetch'
+                    ? 'Unable to reach the API. Start the customer panel with "npm run dev" from the customer-panel folder.'
+                    : (error.message || 'Registration failed');
+                showError(message);
+            } finally {
+                registerBtn.disabled = false;
+                registerBtn.textContent = 'Register';
+            }
+        });
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('show');
+        }
+
+        function hideError() {
+            errorMessage.classList.remove('show');
+        }
+    </script>
+</body>
+</html>

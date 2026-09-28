@@ -1,0 +1,26 @@
+{
+  "name": "green-world-frontend",
+  "version": "1.0.0",
+  "description": "Green World Multi-Role Platform Frontend Monorepo",
+  "private": true,
+  "workspaces": [
+    "super-admin-panel",
+    "store-owner-panel",
+    "customer-panel",
+    "driver-app"
+  ],
+  "scripts": {
+    "dev:admin": "cd super-admin-panel && npm run dev",
+    "dev:store": "cd store-owner-panel && npm run dev",
+    "dev:customer": "cd customer-panel && npm run dev",
+    "dev:driver": "cd driver-app && npm start",
+    "build:admin": "cd super-admin-panel && npm run build",
+    "build:store": "cd store-owner-panel && npm run build",
+    "build:customer": "cd customer-panel && npm run build",
+    "build:driver": "cd driver-app && npm run build",
+    "install:all": "npm install && cd super-admin-panel && npm install && cd ../store-owner-panel && npm install && cd ../customer-panel && npm install && cd ../driver-app && npm install"
+  },
+  "keywords": ["green-world", "ecommerce", "distribution"],
+  "author": "Green World",
+  "license": "PROPRIETARY"
+}

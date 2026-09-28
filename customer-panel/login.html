@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Login - Green World</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/auth.css">
+</head>
+<body class="auth-page">
+    <div class="login-bg" aria-hidden="true">
+        <img src="img/green-world-logo.png" alt="" class="login-bg-logo login-bg-logo-1">
+        <img src="img/green-world-logo.png" alt="" class="login-bg-logo login-bg-logo-2">
+        <img src="img/green-world-logo.png" alt="" class="login-bg-logo login-bg-logo-3">
+        <img src="img/green-world-logo.png" alt="" class="login-bg-logo login-bg-logo-4">
+    </div>
+
+    <div class="login-container">
+        <div class="login-header">
+            <img src="img/green-world-logo.png" alt="Green World" class="brand-logo">
+            <p>Customer & Distributor Login</p>
+        </div>
+
+        <div id="errorMessage" class="error-message"></div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" required autofocus>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" required>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary" id="loginBtn">Login</button>
+            </div>
+        </form>
+
+        <div class="footer-text">
+            Don't have an account? <a href="register.html">Register here</a>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="js/config.js"></script>
+    <script src="js/firebase-config.js"></script>
+    <script src="js/api.js"></script>
+
+    <script>
+        const loginForm = document.getElementById('loginForm');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const loginBtn = document.getElementById('loginBtn');
+        const errorMessage = document.getElementById('errorMessage');
+
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                try {
+                    const token = await user.getIdToken();
+                    const response = await fetch(`${API_CONFIG.baseURL}/auth/me`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    const data = await response.json();
+
+                    const role = data.data?.user?.role;
+                    if (data.success && ['customer', 'distributor'].includes(role)) {
+                        window.location.href = 'index.html';
+                    } else {
+                        await auth.signOut();
+                        showError(roleAccessMessage(role));
+                    }
+                } catch (error) {
+                    console.error('Auth check error:', error);
+                }
+            }
+        });
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const email = emailInput.value.trim();
+            const password = passwordInput.value;
+
+            if (!email || !password) {
+                showError('Please enter email and password');
+                return;
+            }
+
+            try {
+                loginBtn.disabled = true;
+                loginBtn.textContent = 'Logging in...';
+                hideError();
+
+                const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+                const token = await user.getIdToken();
+                const response = await fetch(`${API_CONFIG.baseURL}/auth/me`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await response.json();
+
+                if (!data.success) {
+                    throw new Error(data.message || 'Failed to load user profile');
+                }
+
+                const role = data.data.user.role;
+                if (!['customer', 'distributor'].includes(role)) {
+                    await auth.signOut();
+                    throw new Error(roleAccessMessage(role));
+                }
+
+                window.location.href = 'index.html';
+            } catch (error) {
+                console.error('Login error:', error);
+                const message = error.message === 'Failed to fetch'
+                    ? 'Unable to reach the API. Start the customer panel with "npm run dev" from the customer-panel folder.'
+                    : (error.message || 'Invalid email or password');
+                showError(message);
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Login';
+            }
+        });
+
+        function roleAccessMessage(role) {
+            if (role === 'storeOwner' || role === 'distributor_store_owner') {
+                return 'Store owner accounts must use the Store Owner panel.';
+            }
+            if (role === 'driver') {
+                return 'Driver accounts must use the Driver app.';
+            }
+            if (role === 'superAdmin' || role === 'admin') {
+                return 'Admin accounts must use the Super Admin panel.';
+            }
+            return 'Access denied. Customer or distributor role required.';
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.add('show');
+        }
+
+        function hideError() {
+            errorMessage.classList.remove('show');
+        }
+    </script>
+</body>
+</html>

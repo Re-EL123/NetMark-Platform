@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+        (function () {
+            var match = location.pathname.match(/^\/store\/([^/]+)\/?$/);
+            if (match) {
+                location.replace('/#store/' + encodeURIComponent(decodeURIComponent(match[1])));
+            }
+        })();
+    </script>
+    <title>Green World - Shop</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/auth.css">
+    <link rel="stylesheet" href="css/shop.css">
+    <link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo">
+                    <a href="#home" onclick="app.navigateTo('home'); return false;">
+                        <img src="img/green-world-logo.png" alt="Green World" class="brand-logo-header">
+                    </a>
+                </div>
+                <nav class="nav">
+                    <a href="#home" class="nav-link active" data-page="home">Home</a>
+                    <a href="#shop" class="nav-link" data-page="shop">Shop</a>
+                    <a href="#stores" class="nav-link" data-page="stores">Stores</a>
+                    <a href="#appointments" class="nav-link" data-page="appointments">Book Appointment</a>
+                </nav>
+                <div class="header-actions">
+                    <button class="btn-icon" id="cartBtn" aria-label="Cart">
+                        <i data-feather="shopping-cart"></i>
+                        <span class="badge" id="cartCount">0</span>
+                    </button>
+                    <div class="user-menu" id="userMenu">
+                        <button class="btn btn-primary" id="loginBtn" onclick="window.location.href='login.html'">Login</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main id="mainContent">
+        <!-- Dynamic content loads here -->
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>Green World</h3>
+                    <p>Your trusted health and wellness partner</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Quick Links</h4>
+                    <a href="#shop" data-page="shop">Shop</a>
+                    <a href="#stores" data-page="stores">Stores</a>
+                    <a href="#about" data-page="about">About Us</a>
+                </div>
+                <div class="footer-section">
+                    <h4>Customer Service</h4>
+                    <a href="#contact" data-page="contact">Contact Us</a>
+                    <a href="#faq" data-page="faq">FAQ</a>
+                    <a href="#shipping" data-page="shipping">Shipping Info</a>
+                </div>
+                <div class="footer-section">
+                    <h4>Connect With Us</h4>
+                    <div class="social-links">
+                        <a href="#">Facebook</a>
+                        <a href="#">Twitter</a>
+                        <a href="#">Instagram</a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2026 Green World. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Cart Sidebar -->
+    <div class="cart-sidebar" id="cartSidebar">
+        <div class="cart-header">
+            <h3>Shopping Cart</h3>
+            <button class="close-btn" id="closeCart">&times;</button>
+        </div>
+        <div class="cart-body" id="cartBody">
+            <!-- Cart items -->
+        </div>
+        <div class="cart-footer">
+            <div class="cart-total">
+                <span>Total:</span>
+                <strong id="cartTotal">R0.00</strong>
+            </div>
+            <button class="btn btn-primary btn-block" id="checkoutBtn">
+                Proceed to Checkout
+            </button>
+        </div>
+    </div>
+
+    <!-- Overlay -->
+    <div class="overlay" id="overlay"></div>
+
+    <!-- Modal -->
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <span class="modal-close" id="modalClose">&times;</span>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    
+    <script src="js/config.js"></script>
+    <script src="js/firebase-config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/cart.js"></script>
+    <script src="js/home.js"></script>
+    <script src="js/shop.js"></script>
+    <script src="js/stores.js"></script>
+    <script src="js/account.js"></script>
+    <script src="js/pages.js"></script>
+    <script src="js/checkout.js"></script>
+    <script src="js/appointments.js"></script>
+    <script src="js/orders.js"></script>
+    <script src="js/app.js"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <script>feather.replace()</script>
+</body>
+</html>

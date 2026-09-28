@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "c4ef6d52-033e-4f2d-8c52-8b13a75cbe13"
+      }
+    },
+    "android": {
+      "package": "com.reel123.greenworldfrontend"
+    },
+    "ios": {
+      "bundleIdentifier": "com.reel123.greenworldfrontend",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}
