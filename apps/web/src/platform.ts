@@ -1,65 +1,817 @@
-import { supabase } from './supabase';
 import { apiRequest } from './api';
-import { table, statusBadge, badge, esc, formatDate, setHTML } from './render';
+import { initPanel, NavItem } from './app';
+import { esc, statusBadge, badge, formatDate } from './render';
+import { crudView } from './crud';
+import { openModal, confirmDialog, toast, money, titleCase, statCards, Field } from './ui';
 
-const userName = document.getElementById('userName') as HTMLElement;
+const ROLE_OPTIONS = [
+  'platformAdmin',
+  'owner',
+  'distributor',
+  'storeOwner',
+  'customer',
+  'driver'
+].map((r) => ({ value: r, label: titleCase(r) }));
 
-(window as any).logout = async () => {
-  await supabase.auth.signOut();
-  localStorage.removeItem('netmark_user');
-  window.location.href = import.meta.env.BASE_URL;
-};
-
-async function load() {
-  const u = JSON.parse(localStorage.getItem('netmark_user') || 'null');
-  if (u) userName.textContent = u.name;
-
-  const users = await apiRequest('/users');
-  if (users.success) {
-    setHTML(
-      'users',
-      table(
-        [
-          { key: 'name', label: 'Name' },
-          { key: 'email', label: 'Email' },
-          { key: 'role', label: 'Role', render: (r) => badge(r.role || '-', 'info') },
-          {
-            key: 'verificationStatus',
-            label: 'Verification',
-            render: (r) => statusBadge(r.verificationStatus)
-          },
-          { key: 'phone', label: 'Phone' },
-          { key: 'lastLogin', label: 'Last Login', render: (r) => formatDate(r.lastLogin) }
-        ],
-        users.data
-      )
-    );
-  } else {
-    setHTML('users', `<p class="empty">${esc(users.message || 'Unable to load users.')}</p>`);
-  }
-
-  const companies = await apiRequest('/companies');
-  if (companies.success) {
-    setHTML(
-      'companies',
-      table(
-        [
-          { key: 'name', label: 'Name' },
-          { key: 'slug', label: 'Slug' },
-          { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
-          { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) }
-        ],
-        companies.data
-      )
-    );
-  } else {
-    setHTML(
-      'companies',
-      `<p class="empty">${esc(companies.message || 'Unable to load companies.')}</p>`
-    );
-  }
+function opts(values: string[]) {
+  return values.map((v) => ({ value: v, label: titleCase(v) }));
 }
 
-supabase.auth.getSession().then(({ data }) => {
-  if (data.session) load();
+function act(act: string, id: string, label: string, cls = '') {
+  return `<button data-act="${act}" data-id="${esc(id)}" class="${cls}">${esc(label)}</button>`;
+}
+
+function wire(root: HTMLElement, handlers: Record<string, (id: string) => void>) {
+  root.querySelectorAll('[data-act]').forEach((btn) => {
+    const el = btn as HTMLElement;
+    el.onclick = () => handlers[el.dataset.act || '']?.(el.dataset.id || '');
+  });
+}
+
+const nav: NavItem[] = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'users', label: 'Users' },
+  { id: 'companies', label: 'Companies' },
+  { id: 'stores', label: 'Stores' },
+  { id: 'products', label: 'Products' },
+  { id: 'orders', label: 'Orders' },
+  { id: 'drivers', label: 'Drivers' },
+  { id: 'appointments', label: 'Appointments' },
+  { id: 'codes', label: 'Distributor Codes' },
+  { id: 'payouts', label: 'Payouts' },
+  { id: 'payments', label: 'Payments' },
+  { id: 'reports', label: 'Reports' },
+  { id: 'announcements', label: 'Announcements' },
+  { id: 'audit', label: 'Audit Log' },
+  { id: 'settings', label: 'Settings' }
+];
+
+initPanel({
+  title: 'Platform Admin',
+  nav,
+  render: async (route, ctx) => {
+    const c = ctx.container;
+    ctx.titleEl.textContent = nav.find((n) => n.id === route)?.label || 'Platform Admin';
+
+    if (route === 'dashboard') return renderDashboard(c);
+    if (route === 'users') return renderUsers(c);
+    if (route === 'companies') return renderCompanies(c);
+    if (route === 'stores') return renderStores(c);
+    if (route === 'products') return renderProducts(c);
+    if (route === 'orders') return renderOrders(c);
+    if (route === 'drivers') return renderDrivers(c);
+    if (route === 'appointments') return renderAppointments(c);
+    if (route === 'codes') return renderCodes(c);
+    if (route === 'payouts') return renderPayouts(c);
+    if (route === 'payments') return renderPayments(c);
+    if (route === 'reports') return renderReports(c);
+    if (route === 'announcements') return renderAnnouncements(c);
+    if (route === 'audit') return renderAudit(c);
+    if (route === 'settings') return renderSettings(c);
+  }
 });
+
+/* ------------------------------ dashboard ------------------------------ */
+async function renderDashboard(c: HTMLElement) {
+  const res = await apiRequest('/admin/stats');
+  if (!res.success) {
+    c.innerHTML = `<div class="card"><p class="empty">${esc(res.message)}</p></div>`;
+    return;
+  }
+  const d = res.data;
+  c.innerHTML = `
+    ${statCards([
+      { label: 'Revenue (paid)', value: money(d.totals.revenue), accent: true },
+      { label: 'Orders', value: d.totals.orders },
+      { label: 'Users', value: d.totals.users },
+      { label: 'Companies', value: d.totals.companies },
+      { label: 'Stores', value: d.totals.stores },
+      { label: 'Products', value: d.totals.products },
+      { label: 'Pending drivers', value: d.drivers.pending },
+      { label: 'Active drivers', value: d.drivers.active }
+    ])}
+    <div class="card">
+      <h3>Recent orders</h3>
+      ${tableSimple(
+        ['Order', 'Customer', 'Total', 'Payment', 'Status', 'Created'],
+        d.recentOrders.map((o: any) => [
+          esc(o.orderNumber || o.id),
+          esc(o.customerId ? o.customerId.slice(0, 8) : '—'),
+          money(o.total),
+          statusBadge(o.paymentStatus),
+          statusBadge(o.orderStatus),
+          formatDate(o.createdAt)
+        ])
+      )}
+    </div>
+    <div class="card">
+      <h3>Users by role</h3>
+      ${Object.entries(d.roleCounts)
+        .map(([role, count]) => `<div class="summary-row"><span>${titleCase(role)}</span><strong>${count}</strong></div>`)
+        .join('')}
+    </div>`;
+}
+
+function tableSimple(headers: string[], rows: string[][]) {
+  if (!rows.length) return '<p class="empty">No records.</p>';
+  return `<div class="table-wrap"><table><thead><tr>${headers
+    .map((h) => `<th>${h}</th>`)
+    .join('')}</tr></thead><tbody>${rows
+    .map((r) => `<tr>${r.map((cell) => `<td>${cell}</td>`).join('')}</tr>`)
+    .join('')}</tbody></table></div>`;
+}
+
+/* -------------------------------- users -------------------------------- */
+function renderUsers(c: HTMLElement) {
+  let rows: any[] = [];
+  crudView(c, {
+    endpoint: '/admin/users',
+    searchPlaceholder: 'Search name, email, phone…',
+    onData: (r) => (rows = r),
+    filters: () => [
+      { name: 'role', label: 'Role', options: ROLE_OPTIONS },
+      { name: 'status', label: 'Status', options: opts(['active', 'suspended']) }
+    ],
+    columns: [
+      { key: 'name', label: 'Name' },
+      { key: 'email', label: 'Email' },
+      { key: 'role', label: 'Role', render: (r) => badge(r.role, 'info') },
+      { key: 'status', label: 'Status', render: (r) => statusBadge(r.status || 'active') },
+      { key: 'verificationStatus', label: 'Verification', render: (r) => statusBadge(r.verificationStatus) },
+      { key: 'lastLogin', label: 'Last login', render: (r) => formatDate(r.lastLogin) }
+    ],
+    toolbar: () => `<button class="btn btn-sm" data-new>+ New user</button>`,
+    actions: (r) =>
+      act('edit', r.id, 'Edit') +
+      (r.status === 'suspended' ? act('activate', r.id, 'Reactivate') : act('suspend', r.id, 'Suspend', 'danger')) +
+      act('reset', r.id, 'Reset password') +
+      act('delete', r.id, 'Delete', 'danger'),
+    bind: (root, reload) => {
+      (root.querySelector('[data-new]') as HTMLElement).onclick = () => userModal(null, reload);
+      wire(root, {
+        edit: (id) => userModal(rows.find((r) => r.id === id), reload),
+        suspend: async (id) => {
+          if (await confirmDialog('Suspend this user?', { danger: true, confirmLabel: 'Suspend' })) {
+            await apiRequest(`/admin/users/${id}/suspend`, { method: 'POST' });
+            toast('User suspended', 'success');
+            reload();
+          }
+        },
+        activate: async (id) => {
+          await apiRequest(`/admin/users/${id}/reactivate`, { method: 'POST' });
+          toast('User reactivated', 'success');
+          reload();
+        },
+        reset: async (id) => {
+          const r = await apiRequest(`/admin/users/${id}/reset-password`, { method: 'POST' });
+          if (r.success) alert(`Temporary password: ${r.data.temporaryPassword}\n\nShare this securely.`);
+          else toast(r.message || 'Failed', 'error');
+        },
+        delete: async (id) => {
+          if (await confirmDialog('Delete this user permanently?', { danger: true, confirmLabel: 'Delete' })) {
+            await apiRequest(`/admin/users/${id}`, { method: 'DELETE' });
+            toast('User deleted', 'success');
+            reload();
+          }
+        }
+      });
+    }
+  });
+}
+
+async function userModal(row: any, reload: () => void) {
+  const companies = await loadCompanies();
+  const fields: Field[] = [
+    { name: 'name', label: 'Full name', required: true, value: row?.name },
+    { name: 'email', label: 'Email', type: 'email', required: !row, value: row?.email },
+    { name: 'phone', label: 'Phone', type: 'tel', value: row?.phone },
+    { name: 'role', label: 'Role', type: 'select', options: ROLE_OPTIONS, value: row?.role || 'customer' },
+    { name: 'status', label: 'Status', type: 'select', options: opts(['active', 'suspended']), value: row?.status || 'active' },
+    { name: 'companyId', label: 'Company', type: 'select', options: [{ value: '', label: 'None' }, ...companies], value: row?.companyId || '' }
+  ];
+  if (!row) fields.push({ name: 'password', label: 'Password', type: 'password', help: 'Leave blank to auto-generate' });
+  await openModal({
+    title: row ? 'Edit user' : 'New user',
+    fields,
+    onSubmit: async (v) => {
+      const res = row
+        ? await apiRequest(`/admin/users/${row.id}`, { method: 'PUT', body: JSON.stringify(v) })
+        : await apiRequest('/admin/users', { method: 'POST', body: JSON.stringify(v) });
+      if (!res.success) throw new Error(res.message || 'Failed');
+      if (res.data?.temporaryPassword) alert(`Temporary password: ${res.data.temporaryPassword}`);
+      toast(row ? 'User updated' : 'User created', 'success');
+      reload();
+    }
+  });
+}
+
+async function loadCompanies(): Promise<{ value: string; label: string }[]> {
+  const res = await apiRequest('/companies?pageSize=100');
+  return (res.data || []).map((co: any) => ({ value: co.id, label: co.name }));
+}
+
+/* ------------------------------ companies ------------------------------ */
+function renderCompanies(c: HTMLElement) {
+  let rows: any[] = [];
+  crudView(c, {
+    endpoint: '/companies',
+    searchPlaceholder: 'Search companies…',
+    onData: (r) => (rows = r),
+    filters: () => [{ name: 'status', label: 'Status', options: opts(['active', 'suspended', 'inactive']) }],
+    columns: [
+      { key: 'name', label: 'Name' },
+      { key: 'slug', label: 'Slug' },
+      { key: 'plan', label: 'Plan', render: (r) => badge(r.plan || 'standard', 'info') },
+      { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
+      { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) }
+    ],
+    toolbar: () => `<button class="btn btn-sm" data-new>+ New company</button>`,
+    actions: (r) =>
+      act('edit', r.id, 'Edit') +
+      (r.status === 'suspended' ? act('activate', r.id, 'Reactivate') : act('suspend', r.id, 'Suspend', 'danger')) +
+      act('delete', r.id, 'Delete', 'danger'),
+    bind: (root, reload) => {
+      (root.querySelector('[data-new]') as HTMLElement).onclick = () => companyModal(null, reload);
+      wire(root, {
+        edit: (id) => companyModal(rows.find((r) => r.id === id), reload),
+        suspend: async (id) => {
+          if (await confirmDialog('Suspend this company and all its users?', { danger: true, confirmLabel: 'Suspend' })) {
+            await apiRequest(`/companies/${id}/suspend`, { method: 'POST', body: JSON.stringify({ reason: 'Admin action' }) });
+            toast('Company suspended', 'success');
+            reload();
+          }
+        },
+        activate: async (id) => {
+          await apiRequest(`/companies/${id}/reactivate`, { method: 'POST' });
+          toast('Company reactivated', 'success');
+          reload();
+        },
+        delete: async (id) => {
+          if (await confirmDialog('Delete this company?', { danger: true, confirmLabel: 'Delete' })) {
+            await apiRequest(`/companies/${id}`, { method: 'DELETE' });
+            toast('Company deleted', 'success');
+            reload();
+          }
+        }
+      });
+    }
+  });
+}
+
+async function companyModal(row: any, reload: () => void) {
+  const users = await apiRequest('/admin/users?role=owner&pageSize=100');
+  const owners = [{ value: '', label: 'None' }, ...(users.data || []).map((u: any) => ({ value: u.id, label: `${u.name} (${u.email})` }))];
+  await openModal({
+    title: row ? 'Edit company' : 'New company',
+    fields: [
+      { name: 'name', label: 'Company name', required: true, value: row?.name },
+      { name: 'plan', label: 'Plan', value: row?.plan || 'standard' },
+      { name: 'ownerId', label: 'Owner', type: 'select', options: owners, value: row?.ownerId || '' }
+    ],
+    onSubmit: async (v) => {
+      const res = row
+        ? await apiRequest(`/companies/${row.id}`, { method: 'PUT', body: JSON.stringify(v) })
+        : await apiRequest('/companies', { method: 'POST', body: JSON.stringify(v) });
+      if (!res.success) throw new Error(res.message || 'Failed');
+      toast(row ? 'Company updated' : 'Company created', 'success');
+      reload();
+    }
+  });
+}
+
+/* ------------------------------- stores -------------------------------- */
+function renderStores(c: HTMLElement) {
+  let rows: any[] = [];
+  crudView(c, {
+    endpoint: '/stores',
+    searchPlaceholder: 'Search stores…',
+    onData: (r) => (rows = r),
+    columns: [
+      { key: 'name', label: 'Name' },
+      { key: 'slug', label: 'Slug' },
+      { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') },
+      { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) }
+    ],
+    toolbar: () => `<button class="btn btn-sm" data-new>+ New store</button>`,
+    actions: (r) => act('edit', r.id, 'Edit') + act('toggle', r.id, r.isActive ? 'Deactivate' : 'Activate') + act('delete', r.id, 'Delete', 'danger'),
+    bind: (root, reload) => {
+      (root.querySelector('[data-new]') as HTMLElement).onclick = () => storeModal(null, reload);
+      wire(root, {
+        edit: (id) => storeModal(rows.find((r) => r.id === id), reload),
+        toggle: async (id) => {
+          await apiRequest(`/stores/${id}/toggle`, { method: 'POST' });
+          toast('Store updated', 'success');
+          reload();
+        },
+        delete: async (id) => {
+          if (await confirmDialog('Delete this store?', { danger: true, confirmLabel: 'Delete' })) {
+            await apiRequest(`/stores/${id}`, { method: 'DELETE' });
+            reload();
+          }
+        }
+      });
+    }
+  });
+}
+
+async function storeModal(row: any, reload: () => void) {
+  const companies = await loadCompanies();
+  await openModal({
+    title: row ? 'Edit store' : 'New store',
+    fields: [
+      { name: 'name', label: 'Store name', required: true, value: row?.name },
+      { name: 'address', label: 'Address', value: row?.address },
+      { name: 'companyId', label: 'Company', type: 'select', options: [{ value: '', label: 'None' }, ...companies], value: row?.companyId || '' }
+    ],
+    onSubmit: async (v) => {
+      const res = row
+        ? await apiRequest(`/stores/${row.id}`, { method: 'PUT', body: JSON.stringify(v) })
+        : await apiRequest('/stores', { method: 'POST', body: JSON.stringify(v) });
+      if (!res.success) throw new Error(res.message || 'Failed');
+      toast('Store saved', 'success');
+      reload();
+    }
+  });
+}
+
+/* ------------------------------ products ------------------------------- */
+function renderProducts(c: HTMLElement) {
+  let rows: any[] = [];
+  crudView(c, {
+    endpoint: '/products',
+    searchPlaceholder: 'Search products…',
+    onData: (r) => (rows = r),
+    columns: [
+      { key: 'name', label: 'Name' },
+      { key: 'sku', label: 'SKU' },
+      { key: 'price', label: 'Price', render: (r) => money(r.price) },
+      { key: 'stock', label: 'Stock', render: (r) => badge(String(r.stock ?? 0), Number(r.stock) <= 5 ? 'warning' : 'neutral') },
+      { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') }
+    ],
+    toolbar: () => `<button class="btn btn-sm" data-new>+ New product</button>`,
+    actions: (r) => act('edit', r.id, 'Edit') + act('stock', r.id, 'Stock') + act('delete', r.id, 'Delete', 'danger'),
+    bind: (root, reload) => {
+      (root.querySelector('[data-new]') as HTMLElement).onclick = () => productModal(null, reload);
+      wire(root, {
+        edit: (id) => productModal(rows.find((r) => r.id === id), reload),
+        stock: async (id) => {
+          const row = rows.find((r) => r.id === id);
+          await openModal({
+            title: `Adjust stock — ${row?.name}`,
+            fields: [{ name: 'delta', label: 'Change (+/-)', type: 'number', value: 0, help: `Current: ${row?.stock ?? 0}` }],
+            onSubmit: async (v) => {
+              const res = await apiRequest(`/products/${id}/stock`, { method: 'POST', body: JSON.stringify(v) });
+              if (!res.success) throw new Error(res.message);
+              toast('Stock updated', 'success');
+              reload();
+            }
+          });
+        },
+        delete: async (id) => {
+          if (await confirmDialog('Delete this product?', { danger: true, confirmLabel: 'Delete' })) {
+            await apiRequest(`/products/${id}`, { method: 'DELETE' });
+            reload();
+          }
+        }
+      });
+    }
+  });
+}
+
+async function productModal(row: any, reload: () => void) {
+  const companies = await loadCompanies();
+  await openModal({
+    title: row ? 'Edit product' : 'New product',
+    fields: [
+      { name: 'name', label: 'Name', required: true, value: row?.name },
+      { name: 'price', label: 'Price', type: 'number', step: '0.01', value: row?.price ?? 0 },
+      { name: 'stock', label: 'Stock', type: 'number', value: row?.stock ?? 0 },
+      { name: 'category', label: 'Category', value: row?.category },
+      { name: 'sku', label: 'SKU', value: row?.sku },
+      { name: 'description', label: 'Description', type: 'textarea', value: row?.description },
+      { name: 'image', label: 'Image URL', value: row?.image },
+      { name: 'companyId', label: 'Company', type: 'select', options: [{ value: '', label: 'None' }, ...companies], value: row?.companyId || '' },
+      { name: 'isActive', label: 'Active', type: 'checkbox', value: row ? row.isActive !== false : true }
+    ],
+    onSubmit: async (v) => {
+      const res = row
+        ? await apiRequest(`/products/${row.id}`, { method: 'PUT', body: JSON.stringify(v) })
+        : await apiRequest('/products', { method: 'POST', body: JSON.stringify(v) });
+      if (!res.success) throw new Error(res.message || 'Failed');
+      toast('Product saved', 'success');
+      reload();
+    }
+  });
+}
+
+/* ------------------------------- orders -------------------------------- */
+function renderOrders(c: HTMLElement) {
+  let rows: any[] = [];
+  crudView(c, {
+    endpoint: '/orders',
+    searchPlaceholder: 'Search orders…',
+    onData: (r) => (rows = r),
+    filters: () => [
+      { name: 'status', label: 'Status', options: opts(['pending', 'confirmed', 'ready', 'completed', 'cancelled']) },
+      { name: 'paymentStatus', label: 'Payment', options: opts(['unpaid', 'paid', 'refunded']) }
+    ],
+    columns: [
+      { key: 'orderNumber', label: 'Order', render: (r) => esc(r.orderNumber || r.id.slice(0, 8)) },
+      { key: 'total', label: 'Total', render: (r) => money(r.total) },
+      { key: 'paymentStatus', label: 'Payment', render: (r) => statusBadge(r.paymentStatus) },
+      { key: 'orderStatus', label: 'Status', render: (r) => statusBadge(r.orderStatus) },
+      { key: 'deliveryStatus', label: 'Delivery', render: (r) => statusBadge(r.deliveryStatus) },
+      { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) }
+    ],
+    actions: (r) => act('view', r.id, 'View') + act('status', r.id, 'Status') + act('assign', r.id, 'Assign') + act('refund', r.id, 'Refund', 'danger'),
+    bind: (root, reload) => {
+      wire(root, {
+        view: (id) => orderModal(rows.find((r) => r.id === id)),
+        status: (id) => orderStatusModal(rows.find((r) => r.id === id), reload),
+        assign: (id) => assignModal(rows.find((r) => r.id === id), reload),
+        refund: async (id) => {
+          const row = rows.find((r) => r.id === id);
+          if (await confirmDialog(`Refund ${money(row?.total)} for this order?`, { danger: true, confirmLabel: 'Refund' })) {
+            await apiRequest(`/orders/${id}/refund`, { method: 'POST', body: JSON.stringify({ amount: row?.total }) });
+            toast('Refund issued', 'success');
+            reload();
+          }
+        }
+      });
+    }
+  });
+}
+
+async function orderModal(row: any) {
+  if (!row) return;
+  const items = (row.items || [])
+    .map((i: any) => `<div class="summary-row"><span>${esc(i.name)} × ${i.quantity}</span><span>${money(i.lineTotal)}</span></div>`)
+    .join('');
+  await openModal({
+    title: `Order ${esc(row.orderNumber || row.id)}`,
+    submitLabel: 'Close',
+    html: `
+      <div class="detail-grid" style="margin-bottom:16px">
+        <div><span class="detail-label">Status</span><span>${statusBadge(row.orderStatus)}</span></div>
+        <div><span class="detail-label">Payment</span><span>${statusBadge(row.paymentStatus)}</span></div>
+        <div><span class="detail-label">Delivery</span><span>${statusBadge(row.deliveryStatus)}</span></div>
+        <div><span class="detail-label">Created</span><span>${formatDate(row.createdAt)}</span></div>
+      </div>
+      <h4>Items</h4>${items || '<p class="empty">No items</p>'}
+      <div class="summary-row"><span>Subtotal</span><span>${money(row.subtotal)}</span></div>
+      <div class="summary-row"><span>Delivery</span><span>${money(row.deliveryFee)}</span></div>
+      <div class="summary-row total"><span>Total</span><span>${money(row.total)}</span></div>
+      ${row.address ? `<p class="empty" style="margin-top:12px">Address: ${esc(typeof row.address === 'string' ? row.address : JSON.stringify(row.address))}</p>` : ''}`,
+    onSubmit: async () => true
+  });
+}
+
+async function orderStatusModal(row: any, reload: () => void) {
+  await openModal({
+    title: 'Update order status',
+    fields: [{ name: 'status', label: 'Order status', type: 'select', options: opts(['pending', 'confirmed', 'ready', 'completed', 'cancelled']), value: row?.orderStatus }],
+    onSubmit: async (v) => {
+      const res = await apiRequest(`/orders/${row.id}/status`, { method: 'PUT', body: JSON.stringify(v) });
+      if (!res.success) throw new Error(res.message);
+      toast('Order updated', 'success');
+      reload();
+    }
+  });
+}
+
+async function assignModal(row: any, reload: () => void) {
+  const res = await apiRequest('/drivers?status=approved&pageSize=100');
+  const drivers = (res.data || []).map((d: any) => ({ value: d.id, label: d.user?.name || d.licenseNumber || d.id.slice(0, 8) }));
+  if (!drivers.length) return toast('No approved drivers available', 'error');
+  await openModal({
+    title: 'Assign driver',
+    fields: [{ name: 'driverId', label: 'Driver', type: 'select', options: drivers }],
+    onSubmit: async (v) => {
+      const r = await apiRequest(`/orders/${row.id}/assign`, { method: 'POST', body: JSON.stringify(v) });
+      if (!r.success) throw new Error(r.message);
+      toast('Driver assigned', 'success');
+      reload();
+    }
+  });
+}
+
+/* ------------------------------- drivers ------------------------------- */
+function renderDrivers(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/drivers',
+    searchPlaceholder: 'Search drivers…',
+    filters: () => [{ name: 'status', label: 'Status', options: opts(['pending', 'approved', 'rejected', 'suspended']) }],
+    columns: [
+      { key: 'user', label: 'Driver', render: (r) => esc(r.user?.name || '—') },
+      { key: 'vehicleType', label: 'Vehicle', render: (r) => esc(`${r.vehicleType || ''} ${r.vehicleNumber || ''}`.trim()) },
+      { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
+      { key: 'isAvailable', label: 'Online', render: (r) => statusBadge(r.isAvailable ? 'active' : 'inactive') },
+      { key: 'stats', label: 'Deliveries', render: (r) => esc(r.stats?.totalDeliveries ?? 0) }
+    ],
+    actions: (r) =>
+      act('approve', r.id, 'Approve') +
+      act('reject', r.id, 'Reject', 'danger') +
+      act('suspend', r.id, 'Suspend', 'danger'),
+    bind: (root, reload) => {
+      wire(root, {
+        approve: async (id) => {
+          await apiRequest(`/drivers/${id}/approve`, { method: 'POST' });
+          toast('Driver approved', 'success');
+          reload();
+        },
+        reject: async (id) => {
+          if (await confirmDialog('Reject this driver?', { danger: true, confirmLabel: 'Reject' })) {
+            await apiRequest(`/drivers/${id}/reject`, { method: 'POST' });
+            reload();
+          }
+        },
+        suspend: async (id) => {
+          if (await confirmDialog('Suspend this driver?', { danger: true, confirmLabel: 'Suspend' })) {
+            await apiRequest(`/drivers/${id}/suspend`, { method: 'POST' });
+            reload();
+          }
+        }
+      });
+    }
+  });
+}
+
+/* ---------------------------- appointments ----------------------------- */
+function renderAppointments(c: HTMLElement) {
+  let rows: any[] = [];
+  crudView(c, {
+    endpoint: '/appointments',
+    onData: (r) => (rows = r),
+    filters: () => [{ name: 'status', label: 'Status', options: opts(['pending', 'confirmed', 'completed', 'cancelled', 'no_show']) }],
+    columns: [
+      { key: 'service', label: 'Service' },
+      { key: 'appointmentDate', label: 'Date', render: (r) => formatDate(r.appointmentDate) },
+      { key: 'appointmentTime', label: 'Time' },
+      { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) }
+    ],
+    actions: (r) => act('set', r.id, 'Update'),
+    bind: (root, reload) => {
+      wire(root, {
+        set: async (id) => {
+          await openModal({
+            title: 'Update appointment',
+            fields: [{ name: 'status', label: 'Status', type: 'select', options: opts(['pending', 'confirmed', 'completed', 'cancelled', 'no_show']), value: rows.find((r) => r.id === id)?.status }],
+            onSubmit: async (v) => {
+              await apiRequest(`/appointments/${id}/status`, { method: 'PUT', body: JSON.stringify(v) });
+              toast('Appointment updated', 'success');
+              reload();
+            }
+          });
+        }
+      });
+    }
+  });
+}
+
+/* ------------------------------- codes --------------------------------- */
+function renderCodes(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/codes',
+    searchPlaceholder: 'Search codes…',
+    columns: [
+      { key: 'code', label: 'Code', render: (r) => badge(r.code, 'info') },
+      { key: 'uses', label: 'Uses', render: (r) => `${r.uses || 0}${r.maxUses ? ' / ' + r.maxUses : ''}` },
+      { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') },
+      { key: 'expiresAt', label: 'Expires', render: (r) => (r.expiresAt ? formatDate(r.expiresAt) : '—') }
+    ],
+    toolbar: () => `<button class="btn btn-sm" data-new>+ New code</button>`,
+    actions: (r) => act('toggle', r.id, r.isActive ? 'Disable' : 'Enable') + act('delete', r.id, 'Delete', 'danger'),
+    bind: (root, reload) => {
+      (root.querySelector('[data-new]') as HTMLElement).onclick = () =>
+        openModal({
+          title: 'New distributor code',
+          fields: [
+            { name: 'code', label: 'Code', help: 'Leave blank to auto-generate' },
+            { name: 'maxUses', label: 'Max uses', type: 'number' },
+            { name: 'expiresAt', label: 'Expires', type: 'date' }
+          ],
+          onSubmit: async (v) => {
+            const res = await apiRequest('/codes', { method: 'POST', body: JSON.stringify(v) });
+            if (!res.success) throw new Error(res.message);
+            toast('Code created', 'success');
+            reload();
+          }
+        });
+      wire(root, {
+        toggle: async (id) => {
+          await apiRequest(`/codes/${id}/toggle`, { method: 'POST' });
+          reload();
+        },
+        delete: async (id) => {
+          if (await confirmDialog('Delete this code?', { danger: true, confirmLabel: 'Delete' })) {
+            await apiRequest(`/codes/${id}`, { method: 'DELETE' });
+            reload();
+          }
+        }
+      });
+    }
+  });
+}
+
+/* ------------------------------ payouts -------------------------------- */
+function renderPayouts(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/admin/payouts',
+    columns: [
+      { key: 'driverId', label: 'Driver', render: (r) => esc((r.driverId || '').slice(0, 8)) },
+      { key: 'amount', label: 'Amount', render: (r) => money(r.amount) },
+      { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
+      { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) },
+      { key: 'processedAt', label: 'Processed', render: (r) => formatDate(r.processedAt) }
+    ],
+    toolbar: () => `<button class="btn btn-sm" data-new>+ New payout</button>`,
+    actions: (r) => (r.status === 'pending' ? act('process', r.id, 'Mark paid') : ''),
+    bind: (root, reload) => {
+      (root.querySelector('[data-new]') as HTMLElement).onclick = async () => {
+        const res = await apiRequest('/drivers?status=approved&pageSize=100');
+        const drivers = (res.data || []).map((d: any) => ({ value: d.id, label: d.user?.name || d.id.slice(0, 8) }));
+        await openModal({
+          title: 'New payout',
+          fields: [
+            { name: 'driverId', label: 'Driver', type: 'select', options: drivers },
+            { name: 'amount', label: 'Amount', type: 'number', step: '0.01', required: true },
+            { name: 'method', label: 'Method', type: 'select', options: opts(['eft', 'cash', 'instant']) },
+            { name: 'periodStart', label: 'Period start', type: 'date' },
+            { name: 'periodEnd', label: 'Period end', type: 'date' }
+          ],
+          onSubmit: async (v) => {
+            const r = await apiRequest('/admin/payouts', { method: 'POST', body: JSON.stringify(v) });
+            if (!r.success) throw new Error(r.message);
+            toast('Payout created', 'success');
+            reload();
+          }
+        });
+      };
+      wire(root, {
+        process: async (id) => {
+          if (await confirmDialog('Mark this payout as paid?', { confirmLabel: 'Mark paid' })) {
+            await apiRequest(`/admin/payouts/${id}/process`, { method: 'POST' });
+            toast('Payout processed', 'success');
+            reload();
+          }
+        }
+      });
+    }
+  });
+}
+
+/* ------------------------------ payments ------------------------------- */
+function renderPayments(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/payments',
+    columns: [
+      { key: 'id', label: 'Payment', render: (r) => esc(r.id.slice(0, 8)) },
+      { key: 'orderId', label: 'Order', render: (r) => esc((r.orderId || '').slice(0, 8)) },
+      { key: 'amount', label: 'Amount', render: (r) => money(r.amount) },
+      { key: 'provider', label: 'Provider', render: (r) => badge(r.provider || 'payfast', 'info') },
+      { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
+      { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) }
+    ]
+  });
+}
+
+/* ------------------------------- reports ------------------------------- */
+async function renderReports(c: HTMLElement) {
+  const res = await apiRequest('/reports/overview');
+  if (!res.success) {
+    c.innerHTML = `<div class="card"><p class="empty">${esc(res.message)}</p></div>`;
+    return;
+  }
+  const d = res.data;
+  c.innerHTML = `
+    ${statCards([
+      { label: 'Revenue', value: money(d.totals.revenue), accent: true },
+      { label: 'Orders', value: d.totals.orders },
+      { label: 'Paid orders', value: d.totals.paidOrders },
+      { label: 'Avg order', value: money(d.totals.averageOrderValue) },
+      { label: 'Refunds', value: money(d.totals.refunds) }
+    ])}
+    <div class="card">
+      <h3>Top stores</h3>
+      ${tableSimple(['Store', 'Orders', 'Revenue'], (d.topStores || []).map((s: any) => [esc(s.name), String(s.orders), money(s.revenue)]))}
+    </div>
+    <div class="card">
+      <h3>Top products</h3>
+      ${tableSimple(['Product', 'Qty', 'Revenue'], (d.topProducts || []).map((p: any) => [esc(p.name), String(p.qty), money(p.revenue)]))}
+    </div>
+    <div class="card">
+      <h3>Orders by status</h3>
+      ${Object.entries(d.byStatus)
+        .map(([s, n]) => `<div class="summary-row"><span>${titleCase(s)}</span><strong>${n}</strong></div>`)
+        .join('')}
+    </div>`;
+}
+
+/* ---------------------------- announcements ---------------------------- */
+async function renderAnnouncements(c: HTMLElement) {
+  const res = await apiRequest('/admin/announcements');
+  const rows = res.success ? res.data : [];
+  c.innerHTML = `
+    <div class="toolbar"><div class="spacer"></div><button class="btn btn-sm" id="newAnn">+ New announcement</button></div>
+    ${tableSimple(
+      ['Title', 'Audience', 'Created', ''],
+      rows.map((a: any) => [
+        esc(a.title),
+        badge(a.audience || 'all', 'info'),
+        formatDate(a.createdAt),
+        `<button class="link-btn danger" data-del="${esc(a.id)}">Delete</button>`
+      ])
+    )}`;
+  (document.getElementById('newAnn') as HTMLElement).onclick = () =>
+    openModal({
+      title: 'New announcement',
+      fields: [
+        { name: 'title', label: 'Title', required: true },
+        { name: 'body', label: 'Message', type: 'textarea' },
+        {
+          name: 'audience',
+          label: 'Audience',
+          type: 'select',
+          options: [{ value: 'all', label: 'Everyone' }, ...ROLE_OPTIONS]
+        },
+        { name: 'sendNotification', label: 'Send in-app notification', type: 'checkbox', value: true }
+      ],
+      onSubmit: async (v) => {
+        const r = await apiRequest('/admin/announcements', { method: 'POST', body: JSON.stringify(v) });
+        if (!r.success) throw new Error(r.message);
+        toast('Announcement published', 'success');
+        renderAnnouncements(c);
+      }
+    });
+  c.querySelectorAll('[data-del]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      if (await confirmDialog('Delete this announcement?', { danger: true, confirmLabel: 'Delete' })) {
+        await apiRequest(`/admin/announcements/${(b as HTMLElement).dataset.del}`, { method: 'DELETE' });
+        renderAnnouncements(c);
+      }
+    })
+  );
+}
+
+/* -------------------------------- audit -------------------------------- */
+function renderAudit(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/admin/audit',
+    searchPlaceholder: 'Search action, entity, actor…',
+    columns: [
+      { key: 'action', label: 'Action', render: (r) => badge(r.action, 'info') },
+      { key: 'actorEmail', label: 'Actor' },
+      { key: 'actorRole', label: 'Role' },
+      { key: 'entityType', label: 'Entity' },
+      { key: 'createdAt', label: 'When', render: (r) => new Date(r.createdAt).toLocaleString() }
+    ]
+  });
+}
+
+/* ------------------------------- settings ------------------------------ */
+async function renderSettings(c: HTMLElement) {
+  const res = await apiRequest('/settings');
+  const s = res.success ? res.data.platform || {} : {};
+  c.innerHTML = `
+    <div class="card">
+      <h3>Platform settings</h3>
+      <div id="settingsForm"></div>
+    </div>`;
+
+  const fields: Field[] = [
+    { name: 'platformName', label: 'Platform name', value: s.platformName },
+    { name: 'supportEmail', label: 'Support email', type: 'email', value: s.supportEmail },
+    { name: 'currency', label: 'Currency code', value: s.currency || 'ZAR' },
+    { name: 'currencySymbol', label: 'Currency symbol', value: s.currencySymbol || 'R' },
+    { name: 'deliveryFee', label: 'Delivery fee', type: 'number', step: '0.01', value: s.deliveryFee ?? 0 },
+    { name: 'commissionPercent', label: 'Commission %', type: 'number', value: s.commissionPercent ?? 0 },
+    { name: 'driverCommissionPercent', label: 'Driver share %', type: 'number', value: s.driverCommissionPercent ?? 80 },
+    { name: 'minOrderAmount', label: 'Minimum order', type: 'number', value: s.minOrderAmount ?? 0 },
+    { name: 'deliveryRadiusKm', label: 'Delivery radius (km)', type: 'number', value: s.deliveryRadiusKm ?? 15 },
+    { name: 'maintenanceMode', label: 'Maintenance mode', type: 'checkbox', value: s.maintenanceMode === true },
+    { name: 'allowRegistrations', label: 'Allow registrations', type: 'checkbox', value: s.allowRegistrations !== false }
+  ];
+
+  const host = document.getElementById('settingsForm')!;
+  const form = document.createElement('form');
+  form.innerHTML =
+    fields
+      .map((f) => {
+        if (f.type === 'checkbox')
+          return `<div class="form-group" style="display:flex;gap:10px;align-items:center"><input type="checkbox" name="${f.name}" id="s_${f.name}" ${f.value ? 'checked' : ''} style="width:auto"><label for="s_${f.name}" style="margin:0">${esc(f.label)}</label></div>`;
+        return `<div class="form-group"><label for="s_${f.name}">${esc(f.label)}</label><input id="s_${f.name}" name="${f.name}" type="${f.type || 'text'}" value="${esc(f.value)}" ${f.step ? `step="${f.step}"` : ''}></div>`;
+      })
+      .join('') + `<button class="btn btn-sm" type="submit">Save settings</button>`;
+  host.appendChild(form);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const value: any = {};
+    for (const f of fields) {
+      const el = form.querySelector(`[name="${f.name}"]`) as HTMLInputElement;
+      value[f.name] = f.type === 'checkbox' ? el.checked : f.type === 'number' ? Number(el.value) : el.value;
+    }
+    const r = await apiRequest('/settings', { method: 'PUT', body: JSON.stringify({ scope: 'platform', key: 'general', value }) });
+    if (r.success) toast('Settings saved', 'success');
+    else toast(r.message || 'Failed', 'error');
+  });
+}

@@ -256,11 +256,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // ---- Admin listing & lifecycle ----
       if (path === '' && req.method === 'GET') {
         if (!isAdmin) return res.status(403).json({ success: false, message: 'Forbidden' });
-        let q = sb.from('drivers').select('*');
+        let q = sb.from('drivers').select('*').order('created_at', { ascending: false });
         if (user.role !== 'platformAdmin' && user.company_id) q = q.eq('company_id', user.company_id);
+        if (req.query.status) q = q.eq('status', String(req.query.status));
         const { data, error } = await q;
         if (error) return res.status(500).json({ success: false, message: 'Server error' });
-        return res.status(200).json({ success: true, data: rowsOut(data) });
+        const list = rowsOut(data);
+        const userIds = list.map((d: any) => d.userId).filter(Boolean);
+        if (userIds.length) {
+          const { data: users } = await sb.from('users').select('id, name, email, phone').in('id', userIds);
+          const byId = Object.fromEntries((users || []).map((u: any) => [u.id, u]));
+          for (const d of list) d.user = byId[(d as any).userId] || null;
+        }
+        return res.status(200).json({ success: true, data: list });
       }
 
       if (path === '' && req.method === 'POST') {

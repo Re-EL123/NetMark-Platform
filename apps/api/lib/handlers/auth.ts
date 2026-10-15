@@ -1,6 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { getSupabase, rowOut } from '../db';
 import { verifySupabaseToken, loadUser } from '../middleware';
+import { capabilitiesFor } from '../permissions';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -16,7 +17,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await loadUser(req, res, async () => {
         const sb = getSupabase();
         const userRow = (req as any).user;
-        const payload: any = { user: rowOut(userRow) };
+        const payload: any = { user: rowOut(userRow), capabilities: capabilitiesFor(userRow.role) };
 
         if (userRow.role === 'driver') {
           const { data: driver } = await sb
@@ -77,6 +78,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ success: false, message: 'Missing required fields' });
       }
 
+      const { data: genSettings } = await sb
+        .from('settings')
+        .select('value')
+        .eq('scope', 'platform')
+        .eq('key', 'general')
+        .maybeSingle();
+      if (genSettings?.value?.allowRegistrations === false && role !== 'platformAdmin') {
+        return res.status(403).json({ success: false, message: 'Registrations are currently disabled' });
+      }
+
       // Public signup may not create a platformAdmin once one already exists.
       // The very first platformAdmin is allowed as a bootstrap.
       const PUBLIC_ROLES = ['customer', 'storeOwner', 'distributor', 'driver', 'owner'];
@@ -115,6 +126,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const uid = created.user.id;
+
+      // Owners without an existing company get a fresh company of their own.
+      let resolvedCompanyId = companyId || null;
+      if (role === 'owner' && !resolvedCompanyId) {
+        const baseSlug =
+          String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') ||
+          `company-${Date.now().toString(36)}`;
+        const slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
+        const { data: newCompany } = await sb
+          .from('companies')
+          .insert({ name: `${name}'s Company`, slug, owner_id: uid, status: 'active' })
+          .select('*')
+          .single();
+        if (newCompany) resolvedCompanyId = newCompany.id;
+      }
+
       const { data: user, error: userErr } = await sb
         .from('users')
         .insert({
@@ -123,7 +150,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           email,
           phone: phone || null,
           role,
-          company_id: companyId || null,
+          company_id: resolvedCompanyId,
           distributor_code: distributorCode || null,
           verification_status: role === 'platformAdmin' ? 'verified' : 'pending'
         })
@@ -132,6 +159,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (userErr) {
         console.error('register user insert error', userErr);
         return res.status(500).json({ success: false, message: 'Server error' });
+      }
+
+      if (distributorCode) {
+        const { data: codeRow } = await sb
+          .from('distributor_codes')
+          .select('*')
+          .eq('code', String(distributorCode).toUpperCase())
+          .maybeSingle();
+        if (codeRow && codeRow.is_active !== false) {
+          await sb.from('users').update({ distributor_id: codeRow.distributor_id }).eq('id', uid);
+          await sb
+            .from('distributor_codes')
+            .update({ uses: Number(codeRow.uses || 0) + 1 })
+            .eq('id', codeRow.id);
+        }
       }
 
       if (role === 'driver') {

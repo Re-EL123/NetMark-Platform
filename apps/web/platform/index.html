@@ -3,47 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="NetMark Platform Administration">
+  <meta name="theme-color" content="#111111">
   <title>NetMark - Platform Admin</title>
   <link rel="icon" type="image/png" href="/favicon.png">
   <link rel="apple-touch-icon" href="/favicon-180.png">
   <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
-  <div class="app">
-    <aside class="sidebar">
-      <div class="brand">
-        <img src="/netmark-logo.png" alt="NetMark">
-      </div>
-      <nav>
-        <a href="/platform/" class="active">Dashboard</a>
-        <a href="#users">Users</a>
-        <a href="#companies">Companies</a>
-      </nav>
-    </aside>
-    <div class="main">
-      <header>
-        <h1>Platform Admin</h1>
-        <div class="user-meta">
-          <span id="userName" class="name"></span>
-          <button class="logout-btn" onclick="logout()">Logout</button>
-        </div>
-      </header>
-      <div class="content">
-        <div class="card">
-          <h2>Platform Administration</h2>
-          <p>Global control over companies, users, stores, products, orders, drivers, and appointments.</p>
-        </div>
-        <div class="card">
-          <h3>Users</h3>
-          <div id="users"></div>
-        </div>
-        <div class="card">
-          <h3>Companies</h3>
-          <div id="companies"></div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <div class="content"><p class="empty">Loading…</p></div>
   <script type="module" src="/src/platform.guard.ts"></script>
   <script type="module" src="/src/platform.ts"></script>
 </body>

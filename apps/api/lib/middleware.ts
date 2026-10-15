@@ -1,5 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { getSupabase } from './db';
+import { hasPermission } from './permissions';
 
 export async function verifySupabaseToken(
   req: VercelRequest,
@@ -37,6 +38,10 @@ export async function loadUser(req: VercelRequest, res: VercelResponse, next: ()
     if (error) throw error;
     if (!user) return res.status(401).json({ success: false, message: 'User not found' });
 
+    if (user.status && user.status !== 'active' && user.role !== 'platformAdmin') {
+      return res.status(403).json({ success: false, message: 'Account suspended. Contact support.' });
+    }
+
     await sb.from('users').update({ last_login: new Date().toISOString() }).eq('id', user.id);
 
     (req as any).user = user; // raw row (snake_case); handlers use rowOut()
@@ -53,6 +58,16 @@ export function requireRole(...roles: string[]) {
     if (!user || !roles.includes(user.role)) {
       return res.status(403).json({ success: false, message: 'Forbidden' });
     }
+    next();
+  };
+}
+
+export function requirePermission(...capabilities: string[]) {
+  return (req: VercelRequest, res: VercelResponse, next: () => void) => {
+    const user = (req as any).user;
+    if (!user) return res.status(403).json({ success: false, message: 'Forbidden' });
+    const ok = capabilities.every((cap) => hasPermission(user.role, cap));
+    if (!ok) return res.status(403).json({ success: false, message: 'Forbidden' });
     next();
   };
 }

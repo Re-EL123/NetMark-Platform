@@ -11,6 +11,10 @@ import payments from '../lib/handlers/payments';
 import reports from '../lib/handlers/reports';
 import codes from '../lib/handlers/codes';
 import deliveries from '../lib/handlers/deliveries';
+import admin from '../lib/handlers/admin';
+import settings from '../lib/handlers/settings';
+import notifications from '../lib/handlers/notifications';
+import reviews from '../lib/handlers/reviews';
 
 type Handler = (req: VercelRequest, res: VercelResponse) => unknown;
 
@@ -26,7 +30,11 @@ const handlers: Record<string, Handler> = {
   payments,
   reports,
   codes,
-  deliveries
+  deliveries,
+  admin,
+  settings,
+  notifications,
+  reviews
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

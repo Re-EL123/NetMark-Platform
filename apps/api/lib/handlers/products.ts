@@ -1,68 +1,101 @@
-import { VercelRequest, VercelResponse } from '@vercel/node';
-import { getSupabase, rowOut, rowsOut, mapColumns } from '../db';
-import { verifySupabaseToken, loadUser } from '../middleware';
+import { authed, ok, fail, slugOf, getSupabase, rowOut, rowsOut } from '../http';
+import { parseListQuery, runList } from '../paginate';
+import { hasPermission } from '../permissions';
+import { recordAudit } from '../audit';
 
-const PRODUCT_COLS = {
-  name: 'name',
-  price: 'price',
-  category: 'category',
-  companyId: 'company_id'
-};
+export default authed(async (req, res, ctx) => {
+  const sb = getSupabase();
+  const slug = slugOf(req);
+  const canWrite = ctx.isPlatform || hasPermission(ctx.role, 'products.write');
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  function scope(q: any) {
+    if (ctx.isPlatform) return q;
+    if (ctx.role === 'customer') return q;
+    return q.eq('company_id', ctx.companyId);
+  }
 
-  const slug = Array.isArray(req.query.slug) ? req.query.slug : [req.query.slug || ''];
-  const path = slug.join('/');
+  if (slug.length === 0 && req.method === 'GET') {
+    const list = parseListQuery(req);
+    let q = sb.from('products').select('*', { count: 'exact' });
+    q = scope(q);
+    if (req.query.storeId) q = q.eq('store_id', String(req.query.storeId));
+    if (req.query.category) q = q.eq('category', String(req.query.category));
+    if (ctx.role === 'customer') q = q.eq('is_active', true);
+    if (req.query.isActive !== undefined && ctx.role !== 'customer') q = q.eq('is_active', String(req.query.isActive) === 'true');
+    const result = await runList(q, list, { searchColumns: ['name', 'sku', 'description'] });
+    return ok(res, { data: rowsOut(result.data), meta: { count: result.count, page: result.page, pageSize: result.pageSize } });
+  }
 
-  return verifySupabaseToken(req, res, async () => {
-    await loadUser(req, res, async () => {
-      const sb = getSupabase();
-      const user = (req as any).user;
-      const isScoped = user.role !== 'platformAdmin';
-      const scoped = (q: any) => (isScoped && user.company_id ? q.eq('company_id', user.company_id) : q);
+  if (slug.length === 0 && req.method === 'POST') {
+    if (!canWrite) return fail(res, 'Forbidden', 403);
+    const { name, price, category, stock, sku, description, image, storeId, companyId, isActive } = req.body || {};
+    if (!name) return fail(res, 'Name is required');
+    const targetCompany = ctx.isPlatform ? companyId || null : ctx.companyId;
+    const { data, error } = await sb
+      .from('products')
+      .insert({
+        name,
+        price: price ?? 0,
+        category: category || null,
+        stock: stock ?? 0,
+        sku: sku || null,
+        description: description || null,
+        image: image || null,
+        store_id: storeId || null,
+        company_id: targetCompany,
+        is_active: isActive !== false
+      })
+      .select('*')
+      .single();
+    if (error) return fail(res, 'Could not create product');
+    await recordAudit(req, { action: 'product.create', entityType: 'product', entityId: data.id, after: rowOut(data) });
+    return ok(res, { data: rowOut(data) }, 201);
+  }
 
-      if (path === '' && req.method === 'GET') {
-        const { data, error } = await scoped(sb.from('products').select('*'));
-        if (error) return res.status(500).json({ success: false, message: 'Server error' });
-        return res.status(200).json({ success: true, data: rowsOut(data) });
-      }
+  const id = slug[0];
 
-      if (path === '' && req.method === 'POST') {
-        if (user.role === 'customer' || user.role === 'driver') {
-          return res.status(403).json({ success: false, message: 'Forbidden' });
-        }
-        const body = req.body || {};
-        if (!body.name) return res.status(400).json({ success: false, message: 'Name required' });
-        const { cols, rest } = mapColumns(body, PRODUCT_COLS);
-        if (isScoped && user.company_id) cols.company_id = user.company_id;
-        const { data, error } = await sb.from('products').insert({ ...cols, data: rest }).select('*').single();
-        if (error) return res.status(500).json({ success: false, message: 'Server error' });
-        return res.status(201).json({ success: true, data: rowOut(data) });
-      }
+  if (id && req.method === 'GET') {
+    const { data } = await scope(sb.from('products').select('*').eq('id', id)).maybeSingle();
+    if (!data) return fail(res, 'Not found', 404);
+    return ok(res, { data: rowOut(data) });
+  }
 
-      const id = slug[0];
+  if (id && req.method === 'PUT') {
+    if (!canWrite) return fail(res, 'Forbidden', 403);
+    const { data: before } = await scope(sb.from('products').select('*').eq('id', id)).maybeSingle();
+    if (!before) return fail(res, 'Not found', 404);
+    const b = req.body || {};
+    const patch: any = {};
+    for (const k of ['name', 'price', 'category', 'stock', 'sku', 'description', 'image', 'store_id']) {
+      if (b[k] !== undefined) patch[k] = b[k];
+    }
+    if (b.storeId !== undefined) patch.store_id = b.storeId || null;
+    if (b.isActive !== undefined) patch.is_active = b.isActive;
+    if (b.companyId !== undefined && ctx.isPlatform) patch.company_id = b.companyId || null;
+    const { data: after } = await sb.from('products').update(patch).eq('id', id).select('*').single();
+    await recordAudit(req, { action: 'product.update', entityType: 'product', entityId: id, before: rowOut(before), after: rowOut(after) });
+    return ok(res, { data: rowOut(after) });
+  }
 
-      if (id && req.method === 'GET') {
-        const { data } = await scoped(sb.from('products').select('*').eq('id', id)).maybeSingle();
-        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
-        return res.status(200).json({ success: true, data: rowOut(data) });
-      }
+  if (id && slug[1] === 'stock' && req.method === 'POST') {
+    if (!canWrite) return fail(res, 'Forbidden', 403);
+    const { data: before } = await scope(sb.from('products').select('*').eq('id', id)).maybeSingle();
+    if (!before) return fail(res, 'Not found', 404);
+    const delta = Number(req.body?.delta ?? req.body?.stock ?? 0);
+    const next = Math.max(0, Number(before.stock || 0) + delta);
+    const { data: after } = await sb.from('products').update({ stock: next }).eq('id', id).select('*').single();
+    await recordAudit(req, { action: 'product.stock', entityType: 'product', entityId: id, before: { stock: before.stock }, after: { stock: after.stock } });
+    return ok(res, { data: rowOut(after) });
+  }
 
-      if (id && req.method === 'PUT') {
-        const { data: current } = await scoped(sb.from('products').select('*').eq('id', id)).maybeSingle();
-        if (!current) return res.status(404).json({ success: false, message: 'Not found' });
-        const { cols, rest } = mapColumns(req.body || {}, PRODUCT_COLS);
-        const patch: any = { data: { ...(current.data || {}), ...rest } };
-        Object.assign(patch, cols);
-        const { data } = await scoped(sb.from('products').update(patch).eq('id', id)).select('*').single();
-        return res.status(200).json({ success: true, data: rowOut(data) });
-      }
+  if (id && req.method === 'DELETE') {
+    if (!canWrite) return fail(res, 'Forbidden', 403);
+    const { data: before } = await scope(sb.from('products').select('*').eq('id', id)).maybeSingle();
+    if (!before) return fail(res, 'Not found', 404);
+    await sb.from('products').delete().eq('id', id);
+    await recordAudit(req, { action: 'product.delete', entityType: 'product', entityId: id, before: rowOut(before) });
+    return ok(res, { message: 'Deleted' });
+  }
 
-      res.status(404).json({ success: false, message: 'Not found' });
-    });
-  });
-}
+  return fail(res, 'Not found', 404);
+});

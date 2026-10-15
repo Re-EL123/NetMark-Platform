@@ -2,6 +2,12 @@ import { API_BASE_URL } from './config';
 
 const registerForm = document.getElementById('registerForm') as HTMLFormElement;
 const errorDiv = document.getElementById('error') as HTMLDivElement;
+const roleSelect = document.getElementById('role') as HTMLSelectElement;
+const codeGroup = document.getElementById('codeGroup') as HTMLElement;
+
+roleSelect.addEventListener('change', () => {
+  codeGroup.style.display = ['customer', 'storeOwner'].includes(roleSelect.value) ? 'block' : 'none';
+});
 
 registerForm.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -11,13 +17,14 @@ registerForm.addEventListener('submit', async (e) => {
   const email = (document.getElementById('email') as HTMLInputElement).value;
   const phone = (document.getElementById('phone') as HTMLInputElement).value;
   const password = (document.getElementById('password') as HTMLInputElement).value;
-  const role = (document.getElementById('role') as HTMLSelectElement).value;
+  const role = roleSelect.value;
+  const distributorCode = (document.getElementById('distributorCode') as HTMLInputElement).value;
 
   try {
     const res = await fetch(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, phone, password, role })
+      body: JSON.stringify({ name, email, phone, password, role, distributorCode: distributorCode || undefined })
     });
 
     const data = await res.json();

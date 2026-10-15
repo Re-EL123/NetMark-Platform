@@ -1,102 +1,114 @@
-import { VercelRequest, VercelResponse } from '@vercel/node';
-import { getSupabase, rowOut, rowsOut } from '../db';
-import { verifySupabaseToken, loadUser } from '../middleware';
+import { authed, ok, fail, slugOf, getSupabase, rowOut, rowsOut } from '../http';
+import { parseListQuery, runList } from '../paginate';
+import { hasPermission } from '../permissions';
+import { recordAudit } from '../audit';
 
-function slugify(s: string) {
-  return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-}
+export default authed(async (req, res, ctx) => {
+  const sb = getSupabase();
+  const slug = slugOf(req);
+  const canWrite = ctx.isPlatform || hasPermission(ctx.role, 'settings.write');
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (slug.length === 0 && req.method === 'GET') {
+    const list = parseListQuery(req);
+    let q = sb.from('companies').select('*', { count: 'exact' });
+    if (!ctx.isPlatform) {
+      if (!ctx.companyId) return ok(res, { data: [], meta: { count: 0, page: 1, pageSize: list.pageSize } });
+      q = q.eq('id', ctx.companyId);
+    }
+    if (req.query.status) q = q.eq('status', String(req.query.status));
+    const result = await runList(q, list, { searchColumns: ['name', 'slug'] });
+    return ok(res, { data: rowsOut(result.data), meta: { count: result.count, page: result.page, pageSize: result.pageSize } });
+  }
 
-  const slug = Array.isArray(req.query.slug) ? req.query.slug : [req.query.slug || ''];
-  const path = slug.join('/');
+  if (slug.length === 0 && req.method === 'POST') {
+    if (!ctx.isPlatform) return fail(res, 'Forbidden', 403);
+    const { name, slug: companySlug, plan, ownerId, address, settings } = req.body || {};
+    if (!name) return fail(res, 'Name is required');
+    const autoSlug =
+      (companySlug || name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') ||
+      `company-${Date.now()}`;
+    const { data, error } = await sb
+      .from('companies')
+      .insert({ name, slug: autoSlug, plan: plan || 'standard', owner_id: ownerId || null, settings: settings || {} })
+      .select('*')
+      .single();
+    if (error) {
+      if (String(error.message).includes('duplicate')) return fail(res, 'A company with that slug already exists');
+      return fail(res, 'Could not create company');
+    }
+    if (ownerId) await sb.from('users').update({ company_id: data.id }).eq('id', ownerId);
+    if (address) await sb.from('companies').update({ settings: { ...(data.settings || {}), address } }).eq('id', data.id);
+    await recordAudit(req, { action: 'company.create', entityType: 'company', entityId: data.id, after: rowOut(data) });
+    return ok(res, { data: rowOut(data) }, 201);
+  }
 
-  return verifySupabaseToken(req, res, async () => {
-    await loadUser(req, res, async () => {
-      const sb = getSupabase();
-      const user = (req as any).user;
+  const id = slug[0];
 
-      if (path === '' && req.method === 'GET') {
-        if (user.role === 'platformAdmin') {
-          const { data, error } = await sb.from('companies').select('*');
-          if (error) return res.status(500).json({ success: false, message: 'Server error' });
-          return res.status(200).json({ success: true, data: rowsOut(data) });
-        }
-        if (user.company_id) {
-          const { data } = await sb.from('companies').select('*').eq('id', user.company_id);
-          return res.status(200).json({ success: true, data: rowsOut(data) });
-        }
-        return res.status(200).json({ success: true, data: [] });
-      }
+  if (id && req.method === 'GET') {
+    if (!ctx.isPlatform && ctx.companyId !== id) return fail(res, 'Forbidden', 403);
+    const { data } = await sb.from('companies').select('*').eq('id', id).maybeSingle();
+    if (!data) return fail(res, 'Not found', 404);
+    return ok(res, { data: rowOut(data) });
+  }
 
-      if (path === '' && req.method === 'POST') {
-        if (user.role !== 'platformAdmin' && user.role !== 'owner') {
-          return res.status(403).json({ success: false, message: 'Forbidden' });
-        }
-        const { name, contact, address, status } = req.body || {};
-        if (!name) return res.status(400).json({ success: false, message: 'Name required' });
+  if (id && req.method === 'PUT') {
+    if (!canWrite) return fail(res, 'Forbidden', 403);
+    if (!ctx.isPlatform && ctx.companyId !== id) return fail(res, 'Forbidden', 403);
+    const { data: before } = await sb.from('companies').select('*').eq('id', id).maybeSingle();
+    if (!before) return fail(res, 'Not found', 404);
+    const b = req.body || {};
+    const patch: any = {};
+    for (const k of ['name', 'slug', 'plan']) if (b[k] !== undefined) patch[k] = b[k];
+    if (b.settings !== undefined) patch.settings = { ...(before.settings || {}), ...b.settings };
+    if (b.ownerId !== undefined && ctx.isPlatform) patch.owner_id = b.ownerId || null;
+    if (b.status && ctx.isPlatform) patch.status = b.status;
+    const { data: after } = await sb.from('companies').update(patch).eq('id', id).select('*').single();
+    await recordAudit(req, { action: 'company.update', entityType: 'company', entityId: id, before: rowOut(before), after: rowOut(after) });
+    return ok(res, { data: rowOut(after) });
+  }
 
-        const base = slugify(name);
-        let s = base;
-        let i = 1;
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
-          const { data } = await sb.from('companies').select('id').eq('slug', s).maybeSingle();
-          if (!data) break;
-          s = `${base}-${i++}`;
-        }
+  if (id && (slug[1] === 'suspend' || slug[1] === 'reactivate') && req.method === 'POST') {
+    if (!ctx.isPlatform) return fail(res, 'Forbidden', 403);
+    const status = slug[1] === 'suspend' ? 'suspended' : 'active';
+    const { data: after } = await sb
+      .from('companies')
+      .update({ status, suspended_reason: req.body?.reason || null })
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (!after) return fail(res, 'Not found', 404);
+    // Suspend/reactivate every non-admin user in the company.
+    await sb.from('users').update({ status }).eq('company_id', id).neq('role', 'platformAdmin');
+    await recordAudit(req, { action: `company.${slug[1]}`, entityType: 'company', entityId: id, after: rowOut(after) });
+    return ok(res, { data: rowOut(after) });
+  }
 
-        const { data, error } = await sb
-          .from('companies')
-          .insert({
-            name,
-            slug: s,
-            contact: contact || {},
-            address: address || {},
-            status: status || 'active',
-            created_by: user.id
-          })
-          .select('*')
-          .single();
-        if (error) return res.status(500).json({ success: false, message: 'Server error' });
-        return res.status(201).json({ success: true, data: rowOut(data) });
-      }
+  if (id && slug[1] === 'stats' && req.method === 'GET') {
+    if (!ctx.isPlatform && ctx.companyId !== id) return fail(res, 'Forbidden', 403);
+    const count = async (table: string, col = 'company_id') => {
+      const { count: c } = await sb.from(table).select('id', { count: 'exact', head: true }).eq(col, id);
+      return c || 0;
+    };
+    const [users, stores, products, orders, drivers, appointments] = await Promise.all([
+      count('users'),
+      count('stores'),
+      count('products'),
+      count('orders'),
+      count('drivers'),
+      count('appointments')
+    ]);
+    const { data: paid } = await sb.from('orders').select('total').eq('company_id', id).eq('payment_status', 'paid');
+    const revenue = (paid || []).reduce((s: number, o: any) => s + Number(o.total || 0), 0);
+    return ok(res, { data: { users, stores, products, orders, drivers, appointments, revenue } });
+  }
 
-      const id = slug[0];
+  if (id && req.method === 'DELETE') {
+    if (!ctx.isPlatform) return fail(res, 'Forbidden', 403);
+    const { data: before } = await sb.from('companies').select('*').eq('id', id).maybeSingle();
+    await sb.from('companies').delete().eq('id', id);
+    await recordAudit(req, { action: 'company.delete', entityType: 'company', entityId: id, before: before ? rowOut(before) : null });
+    return ok(res, { message: 'Deleted' });
+  }
 
-      if (id && req.method === 'GET') {
-        let query = sb.from('companies').select('*').eq('id', id);
-        if (user.role !== 'platformAdmin') {
-          if (user.company_id !== id) return res.status(404).json({ success: false, message: 'Not found' });
-        }
-        const { data } = await query.maybeSingle();
-        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
-        return res.status(200).json({ success: true, data: rowOut(data) });
-      }
-
-      if (id && req.method === 'PUT') {
-        if (user.role !== 'platformAdmin' && user.company_id !== id) {
-          return res.status(403).json({ success: false, message: 'Forbidden' });
-        }
-        const body = { ...(req.body || {}) };
-        delete body.slug;
-        delete body.id;
-        const { data } = await sb.from('companies').update(body).eq('id', id).select('*').maybeSingle();
-        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
-        return res.status(200).json({ success: true, data: rowOut(data) });
-      }
-
-      if (id && req.method === 'DELETE') {
-        if (user.role !== 'platformAdmin') return res.status(403).json({ success: false, message: 'Forbidden' });
-        await sb.from('companies').delete().eq('id', id);
-        return res.status(200).json({ success: true, message: 'Deleted' });
-      }
-
-      res.status(404).json({ success: false, message: 'Not found' });
-    });
-  });
-}
+  return fail(res, 'Not found', 404);
+});
