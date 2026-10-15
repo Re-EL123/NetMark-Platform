@@ -9,7 +9,7 @@ export default {
     splash: {
       image: "./assets/splash.png",
       resizeMode: "contain",
-      backgroundColor: "#1A0A0D"
+      backgroundColor: "#111111"
     },
     assetBundlePatterns: ["**/*"],
     ios: {
@@ -26,7 +26,7 @@ export default {
       package: "com.greenworld.driver",
       adaptiveIcon: {
         foregroundImage: "./assets/adaptive-icon.png",
-        backgroundColor: "#1A0A0D"
+        backgroundColor: "#111111"
       },
       permissions: ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
     },

@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light;
   --netmark-red: #e50914;
   --netmark-red-hover: #b91c1c;
   --netmark-red-soft: #fee2e2;
@@ -46,6 +47,7 @@
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
   --background: #09090b;
   --surface: #18181b;
   --sidebar: #111111;
@@ -62,6 +64,13 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 body {
@@ -82,6 +91,11 @@ a:hover {
   text-decoration: underline;
 }
 
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
 h1,
 h2,
 h3,
@@ -94,6 +108,7 @@ h4 {
 /* ---------- Auth pages (login / register) ---------- */
 .container {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -112,14 +127,14 @@ h4 {
 
 .brand-logo {
   display: block;
-  width: 72px;
-  height: 72px;
-  border-radius: var(--radius-md);
-  margin: 0 auto 16px;
+  height: 64px;
+  width: auto;
+  max-width: 100%;
+  margin: 0 auto 20px;
   object-fit: contain;
 }
 
-h1 {
+.login-card h1 {
   font-size: 26px;
   margin-bottom: 8px;
   text-align: center;
@@ -243,21 +258,17 @@ input::placeholder {
 .sidebar .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 8px;
+  justify-content: center;
+  background: var(--white);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
 }
 
 .sidebar .brand img {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-sm);
+  display: block;
+  height: 30px;
+  width: auto;
   object-fit: contain;
-}
-
-.sidebar .brand span {
-  font-size: 18px;
-  font-weight: 700;
-  color: #fff;
 }
 
 .sidebar nav {
@@ -364,12 +375,26 @@ button.secondary:hover,
   box-shadow: none;
 }
 
-.logout-btn,
-header button {
+.logout-btn {
   width: auto;
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   padding: 8px 16px;
   font-size: 14px;
-  margin-top: 0;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.logout-btn:hover {
+  background: var(--grey-100);
+  border-color: var(--grey-300);
+}
+
+[data-theme="dark"] .logout-btn:hover {
+  background: var(--dark);
 }
 
 /* ---------- Status badges ---------- */
@@ -380,6 +405,13 @@ header button {
   font-size: 12px;
   font-weight: 600;
   line-height: 1.6;
+  background: var(--grey-200);
+  color: var(--grey-700);
+}
+
+[data-theme="dark"] .badge {
+  background: var(--dark);
+  color: var(--text-secondary);
 }
 
 .badge-success {
@@ -466,6 +498,31 @@ tbody tr:hover td {
   background: var(--dark);
 }
 
+[data-theme="dark"] select option {
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .badge-success {
+  background: rgba(21, 128, 61, 0.25);
+  color: #4ade80;
+}
+
+[data-theme="dark"] .badge-warning {
+  background: rgba(180, 83, 9, 0.25);
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .badge-danger {
+  background: rgba(185, 28, 28, 0.28);
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .badge-info {
+  background: rgba(29, 78, 216, 0.28);
+  color: #93c5fd;
+}
+
 @media (max-width: 720px) {
   .app {
     flex-direction: column;
@@ -474,12 +531,37 @@ tbody tr:hover td {
   .sidebar {
     width: 100%;
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
+    gap: 12px;
     padding: 12px 16px;
+  }
+
+  .sidebar .brand {
+    padding: 8px 12px;
+  }
+
+  .sidebar .brand img {
+    height: 24px;
   }
 
   .sidebar nav {
     flex-direction: row;
+    flex-wrap: nowrap;
     overflow-x: auto;
+    flex: 1;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sidebar nav a {
+    white-space: nowrap;
+  }
+
+  header {
+    flex-wrap: wrap;
+  }
+
+  .login-card {
+    padding: 28px 20px;
   }
 }

@@ -16,6 +16,7 @@ import { useOrderStore } from "@/services/order.service";
 // import MapView, { Marker } from "react-native-maps";
 import * as Location from "expo-location";
 import { AppScreen } from "@/components/AppBackground";
+import { formatCurrency } from "@/utils/currency";
 import { notify, confirmAction } from "@/utils/notify";
 import { OtpVerificationModal } from "@/components/OtpVerificationModal";
 
@@ -71,13 +72,15 @@ export default function ActiveDeliveryScreen() {
       return;
     }
     const query = encodeURIComponent(addressText);
-    const url = Platform.select({
-      ios: `maps:0,0?q=${query}`,
-      android: `geo:0,0?q=${query}`,
-      default: `https://www.google.com/maps/search/?api=1&query=${query}`
-    });
+    const webUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
+    const url =
+      Platform.select({
+        ios: `maps:0,0?q=${query}`,
+        android: `geo:0,0?q=${query}`,
+        default: webUrl
+      }) || webUrl;
     Linking.openURL(url).catch(() => {
-      Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
+      Linking.openURL(webUrl);
     });
   };
 
@@ -88,7 +91,7 @@ export default function ActiveDeliveryScreen() {
       async () => {
         if (activeDelivery) {
           const success = await updateDeliveryStatus(
-            activeDelivery._id,
+            activeDelivery.id,
             status
           );
           if (success) {
@@ -108,7 +111,7 @@ export default function ActiveDeliveryScreen() {
 
   const handleVerifyOtp = async (otp: string, notes?: string): Promise<boolean> => {
     if (!activeDelivery) return false;
-    const result = await completeDelivery(activeDelivery._id, otp, notes);
+    const result = await completeDelivery(activeDelivery.id, otp, notes);
     if (result.success) {
       notify("Delivery Verified & Completed", "Proof of delivery confirmed! Delivery completed successfully.");
       loadData();
@@ -423,7 +426,7 @@ function getStatusColor(status: string) {
   const colors: any = {
     ready: { backgroundColor: "#B45309" },
     in_transit: { backgroundColor: "#1D4ED8" },
-    delivered: { backgroundColor: "#E50914" }
+    delivered: { backgroundColor: "#15803D" }
   };
   return colors[status] || { backgroundColor: "#6B7280" };
 }

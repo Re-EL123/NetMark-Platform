@@ -47,14 +47,14 @@ export default function ProfileScreen() {
   const handleSettings = () => {
     notify(
       "App Settings",
-      "NetMark Driver App v1.0.0\nEnvironment: Production Lightsail\nGPS Tracking: Enabled\nCurrency: South African Rand (ZAR)"
+      "NetMark Driver App v1.0.0\nGPS Tracking: Enabled\nCurrency: South African Rand (ZAR)"
     );
   };
 
   const handleHelp = () => {
     notify(
       "Help & Support",
-      "Need dispatch assistance?\nEmail: support@greenworldplatform.com\nSupport Hours: 08:00 - 18:00 SAST"
+      "Need dispatch assistance?\nEmail: support@re-el.co.za\nSupport Hours: 08:00 - 18:00 SAST"
     );
   };
 
@@ -269,8 +269,8 @@ export default function ProfileScreen() {
 
 function getStatusColor(status?: string) {
   const colors: any = {
-    approved: { backgroundColor: "#E50914" },
-    active: { backgroundColor: "#E50914" },
+    approved: { backgroundColor: "#15803D" },
+    active: { backgroundColor: "#15803D" },
     pending: { backgroundColor: "#B45309" },
     inactive: { backgroundColor: "#6B7280" }
   };
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent"
   },
   profileHeader: {
-    backgroundColor: "#E50914",
+    backgroundColor: "#111111",
     padding: 30,
     alignItems: "center"
   },

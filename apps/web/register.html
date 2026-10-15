@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Create your NetMark Platform account to shop, manage a store, distribute or deliver.">
+  <meta name="theme-color" content="#e50914">
   <title>NetMark Platform - Register</title>
   <link rel="icon" type="image/png" href="/favicon.png">
   <link rel="apple-touch-icon" href="/favicon-180.png">
@@ -14,27 +16,27 @@
       <img src="/netmark-logo.png" alt="NetMark" class="brand-logo">
       <h1>NetMark Platform</h1>
       <p class="subtitle">Create an account</p>
-      <div id="error" class="error" style="display:none"></div>
+      <div id="error" class="error" role="alert" aria-live="polite" style="display:none"></div>
       <form id="registerForm">
         <div class="form-group">
           <label for="name">Full Name</label>
-          <input type="text" id="name" required>
+          <input type="text" id="name" name="name" autocomplete="name" required>
         </div>
         <div class="form-group">
           <label for="email">Email</label>
-          <input type="email" id="email" required>
+          <input type="email" id="email" name="email" autocomplete="email" inputmode="email" required>
         </div>
         <div class="form-group">
           <label for="phone">Phone</label>
-          <input type="tel" id="phone">
+          <input type="tel" id="phone" name="phone" autocomplete="tel" inputmode="tel">
         </div>
         <div class="form-group">
           <label for="password">Password</label>
-          <input type="password" id="password" required minlength="6">
+          <input type="password" id="password" name="password" autocomplete="new-password" required minlength="6">
         </div>
         <div class="form-group">
           <label for="role">Role</label>
-          <select id="role">
+          <select id="role" name="role">
             <option value="customer">Customer</option>
             <option value="storeOwner">Store Owner</option>
             <option value="distributor">Distributor</option>

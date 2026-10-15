@@ -106,7 +106,7 @@ export default function OrdersScreen() {
 
       <TouchableOpacity
         style={styles.acceptButton}
-        onPress={() => handleAcceptOrder(item._id)}
+        onPress={() => handleAcceptOrder(item.id)}
       >
         <Text style={styles.acceptButtonText}>Accept Delivery</Text>
       </TouchableOpacity>
@@ -118,7 +118,7 @@ export default function OrdersScreen() {
       <FlatList
         data={availableOrders}
         renderItem={renderOrderItem}
-        keyExtractor={(item) => item._id}
+        keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
         refreshControl={
           <RefreshControl

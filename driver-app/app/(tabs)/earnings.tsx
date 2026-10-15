@@ -116,7 +116,7 @@ export default function EarningsScreen() {
       <FlatList
         data={earnings}
         renderItem={renderEarningItem}
-        keyExtractor={(item) => item._id}
+        keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
         refreshControl={
           <RefreshControl
@@ -140,7 +140,7 @@ export default function EarningsScreen() {
 function getPayoutStatusColor(status: string) {
   const colors: any = {
     pending: { backgroundColor: "#B45309" },
-    paid: { backgroundColor: "#E50914" },
+    paid: { backgroundColor: "#15803D" },
     processing: { backgroundColor: "#1D4ED8" }
   };
   return colors[status] || { backgroundColor: "#6B7280" };
