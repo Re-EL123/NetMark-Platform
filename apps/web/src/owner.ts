@@ -1,5 +1,4 @@
-import { auth } from './firebase';
-import { signOut } from 'firebase/auth';
+import { supabase } from './supabase';
 import { apiRequest } from './api';
 
 const userName = document.getElementById('userName') as HTMLElement;
@@ -8,7 +7,7 @@ const usersDiv = document.getElementById('users') as HTMLElement;
 const storesDiv = document.getElementById('stores') as HTMLElement;
 
 (window as any).logout = async () => {
-  await signOut(auth);
+  await supabase.auth.signOut();
   localStorage.removeItem('netmark_user');
   window.location.href = import.meta.env.BASE_URL;
 };
@@ -29,4 +28,7 @@ async function load() {
     storesDiv.innerHTML = `<pre>${JSON.stringify(stores.data, null, 2)}</pre>`;
   }
 }
-auth.onAuthStateChanged(load);
+
+supabase.auth.getSession().then(({ data }) => {
+  if (data.session) load();
+});

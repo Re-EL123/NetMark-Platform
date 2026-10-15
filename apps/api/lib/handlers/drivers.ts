@@ -1,10 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { connectDB } from '../db';
-import { Driver } from '../models/Driver';
-import { Order } from '../models/Order';
-import { DriverEarning } from '../models/DriverEarning';
-import { User } from '../models/User';
-import { verifyFirebaseToken, loadUser } from '../middleware';
+import { getSupabase, rowOut, rowsOut } from '../db';
+import { verifySupabaseToken, loadUser } from '../middleware';
 
 function generateOtp(): string {
   return String(Math.floor(1000 + Math.random() * 9000));
@@ -21,26 +17,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const slug = Array.isArray(req.query.slug) ? req.query.slug : [req.query.slug || ''];
   const path = slug.join('/');
 
-  return verifyFirebaseToken(req, res, async () => {
+  return verifySupabaseToken(req, res, async () => {
     await loadUser(req, res, async () => {
-      await connectDB();
+      const sb = getSupabase();
       const user = (req as any).user;
       const isAdmin = user.role === 'platformAdmin' || user.role === 'owner';
       const isDriver = user.role === 'driver';
 
-      // Resolve the driver profile for driver-role requests
       let driver: any = null;
       if (isDriver) {
-        driver = await Driver.findOne({ userId: user._id });
-        if (!driver) {
+        const { data } = await sb.from('drivers').select('*').eq('user_id', user.id).maybeSingle();
+        if (!data) {
           return res.status(404).json({ success: false, message: 'Driver profile not found' });
         }
+        driver = data;
       }
 
       // ---- /drivers/me ----
       if (path === 'me' && req.method === 'GET') {
         if (!driver) return res.status(403).json({ success: false, message: 'Driver only' });
-        const profile = driver.toObject();
+        const profile = rowOut(driver);
         profile.stats = profile.stats || { totalDeliveries: 0, totalEarnings: 0, rating: 0 };
         return res.status(200).json({ success: true, data: { driver: profile, driverProfile: profile } });
       }
@@ -48,14 +44,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (path === 'me' && req.method === 'PUT') {
         if (!driver) return res.status(403).json({ success: false, message: 'Driver only' });
         const { vehicleType, vehicleNumber, vehicleModel, licenseNumber, licenseExpiry, bankDetails } = req.body || {};
-        if (vehicleType !== undefined) driver.vehicleType = vehicleType;
-        if (vehicleNumber !== undefined) driver.vehicleNumber = vehicleNumber;
-        if (vehicleModel !== undefined) driver.vehicleModel = vehicleModel;
-        if (licenseNumber !== undefined) driver.licenseNumber = licenseNumber;
-        if (licenseExpiry) driver.licenseExpiry = new Date(licenseExpiry);
-        if (bankDetails !== undefined) driver.bankDetails = bankDetails;
-        await driver.save();
-        return res.status(200).json({ success: true, data: { driver: driver.toObject() } });
+        const patch: any = {};
+        if (vehicleType !== undefined) patch.vehicle_type = vehicleType;
+        if (vehicleNumber !== undefined) patch.vehicle_number = vehicleNumber;
+        if (vehicleModel !== undefined) patch.vehicle_model = vehicleModel;
+        if (licenseNumber !== undefined) patch.license_number = licenseNumber;
+        if (licenseExpiry) patch.license_expiry = new Date(licenseExpiry).toISOString().slice(0, 10);
+        if (bankDetails !== undefined) patch.bank_details = bankDetails;
+        const { data } = await sb.from('drivers').update(patch).eq('id', driver.id).select('*').single();
+        return res.status(200).json({ success: true, data: { driver: rowOut(data) } });
       }
 
       // ---- /drivers/availability ----
@@ -65,9 +62,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(403).json({ success: false, message: 'Account not approved' });
         }
         const { status } = req.body || {};
-        driver.isAvailable = status === 'available' || status === 'online' || status === true;
-        await driver.save();
-        return res.status(200).json({ success: true, data: { isAvailable: driver.isAvailable } });
+        const isAvailable = status === 'available' || status === 'online' || status === true;
+        await sb.from('drivers').update({ is_available: isAvailable }).eq('id', driver.id);
+        return res.status(200).json({ success: true, data: { isAvailable } });
       }
 
       // ---- /drivers/location ----
@@ -77,28 +74,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (typeof latitude !== 'number' || typeof longitude !== 'number') {
           return res.status(400).json({ success: false, message: 'latitude and longitude are required' });
         }
-        driver.currentLocation = { lat: latitude, lng: longitude, updatedAt: new Date() };
-        await driver.save();
-        return res.status(200).json({ success: true, data: { currentLocation: driver.currentLocation } });
+        const currentLocation = { lat: latitude, lng: longitude, updatedAt: new Date().toISOString() };
+        await sb.from('drivers').update({ current_location: currentLocation }).eq('id', driver.id);
+        return res.status(200).json({ success: true, data: { currentLocation } });
       }
 
       // ---- /drivers/push-token ----
       if (path === 'push-token' && req.method === 'PUT') {
         if (!driver) return res.status(403).json({ success: false, message: 'Driver only' });
         const { pushToken } = req.body || {};
-        driver.pushToken = pushToken || '';
-        await driver.save();
-        return res.status(200).json({ success: true, data: { pushToken: driver.pushToken } });
+        await sb.from('drivers').update({ push_token: pushToken || '' }).eq('id', driver.id);
+        return res.status(200).json({ success: true, data: { pushToken: pushToken || '' } });
       }
 
       // ---- /drivers/earnings ----
       if (path === 'earnings' && req.method === 'GET') {
         if (!driver) return res.status(403).json({ success: false, message: 'Driver only' });
-        const earnings = await DriverEarning.find({ driverId: driver._id }).sort({ createdAt: -1 }).lean();
-        const total = earnings.reduce((sum, e) => sum + (e.amount || 0), 0);
+        const { data } = await sb
+          .from('driver_earnings')
+          .select('*')
+          .eq('driver_id', driver.id)
+          .order('created_at', { ascending: false });
+        const earnings = rowsOut(data);
+        const total = earnings.reduce((sum, e) => sum + Number(e.amount || 0), 0);
         const pending = earnings
           .filter((e) => e.status === 'pending')
-          .reduce((sum, e) => sum + (e.amount || 0), 0);
+          .reduce((sum, e) => sum + Number(e.amount || 0), 0);
         return res.status(200).json({
           success: true,
           data: { earnings },
@@ -108,15 +109,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (path === 'earnings/summary' && req.method === 'GET') {
         if (!driver) return res.status(403).json({ success: false, message: 'Driver only' });
-        const earnings = await DriverEarning.find({ driverId: driver._id }).lean();
-        const total = earnings.reduce((sum, e) => sum + (e.amount || 0), 0);
+        const { data } = await sb.from('driver_earnings').select('*').eq('driver_id', driver.id);
+        const earnings = rowsOut(data);
+        const total = earnings.reduce((sum, e) => sum + Number(e.amount || 0), 0);
         const paid = earnings
           .filter((e) => e.status === 'paid')
-          .reduce((sum, e) => sum + (e.amount || 0), 0);
-        const pending = total - paid;
+          .reduce((sum, e) => sum + Number(e.amount || 0), 0);
         return res.status(200).json({
           success: true,
-          data: { summary: { total, paid, pending, count: earnings.length } }
+          data: { summary: { total, paid, pending: total - paid, count: earnings.length } }
         });
       }
 
@@ -126,22 +127,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (driver.status !== 'approved') {
           return res.status(403).json({ success: false, message: 'Account not approved' });
         }
-        const filter: any = {
-          deliveryStatus: { $in: ['unassigned', null] },
-          orderStatus: { $in: AVAILABLE_ORDER_STATUSES }
-        };
-        if (driver.companyId) filter.companyId = driver.companyId;
-        const orders = await Order.find(filter).sort({ createdAt: 1 }).lean();
-        return res.status(200).json({ success: true, data: { orders } });
+        let q = sb
+          .from('orders')
+          .select('*')
+          .eq('delivery_status', 'unassigned')
+          .in('order_status', AVAILABLE_ORDER_STATUSES)
+          .order('created_at', { ascending: true });
+        if (driver.company_id) q = q.eq('company_id', driver.company_id);
+        const { data, error } = await q;
+        if (error) return res.status(500).json({ success: false, message: 'Server error' });
+        return res.status(200).json({ success: true, data: { orders: rowsOut(data) } });
       }
 
       // ---- /drivers/deliveries/mine ----
       if (path === 'deliveries/mine' && req.method === 'GET') {
         if (!driver) return res.status(403).json({ success: false, message: 'Driver only' });
-        const orders = await Order.find({ assignedDriverId: driver._id })
-          .sort({ createdAt: -1 })
-          .lean();
-        return res.status(200).json({ success: true, data: { orders } });
+        const { data, error } = await sb
+          .from('orders')
+          .select('*')
+          .eq('assigned_driver_id', driver.id)
+          .order('created_at', { ascending: false });
+        if (error) return res.status(500).json({ success: false, message: 'Server error' });
+        return res.status(200).json({ success: true, data: { orders: rowsOut(data) } });
       }
 
       // ---- /drivers/deliveries/:orderId/accept ----
@@ -151,32 +158,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(403).json({ success: false, message: 'Account not approved' });
         }
         const orderId = slug[1];
-        const claimFilter: any = {
-          _id: orderId,
-          assignedDriverId: { $exists: false },
-          deliveryStatus: { $in: ['unassigned', null] }
-        };
-        if (driver.companyId) claimFilter.companyId = driver.companyId;
-        const order = await Order.findOneAndUpdate(
-          { ...claimFilter, $or: [{ assignedDriverId: null }, { assignedDriverId: { $exists: false } }] },
-          {
-            $set: {
-              assignedDriverId: driver._id,
-              deliveryStatus: 'assigned',
-              acceptedAt: new Date(),
-              orderStatus: 'in_transit'
-            }
-          },
-          { new: true }
-        );
-        if (!order) {
+        // Atomic claim: the WHERE clause guarantees only one driver wins.
+        let q = sb
+          .from('orders')
+          .update({
+            assigned_driver_id: driver.id,
+            delivery_status: 'assigned',
+            accepted_at: new Date().toISOString(),
+            order_status: 'in_transit'
+          })
+          .eq('id', orderId)
+          .eq('delivery_status', 'unassigned')
+          .is('assigned_driver_id', null);
+        if (driver.company_id) q = q.eq('company_id', driver.company_id);
+        const { data: claimed } = await q.select('*').maybeSingle();
+        if (!claimed) {
           return res.status(409).json({ success: false, message: 'Delivery no longer available' });
         }
-        if (!order.deliveryOtp) {
-          order.deliveryOtp = generateOtp();
-          await order.save();
+        let order = claimed;
+        if (!order.delivery_otp) {
+          order.delivery_otp = generateOtp();
+          await sb.from('orders').update({ delivery_otp: order.delivery_otp }).eq('id', order.id);
         }
-        return res.status(200).json({ success: true, data: { order: order.toObject() } });
+        return res.status(200).json({ success: true, data: { order: rowOut(order) } });
       }
 
       // ---- /drivers/deliveries/:orderId/status ----
@@ -188,13 +192,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!allowed.includes(status)) {
           return res.status(400).json({ success: false, message: 'Invalid status' });
         }
-        const order = await Order.findOneAndUpdate(
-          { _id: orderId, assignedDriverId: driver._id },
-          { $set: { deliveryStatus: status, orderStatus: status, deliveryNotes: note || undefined } },
-          { new: true }
-        );
-        if (!order) return res.status(404).json({ success: false, message: 'Delivery not found' });
-        return res.status(200).json({ success: true, data: { order: order.toObject() } });
+        const { data } = await sb
+          .from('orders')
+          .update({ delivery_status: status, order_status: status, delivery_notes: note || null })
+          .eq('id', orderId)
+          .eq('assigned_driver_id', driver.id)
+          .select('*')
+          .maybeSingle();
+        if (!data) return res.status(404).json({ success: false, message: 'Delivery not found' });
+        return res.status(200).json({ success: true, data: { order: rowOut(data) } });
       }
 
       // ---- /drivers/deliveries/:orderId/complete ----
@@ -202,89 +208,102 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!driver) return res.status(403).json({ success: false, message: 'Driver only' });
         const orderId = slug[1];
         const { otp, notes } = req.body || {};
-        const order = await Order.findOne({ _id: orderId, assignedDriverId: driver._id });
-        if (!order) return res.status(404).json({ success: false, message: 'Delivery not found' });
-        if (order.deliveryStatus === 'delivered') {
+        const { data: orderRow } = await sb
+          .from('orders')
+          .select('*')
+          .eq('id', orderId)
+          .eq('assigned_driver_id', driver.id)
+          .maybeSingle();
+        if (!orderRow) return res.status(404).json({ success: false, message: 'Delivery not found' });
+        if (orderRow.delivery_status === 'delivered') {
           return res.status(400).json({ success: false, message: 'Delivery already completed' });
         }
-        if (order.deliveryOtp && order.deliveryOtp !== otp) {
+        if (orderRow.delivery_otp && orderRow.delivery_otp !== otp) {
           return res.status(400).json({ success: false, message: 'Invalid delivery OTP' });
         }
-        order.deliveryStatus = 'delivered';
-        order.orderStatus = 'delivered';
-        order.deliveredAt = new Date();
-        if (notes) order.deliveryNotes = notes;
-        await order.save();
+        const orderPatch: any = {
+          delivery_status: 'delivered',
+          order_status: 'delivered',
+          delivered_at: new Date().toISOString()
+        };
+        if (notes) orderPatch.delivery_notes = notes;
+        const { data: updated } = await sb
+          .from('orders')
+          .update(orderPatch)
+          .eq('id', orderId)
+          .select('*')
+          .single();
 
-        // Record earnings + update driver stats
+        const order = rowOut(updated);
         const amount = Number(order.deliveryFee || order.driverEarning || order.total || 0);
-        await DriverEarning.create({
-          driverId: driver._id,
-          companyId: order.companyId || driver.companyId,
-          orderId: order._id,
+        await sb.from('driver_earnings').insert({
+          driver_id: driver.id,
+          company_id: order.companyId || driver.company_id,
+          order_id: order.id,
           amount,
           status: 'pending',
-          description: `Delivery for order ${order.orderNumber || order._id}`
+          description: `Delivery for order ${order.orderNumber || order.id}`
         });
-        driver.stats = driver.stats || { totalDeliveries: 0, totalEarnings: 0, rating: 0 };
-        driver.stats.totalDeliveries = (driver.stats.totalDeliveries || 0) + 1;
-        driver.stats.totalEarnings = (driver.stats.totalEarnings || 0) + amount;
-        await driver.save();
 
-        return res.status(200).json({ success: true, message: 'Delivery completed', data: { order: order.toObject() } });
+        const stats = driver.stats || { totalDeliveries: 0, totalEarnings: 0, rating: 0 };
+        stats.totalDeliveries = (stats.totalDeliveries || 0) + 1;
+        stats.totalEarnings = (stats.totalEarnings || 0) + amount;
+        await sb.from('drivers').update({ stats }).eq('id', driver.id);
+
+        return res.status(200).json({ success: true, message: 'Delivery completed', data: { order } });
       }
 
       // ---- Admin listing & lifecycle ----
       if (path === '' && req.method === 'GET') {
         if (!isAdmin) return res.status(403).json({ success: false, message: 'Forbidden' });
-        const filter: any = {};
-        if (user.role !== 'platformAdmin' && user.companyId) filter.companyId = user.companyId;
-        const drivers = await Driver.find(filter).lean();
-        return res.status(200).json({ success: true, data: drivers });
+        let q = sb.from('drivers').select('*');
+        if (user.role !== 'platformAdmin' && user.company_id) q = q.eq('company_id', user.company_id);
+        const { data, error } = await q;
+        if (error) return res.status(500).json({ success: false, message: 'Server error' });
+        return res.status(200).json({ success: true, data: rowsOut(data) });
       }
 
       if (path === '' && req.method === 'POST') {
         if (!isAdmin) return res.status(403).json({ success: false, message: 'Forbidden' });
-        const doc: any = { ...req.body };
-        if (user.role !== 'platformAdmin' && user.companyId) doc.companyId = user.companyId;
-        const created = await Driver.create(doc);
-        return res.status(201).json({ success: true, data: created });
+        const insert: any = { ...req.body };
+        if (user.role !== 'platformAdmin' && user.company_id) insert.company_id = user.company_id;
+        const { data, error } = await sb.from('drivers').insert(insert).select('*').single();
+        if (error) return res.status(500).json({ success: false, message: 'Server error' });
+        return res.status(201).json({ success: true, data: rowOut(data) });
       }
 
       if (slug.length === 1 && req.method === 'GET') {
         if (!isAdmin) return res.status(403).json({ success: false, message: 'Forbidden' });
-        const q: any = { _id: slug[0] };
-        if (user.role !== 'platformAdmin' && user.companyId) q.companyId = user.companyId;
-        const found = await Driver.findOne(q).lean();
-        if (!found) return res.status(404).json({ success: false, message: 'Not found' });
-        return res.status(200).json({ success: true, data: found });
+        let q = sb.from('drivers').select('*').eq('id', slug[0]);
+        if (user.role !== 'platformAdmin' && user.company_id) q = q.eq('company_id', user.company_id);
+        const { data } = await q.maybeSingle();
+        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
+        return res.status(200).json({ success: true, data: rowOut(data) });
       }
 
       if (slug.length === 2 && slug[1] === 'approve' && req.method === 'POST') {
         if (!isAdmin) return res.status(403).json({ success: false, message: 'Forbidden' });
-        const q: any = { _id: slug[0] };
-        if (user.role !== 'platformAdmin' && user.companyId) q.companyId = user.companyId;
-        const updated = await Driver.findOneAndUpdate(
-          q,
-          { $set: { status: 'approved', rejectionReason: undefined } },
-          { new: true }
-        );
-        if (!updated) return res.status(404).json({ success: false, message: 'Not found' });
-        return res.status(200).json({ success: true, data: updated.toObject() });
+        let q = sb
+          .from('drivers')
+          .update({ status: 'approved', rejection_reason: null })
+          .eq('id', slug[0]);
+        if (user.role !== 'platformAdmin' && user.company_id) q = q.eq('company_id', user.company_id);
+        const { data } = await q.select('*').maybeSingle();
+        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
+        return res.status(200).json({ success: true, data: rowOut(data) });
       }
 
       if (slug.length === 2 && ['reject', 'suspend'].includes(slug[1]) && req.method === 'POST') {
         if (!isAdmin) return res.status(403).json({ success: false, message: 'Forbidden' });
-        const q: any = { _id: slug[0] };
-        if (user.role !== 'platformAdmin' && user.companyId) q.companyId = user.companyId;
         const target = slug[1] === 'reject' ? 'rejected' : 'suspended';
-        const updated = await Driver.findOneAndUpdate(
-          q,
-          { $set: { status: target, isAvailable: false, rejectionReason: (req.body || {}).reason } },
-          { new: true }
-        );
-        if (!updated) return res.status(404).json({ success: false, message: 'Not found' });
-        return res.status(200).json({ success: true, data: updated.toObject() });
+        let q = sb
+          .from('drivers')
+          .update({ status: target, is_available: false, rejection_reason: (req.body || {}).reason || null })
+          .eq('id', slug[0]);
+        if (user.role !== 'platformAdmin' && user.company_id) q = q.eq('company_id', user.company_id);
+        const { data } = await q.select('*').maybeSingle();
+        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
+        return res.status(200).json({ success: true, data: rowOut(data) });
       }
 
       res.status(404).json({ success: false, message: 'Not found' });

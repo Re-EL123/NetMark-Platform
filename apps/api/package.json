@@ -10,9 +10,8 @@
     "dev": "vercel dev"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.117.3",
     "cors": "^2.8.5",
-    "firebase-admin": "^12.7.0",
-    "mongoose": "^8.8.4",
     "zod": "^3.23.8"
   },
   "devDependencies": {

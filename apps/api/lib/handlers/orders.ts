@@ -1,8 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { connectDB } from '../db';
-import { Order } from '../models/Order';
-import { Driver } from '../models/Driver';
-import { verifyFirebaseToken, loadUser } from '../middleware';
+import { getSupabase, rowOut, rowsOut } from '../db';
+import { verifySupabaseToken, loadUser } from '../middleware';
 
 function generateOtp(): string {
   return String(Math.floor(1000 + Math.random() * 9000));
@@ -17,47 +15,66 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const slug = Array.isArray(req.query.slug) ? req.query.slug : [req.query.slug || ''];
   const path = slug.join('/');
 
-  return verifyFirebaseToken(req, res, async () => {
+  return verifySupabaseToken(req, res, async () => {
     await loadUser(req, res, async () => {
-      await connectDB();
+      const sb = getSupabase();
       const user = (req as any).user;
       const isScoped = user.role !== 'platformAdmin';
-      const scope: any = isScoped && user.companyId ? { companyId: user.companyId } : {};
 
       if (path === '' && req.method === 'GET') {
-        const data = await Order.find(scope).sort({ createdAt: -1 }).lean();
-        return res.status(200).json({ success: true, data });
+        let q = sb.from('orders').select('*').order('created_at', { ascending: false });
+        if (isScoped && user.company_id) q = q.eq('company_id', user.company_id);
+        const { data, error } = await q;
+        if (error) return res.status(500).json({ success: false, message: 'Server error' });
+        return res.status(200).json({ success: true, data: rowsOut(data) });
       }
 
       if (path === 'my/all' && req.method === 'GET') {
-        const data = await Order.find({ userId: user._id }).sort({ createdAt: -1 }).lean();
-        return res.status(200).json({ success: true, data });
+        const { data, error } = await sb
+          .from('orders')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+        if (error) return res.status(500).json({ success: false, message: 'Server error' });
+        return res.status(200).json({ success: true, data: rowsOut(data) });
       }
 
       if (path === '' && req.method === 'POST') {
         const body = req.body || {};
-        const doc: any = { ...body, userId: user._id };
-        if (isScoped && user.companyId) doc.companyId = user.companyId;
-        if (!doc.orderNumber) {
-          doc.orderNumber = 'NM' + Date.now().toString().slice(-8);
-        }
-        doc.deliveryStatus = doc.deliveryStatus || 'unassigned';
-        doc.orderStatus = doc.orderStatus || 'ready';
-        doc.deliveryOtp = doc.deliveryOtp || generateOtp();
-        const created = await Order.create(doc);
-        return res.status(201).json({ success: true, data: created.toObject() });
+        const {
+          orderNumber,
+          companyId,
+          storeId,
+          orderStatus,
+          deliveryStatus,
+          deliveryOtp,
+          userId,
+          ...rest
+        } = body;
+        const insert: any = {
+          order_number: orderNumber || 'NM' + Date.now().toString().slice(-8),
+          user_id: userId || user.id,
+          company_id: (isScoped && user.company_id) ? user.company_id : (companyId || null),
+          store_id: storeId || null,
+          order_status: orderStatus || 'ready',
+          delivery_status: deliveryStatus || 'unassigned',
+          delivery_otp: deliveryOtp || generateOtp(),
+          data: rest
+        };
+        const { data, error } = await sb.from('orders').insert(insert).select('*').single();
+        if (error) return res.status(500).json({ success: false, message: 'Server error' });
+        return res.status(201).json({ success: true, data: rowOut(data) });
       }
 
+      const id = slug[0];
+
       if (slug.length === 2 && slug[1] === 'status' && req.method === 'PUT') {
-        const q: any = { _id: slug[0], ...scope };
         const { status } = req.body || {};
-        const updated = await Order.findOneAndUpdate(
-          q,
-          { $set: { orderStatus: status } },
-          { new: true }
-        );
-        if (!updated) return res.status(404).json({ success: false, message: 'Not found' });
-        return res.status(200).json({ success: true, data: updated.toObject() });
+        let q = sb.from('orders').update({ order_status: status }).eq('id', id);
+        if (isScoped && user.company_id) q = q.eq('company_id', user.company_id);
+        const { data } = await q.select('*').maybeSingle();
+        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
+        return res.status(200).json({ success: true, data: rowOut(data) });
       }
 
       if (slug.length === 2 && slug[1] === 'assign' && req.method === 'POST') {
@@ -65,28 +82,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(403).json({ success: false, message: 'Forbidden' });
         }
         const { driverId } = req.body || {};
-        const q: any = { _id: slug[0], ...scope };
-        const updated = await Order.findOneAndUpdate(
-          q,
-          {
-            $set: {
-              assignedDriverId: driverId,
-              deliveryStatus: 'assigned',
-              orderStatus: 'in_transit',
-              acceptedAt: new Date()
-            }
-          },
-          { new: true }
-        );
-        if (!updated) return res.status(404).json({ success: false, message: 'Not found' });
-        return res.status(200).json({ success: true, data: updated.toObject() });
+        let q = sb
+          .from('orders')
+          .update({
+            assigned_driver_id: driverId,
+            delivery_status: 'assigned',
+            order_status: 'in_transit',
+            accepted_at: new Date().toISOString()
+          })
+          .eq('id', id);
+        if (isScoped && user.company_id) q = q.eq('company_id', user.company_id);
+        const { data } = await q.select('*').maybeSingle();
+        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
+        return res.status(200).json({ success: true, data: rowOut(data) });
       }
 
-      if (slug.length === 2 && req.method === 'GET') {
-        const q: any = { _id: slug[0], ...scope };
-        const found = await Order.findOne(q).lean();
-        if (!found) return res.status(404).json({ success: false, message: 'Not found' });
-        return res.status(200).json({ success: true, data: found });
+      if (slug.length === 1 && req.method === 'GET') {
+        let q = sb.from('orders').select('*').eq('id', id);
+        if (isScoped && user.company_id) q = q.eq('company_id', user.company_id);
+        const { data } = await q.maybeSingle();
+        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
+        return res.status(200).json({ success: true, data: rowOut(data) });
       }
 
       res.status(404).json({ success: false, message: 'Not found' });

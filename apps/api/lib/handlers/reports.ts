@@ -1,7 +1,5 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { connectDB } from '../db';
-import mongoose from 'mongoose';
-import { verifyFirebaseToken, loadUser } from '../middleware';
+import { verifySupabaseToken, loadUser } from '../middleware';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -12,10 +10,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const slug = Array.isArray(req.query.slug) ? req.query.slug : [req.query.slug || ''];
   const path = slug.join('/');
 
-  return verifyFirebaseToken(req, res, async () => {
+  return verifySupabaseToken(req, res, async () => {
     await loadUser(req, res, async () => {
-      await connectDB();
-      const user = (req as any).user;
       if (path === 'my/all' && req.method === 'GET') {
         return res.status(200).json({ success: true, data: [] });
       }

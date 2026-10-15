@@ -1,10 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { connectDB } from '../db';
-import { User } from '../models/User';
-import { Driver } from '../models/Driver';
-import { Company } from '../models/Company';
-import { verifyFirebaseToken, loadUser } from '../middleware';
-import { authAdmin } from '../firebase';
+import { getSupabase, rowOut } from '../db';
+import { verifySupabaseToken, loadUser } from '../middleware';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -16,20 +12,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const path = slug.join('/');
 
   if (path === 'me' && req.method === 'GET') {
-    return verifyFirebaseToken(req, res, async () => {
+    return verifySupabaseToken(req, res, async () => {
       await loadUser(req, res, async () => {
-        const user = (req as any).user;
-        const payload: any = { user: user.toObject ? user.toObject() : user };
+        const sb = getSupabase();
+        const userRow = (req as any).user;
+        const payload: any = { user: rowOut(userRow) };
 
-        if (user.role === 'driver') {
-          const driver = await Driver.findOne({ userId: user._id }).lean();
+        if (userRow.role === 'driver') {
+          const { data: driver } = await sb
+            .from('drivers')
+            .select('*')
+            .eq('user_id', userRow.id)
+            .maybeSingle();
           if (driver) {
-            payload.driverProfile = driver;
-            payload.driver = driver;
+            payload.driverProfile = rowOut(driver);
+            payload.driver = rowOut(driver);
           }
-        } else if (user.companyId) {
-          const company = await Company.findById(user.companyId).lean();
-          if (company) payload.company = company;
+        } else if (userRow.company_id) {
+          const { data: company } = await sb
+            .from('companies')
+            .select('*')
+            .eq('id', userRow.company_id)
+            .maybeSingle();
+          if (company) payload.company = rowOut(company);
         }
 
         return res.status(200).json({ success: true, data: payload });
@@ -38,24 +43,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (path === 'me' && req.method === 'PUT') {
-    return verifyFirebaseToken(req, res, async () => {
+    return verifySupabaseToken(req, res, async () => {
       await loadUser(req, res, async () => {
-        const user = (req as any).user;
+        const sb = getSupabase();
+        const userRow = (req as any).user;
         const { name, phone, profileImage } = req.body || {};
-        if (name) user.name = name;
-        if (phone) user.phone = phone;
-        if (profileImage) user.profileImage = profileImage;
-        await user.save();
-        return res.status(200).json({ success: true, data: { user: user.toObject() } });
+        const patch: any = {};
+        if (name) patch.name = name;
+        if (phone) patch.phone = phone;
+        if (profileImage) patch.profile_image = profileImage;
+        const { data, error } = await sb.from('users').update(patch).eq('id', userRow.id).select('*').single();
+        if (error) return res.status(500).json({ success: false, message: 'Server error' });
+        return res.status(200).json({ success: true, data: { user: rowOut(data) } });
       });
     });
   }
 
   if (path === 'register' && req.method === 'POST') {
     try {
-      await connectDB();
+      const sb = getSupabase();
       const {
-        firebaseUid: providedUid,
         name,
         email,
         phone,
@@ -70,70 +77,64 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ success: false, message: 'Missing required fields' });
       }
 
-      const existing = await User.findOne({ email });
+      const { data: existing } = await sb.from('users').select('id').eq('email', email).maybeSingle();
       if (existing) {
         return res.status(400).json({ success: false, message: 'User already exists' });
       }
 
-      // Determine firebase uid: provided by web client, or create user server-side (mobile)
-      let firebaseUid = providedUid;
-      if (firebaseUid) {
-        const authHeader = req.headers.authorization;
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-          try {
-            const decoded = await authAdmin.verifyIdToken(authHeader.split('Bearer ')[1]);
-            firebaseUid = decoded.uid;
-          } catch {
-            return res.status(401).json({ success: false, message: 'Invalid token' });
-          }
-        }
-      } else {
-        if (!password) {
-          return res.status(400).json({ success: false, message: 'Password required' });
-        }
-        try {
-          const fbUser = await authAdmin.createUser({ email, password, displayName: name, phoneNumber: phone || undefined });
-          firebaseUid = fbUser.uid;
-        } catch (fbErr: any) {
-          if (fbErr?.code === 'auth/email-already-exists') {
-            return res.status(400).json({ success: false, message: 'Email already registered' });
-          }
-          if (fbErr?.code === 'auth/invalid-phone-number') {
-            const fbUser = await authAdmin.createUser({ email, password, displayName: name });
-            firebaseUid = fbUser.uid;
-          } else {
-            return res.status(400).json({ success: false, message: fbErr?.message || 'Firebase registration failed' });
-          }
-        }
+      if (!password) {
+        return res.status(400).json({ success: false, message: 'Password required' });
       }
 
-      const user = await User.create({
-        firebaseUid,
-        name,
+      const { data: created, error: authErr } = await sb.auth.admin.createUser({
         email,
-        phone,
-        role,
-        companyId: companyId || undefined,
-        distributorCode: distributorCode || undefined,
-        verificationStatus: role === 'platformAdmin' ? 'verified' : 'pending'
+        password,
+        email_confirm: true,
+        user_metadata: { name }
       });
+      if (authErr || !created?.user) {
+        const msg = authErr?.message || 'Registration failed';
+        return res.status(400).json({ success: false, message: msg });
+      }
+
+      const uid = created.user.id;
+      const { data: user, error: userErr } = await sb
+        .from('users')
+        .insert({
+          id: uid,
+          name,
+          email,
+          phone: phone || null,
+          role,
+          company_id: companyId || null,
+          distributor_code: distributorCode || null,
+          verification_status: role === 'platformAdmin' ? 'verified' : 'pending'
+        })
+        .select('*')
+        .single();
+      if (userErr) {
+        console.error('register user insert error', userErr);
+        return res.status(500).json({ success: false, message: 'Server error' });
+      }
 
       if (role === 'driver') {
-        await Driver.create({
-          userId: user._id,
-          firebaseUid,
-          companyId: companyId || undefined,
+        const { error: driverErr } = await sb.from('drivers').insert({
+          user_id: uid,
+          company_id: companyId || null,
           status: 'pending',
-          isAvailable: false,
-          vehicleType: driverInfo?.vehicleType,
-          vehicleNumber: driverInfo?.vehicleNumber,
-          vehicleModel: driverInfo?.vehicleModel,
-          licenseNumber: driverInfo?.licenseNumber,
-          licenseExpiry: driverInfo?.licenseExpiry ? new Date(driverInfo.licenseExpiry) : undefined
+          is_available: false,
+          vehicle_type: driverInfo?.vehicleType || null,
+          vehicle_number: driverInfo?.vehicleNumber || null,
+          vehicle_model: driverInfo?.vehicleModel || null,
+          license_number: driverInfo?.licenseNumber || null,
+          license_expiry: driverInfo?.licenseExpiry
+            ? new Date(driverInfo.licenseExpiry).toISOString().slice(0, 10)
+            : null
         });
+        if (driverErr) console.error('register driver insert error', driverErr);
       }
 
-      return res.status(201).json({ success: true, data: { user: user.toObject() } });
+      return res.status(201).json({ success: true, data: { user: rowOut(user) } });
     } catch (err: any) {
       console.error('register error', err);
       return res.status(500).json({ success: false, message: 'Server error' });

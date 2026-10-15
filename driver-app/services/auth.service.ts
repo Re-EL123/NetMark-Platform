@@ -1,8 +1,7 @@
 // services/auth.service.ts
 import create from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { auth } from "./firebase";
+import { supabase } from "./supabase";
 import api, { setOnUnauthorized } from "./api";
 import { useDriverStore } from "./driver.service";
 
@@ -21,27 +20,29 @@ interface AuthState {
 }
 
 function parseLoginError(error: any): string {
-  const code = error?.code;
-  if (
-    code === "auth/invalid-credential" ||
-    code === "auth/user-not-found" ||
-    code === "auth/wrong-password"
-  ) {
+  const message = error?.message || "";
+  if (message.toLowerCase().includes("invalid login credentials")) {
     return "Invalid email or password. Please check your credentials.";
   }
-  if (code === "auth/user-disabled") {
-    return "This user account has been disabled. Please contact support.";
+  if (message.toLowerCase().includes("email not confirmed")) {
+    return "This account has not been confirmed. Please contact support.";
   }
-  if (code === "auth/too-many-requests") {
+  if (message.toLowerCase().includes("too many")) {
     return "Too many failed login attempts. Please try again in a few minutes.";
   }
-  if (code === "auth/network-request-failed") {
+  if (error?.code === "network" || message.toLowerCase().includes("network")) {
     return "Network connection failed. Please check your internet connection.";
   }
-  if (error?.message) {
-    return error.message;
+  if (message) {
+    return message;
   }
   return "An unexpected error occurred during login. Please try again.";
+}
+
+async function clearSession() {
+  await supabase.auth.signOut().catch(() => {});
+  await AsyncStorage.removeItem("token");
+  useDriverStore.getState().clearProfile();
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -51,13 +52,17 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   login: async (email, password) => {
     try {
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
-      );
+      });
 
-      const token = await userCredential.user.getIdToken();
+      if (error) throw error;
+
+      const token = data.session?.access_token;
+      if (!token) {
+        throw new Error("Failed to establish a session.");
+      }
       await AsyncStorage.setItem("token", token);
 
       const response = await api.get("/auth/me");
@@ -68,9 +73,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
       const user = response.data.user;
       if (user.role !== "driver") {
-        await signOut(auth).catch(() => {});
-        await AsyncStorage.removeItem("token");
-        useDriverStore.getState().clearProfile();
+        await clearSession();
         set({ user: null, token: null, isAuthenticated: false });
         return {
           success: false,
@@ -81,9 +84,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       const driverProfile = response.data.driverProfile || response.data.driver;
 
       if (driverProfile?.status === "pending") {
-        await signOut(auth).catch(() => {});
-        await AsyncStorage.removeItem("token");
-        useDriverStore.getState().clearProfile();
+        await clearSession();
         set({ user: null, token: null, isAuthenticated: false });
         return {
           success: false,
@@ -92,9 +93,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       }
 
       if (driverProfile?.status === "rejected") {
-        await signOut(auth).catch(() => {});
-        await AsyncStorage.removeItem("token");
-        useDriverStore.getState().clearProfile();
+        await clearSession();
         set({ user: null, token: null, isAuthenticated: false });
         return {
           success: false,
@@ -103,9 +102,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       }
 
       if (driverProfile?.status === "suspended") {
-        await signOut(auth).catch(() => {});
-        await AsyncStorage.removeItem("token");
-        useDriverStore.getState().clearProfile();
+        await clearSession();
         set({ user: null, token: null, isAuthenticated: false });
         return {
           success: false,
@@ -122,9 +119,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       return { success: true };
     } catch (error: any) {
       console.error("Login error:", error);
-      await signOut(auth).catch(() => {});
-      await AsyncStorage.removeItem("token");
-      useDriverStore.getState().clearProfile();
+      await clearSession();
       set({ user: null, token: null, isAuthenticated: false });
       return {
         success: false,
@@ -135,7 +130,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     try {
-      await signOut(auth);
+      await supabase.auth.signOut();
     } catch (e) {
       console.warn("SignOut error:", e);
     }
@@ -171,16 +166,12 @@ export const useAuthStore = create<AuthState>((set) => ({
           isAuthenticated: true
         });
       } else {
-        await signOut(auth).catch(() => {});
-        await AsyncStorage.removeItem("token");
-        useDriverStore.getState().clearProfile();
+        await clearSession();
         set({ user: null, token: null, isAuthenticated: false });
       }
     } catch (error) {
       console.error("checkAuth error:", error);
-      await signOut(auth).catch(() => {});
-      await AsyncStorage.removeItem("token");
-      useDriverStore.getState().clearProfile();
+      await clearSession();
       set({ user: null, token: null, isAuthenticated: false });
     }
   }

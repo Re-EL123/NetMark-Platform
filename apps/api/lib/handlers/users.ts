@@ -1,7 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { connectDB } from '../db';
-import { User } from '../models/User';
-import { verifyFirebaseToken, loadUser, requireRole } from '../middleware';
+import { getSupabase, rowOut, rowsOut } from '../db';
+import { verifySupabaseToken, loadUser } from '../middleware';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -12,58 +11,61 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const slug = Array.isArray(req.query.slug) ? req.query.slug : [req.query.slug || ''];
   const path = slug.join('/');
 
-  return verifyFirebaseToken(req, res, async () => {
+  return verifySupabaseToken(req, res, async () => {
     await loadUser(req, res, async () => {
-      await connectDB();
+      const sb = getSupabase();
       const user = (req as any).user;
 
       if (path === '' && req.method === 'GET') {
         if (user.role === 'platformAdmin') {
-          const users = await User.find().lean();
-          return res.status(200).json({ success: true, data: users });
+          const { data, error } = await sb.from('users').select('*');
+          if (error) return res.status(500).json({ success: false, message: 'Server error' });
+          return res.status(200).json({ success: true, data: rowsOut(data) });
         }
         if (user.role === 'owner') {
-          const users = await User.find({ companyId: user.companyId }).lean();
-          return res.status(200).json({ success: true, data: users });
+          const { data, error } = await sb.from('users').select('*').eq('company_id', user.company_id);
+          if (error) return res.status(500).json({ success: false, message: 'Server error' });
+          return res.status(200).json({ success: true, data: rowsOut(data) });
         }
         return res.status(403).json({ success: false, message: 'Forbidden' });
       }
 
       const id = slug[0];
+
       if (id && req.method === 'GET') {
-        let u;
-        if (user.role === 'platformAdmin') {
-          u = await User.findById(id).lean();
-        } else if (user.role === 'owner') {
-          u = await User.findOne({ _id: id, companyId: user.companyId }).lean();
+        let query = sb.from('users').select('*').eq('id', id);
+        if (user.role !== 'platformAdmin') {
+          if (user.role !== 'owner') return res.status(403).json({ success: false, message: 'Forbidden' });
+          query = query.eq('company_id', user.company_id);
         }
-        if (!u) return res.status(404).json({ success: false, message: 'Not found' });
-        return res.status(200).json({ success: true, data: u });
+        const { data } = await query.maybeSingle();
+        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
+        return res.status(200).json({ success: true, data: rowOut(data) });
       }
 
       if (id && req.method === 'PUT') {
-        const allowed = ['platformAdmin', 'owner'];
-        if (!allowed.includes(user.role)) return res.status(403).json({ success: false, message: 'Forbidden' });
-        const update: any = {};
-        const { name, phone, role, verificationStatus, companyId } = req.body;
-        if (name) update.name = name;
-        if (phone) update.phone = phone;
-        if (verificationStatus) update.verificationStatus = verificationStatus;
-        if (role && user.role === 'platformAdmin') update.role = role;
-        if (companyId && user.role === 'platformAdmin') update.companyId = companyId;
-        let u;
-        if (user.role === 'platformAdmin') {
-          u = await User.findByIdAndUpdate(id, update, { new: true }).lean();
-        } else {
-          u = await User.findOneAndUpdate({ _id: id, companyId: user.companyId }, update, { new: true }).lean();
+        if (!['platformAdmin', 'owner'].includes(user.role)) {
+          return res.status(403).json({ success: false, message: 'Forbidden' });
         }
-        if (!u) return res.status(404).json({ success: false, message: 'Not found' });
-        return res.status(200).json({ success: true, data: u });
+        const { name, phone, role, verificationStatus, companyId } = req.body || {};
+        const patch: any = {};
+        if (name) patch.name = name;
+        if (phone) patch.phone = phone;
+        if (verificationStatus) patch.verification_status = verificationStatus;
+        if (role && user.role === 'platformAdmin') patch.role = role;
+        if (companyId && user.role === 'platformAdmin') patch.company_id = companyId;
+
+        let upd = sb.from('users').update(patch).eq('id', id);
+        if (user.role === 'owner') upd = upd.eq('company_id', user.company_id);
+        const { data } = await upd.select('*').maybeSingle();
+        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
+        return res.status(200).json({ success: true, data: rowOut(data) });
       }
 
       if (id && req.method === 'DELETE') {
         if (user.role !== 'platformAdmin') return res.status(403).json({ success: false, message: 'Forbidden' });
-        await User.findByIdAndDelete(id);
+        await sb.auth.admin.deleteUser(id).catch(() => {});
+        await sb.from('users').delete().eq('id', id);
         return res.status(200).json({ success: true, message: 'Deleted' });
       }
 

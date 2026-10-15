@@ -2,7 +2,7 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
-import { auth } from "./firebase";
+import { supabase } from "./supabase";
 
 let onUnauthorizedCallback: (() => void) | null = null;
 
@@ -12,7 +12,7 @@ export function setOnUnauthorized(callback: (() => void) | null) {
 
 const REMOTE_API_URL =
   Constants.expoConfig?.extra?.apiUrl ||
-  "https://greenworldplatform.duckdns.org/api";
+  "https://netmark-api.vercel.app/api";
 
 function isLocalWebHost(hostname: string): boolean {
   return (
@@ -47,21 +47,20 @@ const apiClient = axios.create({
   }
 });
 
-// Request interceptor: auto-refresh Firebase ID token
+// Request interceptor: attach the current Supabase access token.
 apiClient.interceptors.request.use(
   async (config) => {
     let token = await AsyncStorage.getItem("token");
 
-    if (auth.currentUser) {
-      try {
-        const freshToken = await auth.currentUser.getIdToken(false);
-        if (freshToken) {
-          token = freshToken;
-          await AsyncStorage.setItem("token", freshToken);
-        }
-      } catch (e) {
-        console.warn("Firebase token refresh fallback to stored token:", e);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const freshToken = data.session?.access_token;
+      if (freshToken) {
+        token = freshToken;
+        await AsyncStorage.setItem("token", freshToken);
       }
+    } catch (e) {
+      console.warn("Supabase token refresh fallback to stored token:", e);
     }
 
     if (!config.headers) {

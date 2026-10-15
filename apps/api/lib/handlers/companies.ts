@@ -1,8 +1,6 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { connectDB } from '../db';
-import { Company } from '../models/Company';
-import { verifyFirebaseToken, loadUser } from '../middleware';
-import mongoose from 'mongoose';
+import { getSupabase, rowOut, rowsOut } from '../db';
+import { verifySupabaseToken, loadUser } from '../middleware';
 
 function slugify(s: string) {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -17,19 +15,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const slug = Array.isArray(req.query.slug) ? req.query.slug : [req.query.slug || ''];
   const path = slug.join('/');
 
-  return verifyFirebaseToken(req, res, async () => {
+  return verifySupabaseToken(req, res, async () => {
     await loadUser(req, res, async () => {
-      await connectDB();
+      const sb = getSupabase();
       const user = (req as any).user;
 
       if (path === '' && req.method === 'GET') {
         if (user.role === 'platformAdmin') {
-          const companies = await Company.find().lean();
-          return res.status(200).json({ success: true, data: companies });
+          const { data, error } = await sb.from('companies').select('*');
+          if (error) return res.status(500).json({ success: false, message: 'Server error' });
+          return res.status(200).json({ success: true, data: rowsOut(data) });
         }
-        if (user.companyId) {
-          const c = await Company.findById(user.companyId).lean();
-          return res.status(200).json({ success: true, data: c ? [c] : [] });
+        if (user.company_id) {
+          const { data } = await sb.from('companies').select('*').eq('id', user.company_id);
+          return res.status(200).json({ success: true, data: rowsOut(data) });
         }
         return res.status(200).json({ success: true, data: [] });
       }
@@ -38,46 +37,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (user.role !== 'platformAdmin' && user.role !== 'owner') {
           return res.status(403).json({ success: false, message: 'Forbidden' });
         }
-        const { name, contact, address, status } = req.body;
+        const { name, contact, address, status } = req.body || {};
         if (!name) return res.status(400).json({ success: false, message: 'Name required' });
-        let base = slugify(name);
+
+        const base = slugify(name);
         let s = base;
         let i = 1;
-        while (await Company.findOne({ slug: s })) { s = base + '-' + i++; }
-        const c = await Company.create({
-          name,
-          slug: s,
-          contact: contact || {},
-          address: address || {},
-          status: status || 'active',
-          createdBy: user._id
-        });
-        return res.status(201).json({ success: true, data: c });
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { data } = await sb.from('companies').select('id').eq('slug', s).maybeSingle();
+          if (!data) break;
+          s = `${base}-${i++}`;
+        }
+
+        const { data, error } = await sb
+          .from('companies')
+          .insert({
+            name,
+            slug: s,
+            contact: contact || {},
+            address: address || {},
+            status: status || 'active',
+            created_by: user.id
+          })
+          .select('*')
+          .single();
+        if (error) return res.status(500).json({ success: false, message: 'Server error' });
+        return res.status(201).json({ success: true, data: rowOut(data) });
       }
 
       const id = slug[0];
+
       if (id && req.method === 'GET') {
-        let c;
-        if (user.role === 'platformAdmin') c = await Company.findById(id).lean();
-        else if (user.companyId?.toString() === id) c = await Company.findById(id).lean();
-        if (!c) return res.status(404).json({ success: false, message: 'Not found' });
-        return res.status(200).json({ success: true, data: c });
+        let query = sb.from('companies').select('*').eq('id', id);
+        if (user.role !== 'platformAdmin') {
+          if (user.company_id !== id) return res.status(404).json({ success: false, message: 'Not found' });
+        }
+        const { data } = await query.maybeSingle();
+        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
+        return res.status(200).json({ success: true, data: rowOut(data) });
       }
 
       if (id && req.method === 'PUT') {
-        if (user.role !== 'platformAdmin' && user.companyId?.toString() !== id) {
+        if (user.role !== 'platformAdmin' && user.company_id !== id) {
           return res.status(403).json({ success: false, message: 'Forbidden' });
         }
-        const update = { ...req.body };
-        delete update.slug;
-        const c = await Company.findByIdAndUpdate(id, update, { new: true }).lean();
-        if (!c) return res.status(404).json({ success: false, message: 'Not found' });
-        return res.status(200).json({ success: true, data: c });
+        const body = { ...(req.body || {}) };
+        delete body.slug;
+        delete body.id;
+        const { data } = await sb.from('companies').update(body).eq('id', id).select('*').maybeSingle();
+        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
+        return res.status(200).json({ success: true, data: rowOut(data) });
       }
 
       if (id && req.method === 'DELETE') {
         if (user.role !== 'platformAdmin') return res.status(403).json({ success: false, message: 'Forbidden' });
-        await Company.findByIdAndDelete(id);
+        await sb.from('companies').delete().eq('id', id);
         return res.status(200).json({ success: true, message: 'Deleted' });
       }
 

@@ -1,12 +1,11 @@
-import { auth } from './firebase';
-import { signOut } from 'firebase/auth';
+import { supabase } from './supabase';
 import { apiRequest } from './api';
 
 const userName = document.getElementById('userName') as HTMLElement;
 const content = document.querySelector('.container .card') as HTMLElement;
 
 (window as any).logout = async () => {
-  await signOut(auth);
+  await supabase.auth.signOut();
   localStorage.removeItem('netmark_user');
   window.location.href = import.meta.env.BASE_URL;
 };
@@ -44,7 +43,7 @@ async function load() {
       html += `<h3>Available Deliveries</h3>`;
       const orders = avail.data.orders || [];
       html += orders.length
-        ? `<ul>${orders.map((o: any) => `<li>${o.orderNumber || o._id} - ${o.orderStatus}</li>`).join('')}</ul>`
+        ? `<ul>${orders.map((o: any) => `<li>${o.orderNumber || o.id} - ${o.orderStatus}</li>`).join('')}</ul>`
         : '<p>No available deliveries.</p>';
     }
   } else if (driver.status === 'pending') {
@@ -68,4 +67,7 @@ async function load() {
     });
   }
 }
-auth.onAuthStateChanged(load);
+
+supabase.auth.getSession().then(({ data }) => {
+  if (data.session) load();
+});

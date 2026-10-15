@@ -1,9 +1,8 @@
-import { auth } from './firebase';
-import { signOut } from 'firebase/auth';
+import { supabase } from './supabase';
 
 const userName = document.getElementById('userName') as HTMLElement;
 (window as any).logout = async () => {
-  await signOut(auth);
+  await supabase.auth.signOut();
   localStorage.removeItem('netmark_user');
   window.location.href = import.meta.env.BASE_URL;
 };

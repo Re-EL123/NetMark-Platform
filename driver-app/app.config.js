@@ -47,7 +47,9 @@ export default {
     extra: {
       apiUrl:
         process.env.API_URL ||
-        "https://greenworldplatform.duckdns.org/api",
+        "https://netmark-api.vercel.app/api",
+      supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL || "",
+      supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "",
       eas: {
         projectId: "8e17e5e3-ff75-4133-b2c1-db2f1795861d"
       }
