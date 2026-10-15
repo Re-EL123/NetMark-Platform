@@ -114,14 +114,16 @@ async function catalog(c: HTMLElement) {
 }
 
 /* --------------------------------- cart -------------------------------- */
-function cart(c: HTMLElement, ctx: any) {
+async function cart(c: HTMLElement, ctx: any) {
   const lines = getCart();
   if (!lines.length) {
     c.innerHTML = `<div class="card"><p class="empty">Your cart is empty.</p><button class="btn btn-sm" onclick="location.hash='catalog'">Browse products</button></div>`;
     return;
   }
+  const settingsRes = await apiRequest('/settings');
+  const symbol = settingsRes.data?.platform?.currencySymbol || 'R';
+  const deliveryFee = Number(settingsRes.data?.platform?.deliveryFee ?? 0);
   const subtotal = lines.reduce((s, l) => s + l.price * l.quantity, 0);
-  const deliveryFee = 25;
   const total = subtotal + deliveryFee;
 
   c.innerHTML = `
@@ -130,7 +132,7 @@ function cart(c: HTMLElement, ctx: any) {
       ${lines
         .map(
           (l, i) => `<div class="cart-line">
-        <div><div class="name">${esc(l.name)}</div><div class="empty">${money(l.price)}</div></div>
+        <div><div class="name">${esc(l.name)}</div><div class="empty">${money(l.price, symbol)}</div></div>
         <div class="qty">
           <button class="link-btn" data-dec="${i}">−</button>
           <span>${l.quantity}</span>
@@ -140,9 +142,9 @@ function cart(c: HTMLElement, ctx: any) {
       </div>`
         )
         .join('')}
-      <div class="summary-row"><span>Subtotal</span><span>${money(subtotal)}</span></div>
-      <div class="summary-row"><span>Delivery</span><span>${money(deliveryFee)}</span></div>
-      <div class="summary-row total"><span>Total</span><span>${money(total)}</span></div>
+      <div class="summary-row"><span>Subtotal</span><span>${money(subtotal, symbol)}</span></div>
+      <div class="summary-row"><span>Delivery</span><span>${money(deliveryFee, symbol)}</span></div>
+      <div class="summary-row total"><span>Total</span><span>${money(total, symbol)}</span></div>
       <button class="btn btn-sm" id="checkoutBtn" style="margin-top:12px">Checkout</button>
     </div>`;
 

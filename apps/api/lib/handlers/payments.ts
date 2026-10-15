@@ -52,9 +52,20 @@ const authedHandler = authed(async (req, res, ctx) => {
 
   // GET /payments  |  GET /payments/mine
   if (slug.length === 0 && req.method === 'GET') {
-    if (!ctx.isPlatform) return fail(res, 'Forbidden', 403);
-    const { data } = await sb.from('payments').select('*').order('created_at', { ascending: false }).limit(200);
-    return ok(res, { data: rowsOut(data) });
+    if (ctx.isPlatform) {
+      const { data } = await sb.from('payments').select('*').order('created_at', { ascending: false }).limit(200);
+      return ok(res, { data: rowsOut(data) });
+    }
+    if (ctx.role === 'owner' && ctx.companyId) {
+      const { data } = await sb
+        .from('payments')
+        .select('*')
+        .eq('company_id', ctx.companyId)
+        .order('created_at', { ascending: false })
+        .limit(200);
+      return ok(res, { data: rowsOut(data) });
+    }
+    return fail(res, 'Forbidden', 403);
   }
 
   if (slug[0] === 'mine' && req.method === 'GET') {
@@ -135,7 +146,8 @@ const authedHandler = authed(async (req, res, ctx) => {
   if (slug.length === 1 && req.method === 'GET') {
     const { data } = await sb.from('payments').select('*').eq('id', slug[0]).maybeSingle();
     if (!data) return fail(res, 'Not found', 404);
-    if (!ctx.isPlatform && data.user_id !== ctx.userId) return fail(res, 'Forbidden', 403);
+    const allowed = ctx.isPlatform || data.user_id === ctx.userId || (ctx.role === 'owner' && data.company_id === ctx.companyId);
+    if (!allowed) return fail(res, 'Forbidden', 403);
     return ok(res, { data: rowOut(data) });
   }
 

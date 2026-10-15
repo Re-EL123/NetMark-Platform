@@ -3,6 +3,7 @@ import { parseListQuery, runList } from '../paginate';
 import { hasPermission } from '../permissions';
 import { recordAudit } from '../audit';
 import { notify } from '../notify';
+import { storeIdsForUser } from '../scope';
 
 const STATUSES = ['pending', 'confirmed', 'completed', 'cancelled', 'no_show'];
 
@@ -11,9 +12,13 @@ export default authed(async (req, res, ctx) => {
   const slug = slugOf(req);
   const canWrite = ctx.isPlatform || hasPermission(ctx.role, 'appointments.write');
 
+  let storeIds: string[] | null = null;
+  if (ctx.role === 'storeOwner') storeIds = await storeIdsForUser(sb, ctx.userId, 'store_owner_id');
+
   function scope(q: any) {
     if (ctx.isPlatform) return q;
-    if (ctx.role === 'owner' || ctx.role === 'storeOwner') return q.eq('company_id', ctx.companyId);
+    if (ctx.role === 'owner') return q.eq('company_id', ctx.companyId);
+    if (ctx.role === 'storeOwner') return q.in('store_id', storeIds || []);
     if (ctx.role === 'customer') return q.eq('user_id', ctx.userId);
     return q.eq('company_id', ctx.companyId);
   }
@@ -71,11 +76,23 @@ export default authed(async (req, res, ctx) => {
     const status = req.body?.status;
     if (slug[1] === 'status' && !STATUSES.includes(status)) return fail(res, 'Invalid status');
     if (slug[1] !== 'status' && !canWrite) return fail(res, 'Forbidden', 403);
+
+    // Customers may only cancel their own appointment, never confirm/complete it.
+    const isOwn = before.user_id === ctx.userId;
+    if (ctx.role === 'customer') {
+      if (!isOwn) return fail(res, 'Forbidden', 403);
+      if (status !== 'cancelled') return fail(res, 'You can only cancel an appointment', 403);
+    } else if (!canWrite) {
+      return fail(res, 'Forbidden', 403);
+    }
+
     const patch: any = {};
     if (status && STATUSES.includes(status)) patch.status = status;
-    if (req.body?.date) patch.appointment_date = req.body.date;
-    if (req.body?.time !== undefined) patch.appointment_time = req.body.time;
-    if (req.body?.notes !== undefined) patch.notes = req.body.notes;
+    if (ctx.role !== 'customer') {
+      if (req.body?.date) patch.appointment_date = req.body.date;
+      if (req.body?.time !== undefined) patch.appointment_time = req.body.time;
+      if (req.body?.notes !== undefined) patch.notes = req.body.notes;
+    }
     const { data: after } = await sb.from('appointments').update(patch).eq('id', id).select('*').single();
     await recordAudit(req, { action: 'appointment.update', entityType: 'appointment', entityId: id, after: rowOut(after) });
     if (after.user_id && status) {

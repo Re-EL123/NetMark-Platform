@@ -11,13 +11,15 @@ function tempPassword(): string {
 }
 
 export default authed(async (req, res, ctx) => {
-  // Every route in this handler requires full platform control.
-  if (ctx.role !== 'platformAdmin') return fail(res, 'Forbidden', 403);
-
   const slug = slugOf(req);
   const sb = getSupabase();
   const [section, ...rest] = slug;
   const id = rest[0];
+
+  // Platform control only, except owners who may manage their company's payouts.
+  const isPlatform = ctx.role === 'platformAdmin';
+  const ownerPayouts = ctx.role === 'owner' && section === 'payouts' && !!ctx.companyId;
+  if (!isPlatform && !ownerPayouts) return fail(res, 'Forbidden', 403);
 
   /* ------------------------------- stats -------------------------------- */
   if (section === 'stats' && req.method === 'GET') {
@@ -251,13 +253,20 @@ export default authed(async (req, res, ctx) => {
   if (section === 'payouts') {
     if (!id && req.method === 'GET') {
       const list = parseListQuery(req);
-      const q = sb.from('payouts').select('*', { count: 'exact' });
+      let q = sb.from('payouts').select('*', { count: 'exact' });
+      if (!isPlatform) q = q.eq('company_id', ctx.companyId);
       const result = await runList(q, list, { searchColumns: ['reference', 'notes'] });
       return ok(res, { data: rowsOut(result.data), meta: { count: result.count, page: result.page, pageSize: result.pageSize } });
     }
     if (!id && req.method === 'POST') {
       const { driverId, amount, method, periodStart, periodEnd, notes, companyId } = req.body || {};
       if (!driverId || !amount) return fail(res, 'Driver and amount are required');
+      let targetCompany = isPlatform ? companyId || null : ctx.companyId;
+      // Owners may only pay drivers that belong to their company.
+      if (!isPlatform) {
+        const { data: driver } = await sb.from('drivers').select('id, company_id').eq('id', driverId).maybeSingle();
+        if (!driver || driver.company_id !== ctx.companyId) return fail(res, 'Driver not found', 404);
+      }
       const { data } = await sb
         .from('payouts')
         .insert({
@@ -267,7 +276,7 @@ export default authed(async (req, res, ctx) => {
           period_start: periodStart || null,
           period_end: periodEnd || null,
           notes: notes || null,
-          company_id: companyId || null,
+          company_id: targetCompany,
           status: 'pending'
         })
         .select('*')
@@ -276,6 +285,9 @@ export default authed(async (req, res, ctx) => {
       return ok(res, { data: rowOut(data) }, 201);
     }
     if (id && rest[1] === 'process' && req.method === 'POST') {
+      const { data: current } = await sb.from('payouts').select('*').eq('id', id).maybeSingle();
+      if (!current) return fail(res, 'Not found', 404);
+      if (!isPlatform && current.company_id !== ctx.companyId) return fail(res, 'Forbidden', 403);
       const { data: payout } = await sb
         .from('payouts')
         .update({ status: 'paid', processed_by: ctx.userId, processed_at: new Date().toISOString() })

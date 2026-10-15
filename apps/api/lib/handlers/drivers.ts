@@ -235,7 +235,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .single();
 
         const order = rowOut(updated);
-        const amount = Number(order.deliveryFee || order.driverEarning || order.total || 0);
+        const { data: cfg } = await sb
+          .from('settings')
+          .select('value')
+          .eq('scope', 'platform')
+          .eq('key', 'general')
+          .maybeSingle();
+        const commissionPct = Number(cfg?.value?.driverCommissionPercent ?? 100);
+        const baseRate = Number(order.deliveryFee || order.driverEarning || order.total || 0);
+        const amount = Math.round(baseRate * (commissionPct / 100) * 100) / 100;
         await sb.from('driver_earnings').insert({
           driver_id: driver.id,
           company_id: order.companyId || driver.company_id,

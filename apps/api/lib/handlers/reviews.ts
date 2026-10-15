@@ -20,6 +20,13 @@ export default authed(async (req, res, ctx) => {
   if (slug.length === 0 && req.method === 'POST') {
     const { orderId, storeId, productId, rating, comment, companyId } = req.body || {};
     if (!rating) return fail(res, 'Rating is required');
+    // Only platform may attribute a review to an arbitrary company; otherwise
+    // derive it from the referenced store.
+    let targetCompany = ctx.isPlatform ? companyId || null : ctx.companyId || null;
+    if (storeId) {
+      const { data: store } = await sb.from('stores').select('company_id').eq('id', storeId).maybeSingle();
+      if (store?.company_id) targetCompany = store.company_id;
+    }
     const { data } = await sb
       .from('reviews')
       .insert({
@@ -27,7 +34,7 @@ export default authed(async (req, res, ctx) => {
         store_id: storeId || null,
         product_id: productId || null,
         user_id: ctx.userId,
-        company_id: companyId || ctx.companyId || null,
+        company_id: targetCompany,
         rating: Math.min(5, Math.max(1, Number(rating))),
         comment: comment || null
       })
@@ -38,7 +45,13 @@ export default authed(async (req, res, ctx) => {
 
   if (slug[0] && req.method === 'DELETE') {
     let q = sb.from('reviews').delete().eq('id', slug[0]);
-    if (!['platformAdmin', 'owner'].includes(ctx.role)) q = q.eq('user_id', ctx.userId);
+    if (ctx.isPlatform) {
+      /* platform may delete any review */
+    } else if (ctx.role === 'owner') {
+      q = q.eq('company_id', ctx.companyId);
+    } else {
+      q = q.eq('user_id', ctx.userId);
+    }
     await q;
     return ok(res, { message: 'Deleted' });
   }

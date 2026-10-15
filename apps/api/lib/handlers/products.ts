@@ -2,15 +2,22 @@ import { authed, ok, fail, slugOf, getSupabase, rowOut, rowsOut } from '../http'
 import { parseListQuery, runList } from '../paginate';
 import { hasPermission } from '../permissions';
 import { recordAudit } from '../audit';
+import { storeIdsForUser } from '../scope';
 
 export default authed(async (req, res, ctx) => {
   const sb = getSupabase();
   const slug = slugOf(req);
   const canWrite = ctx.isPlatform || hasPermission(ctx.role, 'products.write');
 
+  // storeOwner/distributor have no company, so resolve their stores up front.
+  let storeIds: string[] | null = null;
+  if (ctx.role === 'storeOwner') storeIds = await storeIdsForUser(sb, ctx.userId, 'store_owner_id');
+  else if (ctx.role === 'distributor') storeIds = await storeIdsForUser(sb, ctx.userId, 'distributor_id');
+
   function scope(q: any) {
     if (ctx.isPlatform) return q;
     if (ctx.role === 'customer') return q;
+    if (ctx.role === 'storeOwner' || ctx.role === 'distributor') return q.in('store_id', storeIds || []);
     return q.eq('company_id', ctx.companyId);
   }
 
@@ -30,7 +37,14 @@ export default authed(async (req, res, ctx) => {
     if (!canWrite) return fail(res, 'Forbidden', 403);
     const { name, price, category, stock, sku, description, image, storeId, companyId, isActive } = req.body || {};
     if (!name) return fail(res, 'Name is required');
-    const targetCompany = ctx.isPlatform ? companyId || null : ctx.companyId;
+    let targetCompany = ctx.isPlatform ? companyId || null : ctx.companyId;
+    // storeOwners own products through a store; require and validate it.
+    if (ctx.role === 'storeOwner') {
+      if (!storeId) return fail(res, 'Select one of your stores for this product');
+      const { data: store } = await sb.from('stores').select('id, company_id, store_owner_id').eq('id', storeId).maybeSingle();
+      if (!store || store.store_owner_id !== ctx.userId) return fail(res, 'Store not found', 403);
+      targetCompany = store.company_id || null;
+    }
     const { data, error } = await sb
       .from('products')
       .insert({
@@ -72,6 +86,13 @@ export default authed(async (req, res, ctx) => {
     if (b.storeId !== undefined) patch.store_id = b.storeId || null;
     if (b.isActive !== undefined) patch.is_active = b.isActive;
     if (b.companyId !== undefined && ctx.isPlatform) patch.company_id = b.companyId || null;
+    // A storeOwner may only move a product between stores they own.
+    if (ctx.role === 'storeOwner' && b.storeId !== undefined) {
+      if (!b.storeId) return fail(res, 'Select one of your stores for this product');
+      const { data: store } = await sb.from('stores').select('id, company_id, store_owner_id').eq('id', b.storeId).maybeSingle();
+      if (!store || store.store_owner_id !== ctx.userId) return fail(res, 'Store not found', 403);
+      patch.company_id = store.company_id || null;
+    }
     const { data: after } = await sb.from('products').update(patch).eq('id', id).select('*').single();
     await recordAudit(req, { action: 'product.update', entityType: 'product', entityId: id, before: rowOut(before), after: rowOut(after) });
     return ok(res, { data: rowOut(after) });

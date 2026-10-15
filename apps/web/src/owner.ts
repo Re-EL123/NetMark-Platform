@@ -31,6 +31,7 @@ const nav: NavItem[] = [
   { id: 'drivers', label: 'Drivers' },
   { id: 'appointments', label: 'Appointments' },
   { id: 'codes', label: 'Codes' },
+  { id: 'payouts', label: 'Payouts', capability: 'payouts.read' },
   { id: 'reports', label: 'Reports' },
   { id: 'settings', label: 'Settings' }
 ];
@@ -49,6 +50,7 @@ initPanel({
     if (route === 'drivers') return drivers(c);
     if (route === 'appointments') return appointments(c);
     if (route === 'codes') return codes(c);
+    if (route === 'payouts') return payouts(c);
     if (route === 'reports') return reports(c);
     if (route === 'settings') return settings(c);
   }
@@ -397,6 +399,53 @@ function codes(c: HTMLElement) {
         delete: async (id) => {
           if (await confirmDialog('Delete this code?', { danger: true, confirmLabel: 'Delete' })) {
             await apiRequest(`/codes/${id}`, { method: 'DELETE' });
+            reload();
+          }
+        }
+      });
+    }
+  });
+}
+
+function payouts(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/admin/payouts',
+    columns: [
+      { key: 'amount', label: 'Amount', render: (r) => money(r.amount) },
+      { key: 'method', label: 'Method', render: (r) => titleCase(r.method || 'eft') },
+      { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
+      { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) }
+    ],
+    toolbar: () => `<button class="btn btn-sm" data-new>+ New payout</button>`,
+    actions: (r) => (r.status === 'paid' ? '' : act('process', r.id, 'Mark paid')),
+    bind: (root, reload) => {
+      (root.querySelector('[data-new]') as HTMLElement).onclick = async () => {
+        const res = await apiRequest('/drivers?status=approved&pageSize=100');
+        const drivers = (res.data || []).map((d: any) => ({ value: d.id, label: d.user?.name || d.id.slice(0, 8) }));
+        if (!drivers.length) return toast('No approved drivers yet', 'error');
+        await openModal({
+          title: 'New payout',
+          fields: [
+            { name: 'driverId', label: 'Driver', type: 'select', options: drivers },
+            { name: 'amount', label: 'Amount', type: 'number', step: '0.01', required: true },
+            { name: 'method', label: 'Method', type: 'select', options: opts(['eft', 'cash', 'wallet']) },
+            { name: 'periodStart', label: 'Period start', type: 'date' },
+            { name: 'periodEnd', label: 'Period end', type: 'date' },
+            { name: 'notes', label: 'Notes', type: 'textarea' }
+          ],
+          onSubmit: async (v) => {
+            const r = await apiRequest('/admin/payouts', { method: 'POST', body: JSON.stringify(v) });
+            if (!r.success) throw new Error(r.message || 'Failed');
+            toast('Payout created', 'success');
+            reload();
+          }
+        });
+      };
+      wire(root, {
+        process: async (id) => {
+          if (await confirmDialog('Mark this payout as paid?', { confirmLabel: 'Mark paid' })) {
+            await apiRequest(`/admin/payouts/${id}/process`, { method: 'POST' });
+            toast('Payout processed', 'success');
             reload();
           }
         }

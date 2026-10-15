@@ -1,5 +1,6 @@
 import { authed, ok, fail, slugOf, getSupabase, rowsOut } from '../http';
 import { hasPermission } from '../permissions';
+import { storeIdsForUser } from '../scope';
 
 function rangeFromQuery(req: any): { from: string; to: string } {
   const to = req.query?.to ? new Date(String(req.query.to)) : new Date();
@@ -46,7 +47,16 @@ export default authed(async (req, res, ctx) => {
   // overview / sales / (default)
   const { from, to } = rangeFromQuery(req);
   let q = sb.from('orders').select('*').gte('created_at', from).lte('created_at', to);
-  if (!ctx.isPlatform) q = q.eq('company_id', ctx.companyId);
+  if (!ctx.isPlatform) {
+    if (ctx.role === 'storeOwner') {
+      const storeIds = await storeIdsForUser(sb, ctx.userId, 'store_owner_id');
+      q = q.in('store_id', storeIds);
+    } else if (ctx.role === 'distributor') {
+      q = q.eq('distributor_id', ctx.userId);
+    } else {
+      q = q.eq('company_id', ctx.companyId);
+    }
+  }
   const { data: orders } = await q;
   const all = orders || [];
 

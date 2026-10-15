@@ -2,7 +2,7 @@ import { apiRequest } from './api';
 import { initPanel, NavItem, can } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { crudView } from './crud';
-import { openModal, toast, money, titleCase, statCards } from './ui';
+import { openModal, toast, money, titleCase, statCards, Field } from './ui';
 
 function opts(values: string[]) {
   return values.map((v) => ({ value: v, label: titleCase(v) }));
@@ -29,6 +29,7 @@ const nav: NavItem[] = [
   { id: 'stores', label: 'Stores', capability: 'stores.read' },
   { id: 'products', label: 'Products', capability: 'products.read' },
   { id: 'orders', label: 'Orders', capability: 'orders.read' },
+  { id: 'customers', label: 'Customers', capability: 'users.read' },
   { id: 'appointments', label: 'Appointments', capability: 'appointments.read' },
   { id: 'codes', label: 'Codes', capability: 'codes.read' },
   { id: 'reports', label: 'Reports', capability: 'reports.read' }
@@ -42,8 +43,9 @@ initPanel({
     ctx.titleEl.textContent = nav.find((n) => n.id === route)?.label || 'Business';
     if (route === 'dashboard') return dashboard(c);
     if (route === 'stores') return stores(c, ctx.user.role);
-    if (route === 'products') return products(c);
+    if (route === 'products') return products(c, ctx.user.role);
     if (route === 'orders') return orders(c);
+    if (route === 'customers') return customers(c);
     if (route === 'appointments' && ctx.user.role === 'storeOwner') return appointments(c);
     if (route === 'codes' && ctx.user.role === 'distributor') return codes(c);
     if (route === 'reports') return reports(c);
@@ -110,9 +112,18 @@ function stores(c: HTMLElement, role: string) {
   });
 }
 
-function products(c: HTMLElement) {
+function products(c: HTMLElement, role: string) {
   let rows: any[] = [];
+  let storeOpts: { value: string; label: string }[] = [];
   const writable = can('products.write');
+  const needsStore = role === 'storeOwner';
+  const storeField = (value: string): Field => ({
+    name: 'storeId',
+    label: 'Store',
+    type: 'select',
+    options: storeOpts,
+    value
+  });
   crudView(c, {
     endpoint: '/products',
     onData: (r) => (rows = r),
@@ -126,7 +137,11 @@ function products(c: HTMLElement) {
     actions: writable ? (r) => act('edit', r.id, 'Edit') + act('stock', r.id, 'Stock') : undefined,
     bind: (root, reload) => {
       if (!writable) return;
-      (root.querySelector('[data-new]') as HTMLElement).onclick = () =>
+      (root.querySelector('[data-new]') as HTMLElement).onclick = async () => {
+        if (needsStore) {
+          const res = await apiRequest('/stores?pageSize=100');
+          storeOpts = (res.data || []).map((s: any) => ({ value: s.id, label: s.name }));
+        }
         openModal({
           title: 'New product',
           fields: [
@@ -134,31 +149,42 @@ function products(c: HTMLElement) {
             { name: 'price', label: 'Price', type: 'number', step: '0.01' },
             { name: 'stock', label: 'Stock', type: 'number' },
             { name: 'category', label: 'Category' },
+            ...(needsStore ? [storeField(storeOpts[0]?.value || '')] : []),
             { name: 'description', label: 'Description', type: 'textarea' },
             { name: 'isActive', label: 'Active', type: 'checkbox', value: true }
           ],
           onSubmit: async (v) => {
-            await apiRequest('/products', { method: 'POST', body: JSON.stringify(v) });
+            const res = await apiRequest('/products', { method: 'POST', body: JSON.stringify(v) });
+            if (!res.success) throw new Error(res.message || 'Failed');
             toast('Product created', 'success');
             reload();
           }
         });
+      };
       wire(root, {
-        edit: (id) =>
+        edit: async (id) => {
+          const row = rows.find((r) => r.id === id);
+          if (needsStore) {
+            const res = await apiRequest('/stores?pageSize=100');
+            storeOpts = (res.data || []).map((s: any) => ({ value: s.id, label: s.name }));
+          }
           openModal({
             title: 'Edit product',
             fields: [
-              { name: 'name', label: 'Name', value: rows.find((r) => r.id === id)?.name },
-              { name: 'price', label: 'Price', type: 'number', step: '0.01', value: rows.find((r) => r.id === id)?.price },
-              { name: 'stock', label: 'Stock', type: 'number', value: rows.find((r) => r.id === id)?.stock },
-              { name: 'isActive', label: 'Active', type: 'checkbox', value: rows.find((r) => r.id === id)?.isActive !== false }
+              { name: 'name', label: 'Name', value: row?.name },
+              { name: 'price', label: 'Price', type: 'number', step: '0.01', value: row?.price },
+              { name: 'stock', label: 'Stock', type: 'number', value: row?.stock },
+              ...(needsStore ? [storeField(row?.storeId || '')] : []),
+              { name: 'isActive', label: 'Active', type: 'checkbox', value: row?.isActive !== false }
             ],
             onSubmit: async (v) => {
-              await apiRequest(`/products/${id}`, { method: 'PUT', body: JSON.stringify(v) });
+              const res = await apiRequest(`/products/${id}`, { method: 'PUT', body: JSON.stringify(v) });
+              if (!res.success) throw new Error(res.message || 'Failed');
               toast('Product updated', 'success');
               reload();
             }
-          }),
+          });
+        },
         stock: async (id) =>
           openModal({
             title: 'Adjust stock',
@@ -171,6 +197,20 @@ function products(c: HTMLElement) {
           })
       });
     }
+  });
+}
+
+function customers(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/users',
+    searchPlaceholder: 'Search referred customers…',
+    columns: [
+      { key: 'name', label: 'Name' },
+      { key: 'email', label: 'Email' },
+      { key: 'phone', label: 'Phone' },
+      { key: 'role', label: 'Role', render: (r) => badge(r.role, 'info') },
+      { key: 'createdAt', label: 'Joined', render: (r) => formatDate(r.createdAt) }
+    ]
   });
 }
 

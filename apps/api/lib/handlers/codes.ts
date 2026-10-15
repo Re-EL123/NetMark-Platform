@@ -40,6 +40,13 @@ export default authed(async (req, res, ctx) => {
     const { code, distributorId, maxUses, expiresAt, companyId } = req.body || {};
     const distributor = ctx.role === 'distributor' ? ctx.userId : distributorId || null;
     const targetCompany = ctx.isPlatform ? companyId || null : ctx.companyId;
+    // Owners may only issue codes for distributors within their own company.
+    if (ctx.role === 'owner' && distributor) {
+      const { data: rep } = await sb.from('users').select('id, company_id, role').eq('id', distributor).maybeSingle();
+      if (!rep || rep.role !== 'distributor' || rep.company_id !== ctx.companyId) {
+        return fail(res, 'Distributor not found in your company', 404);
+      }
+    }
     const { data, error } = await sb
       .from('distributor_codes')
       .insert({
@@ -61,8 +68,21 @@ export default authed(async (req, res, ctx) => {
   }
 
   const id = slug[0];
+
+  // A code may only be touched by its owning distributor, the owning company's
+  // owner, or the platform.
+  const canTouch = (code: any) => {
+    if (ctx.isPlatform) return true;
+    if (ctx.role === 'owner') return code.company_id && code.company_id === ctx.companyId;
+    if (ctx.role === 'distributor') return code.distributor_id === ctx.userId;
+    return false;
+  };
+
   if (id && req.method === 'PUT') {
     if (!canWrite) return fail(res, 'Forbidden', 403);
+    const { data: before } = await sb.from('distributor_codes').select('*').eq('id', id).maybeSingle();
+    if (!before) return fail(res, 'Not found', 404);
+    if (!canTouch(before)) return fail(res, 'Forbidden', 403);
     const b = req.body || {};
     const patch: any = {};
     if (b.maxUses !== undefined) patch.max_uses = b.maxUses;
@@ -77,6 +97,7 @@ export default authed(async (req, res, ctx) => {
     if (!canWrite) return fail(res, 'Forbidden', 403);
     const { data: before } = await sb.from('distributor_codes').select('*').eq('id', id).maybeSingle();
     if (!before) return fail(res, 'Not found', 404);
+    if (!canTouch(before)) return fail(res, 'Forbidden', 403);
     const { data: after } = await sb.from('distributor_codes').update({ is_active: !before.is_active }).eq('id', id).select('*').single();
     return ok(res, { data: rowOut(after) });
   }
@@ -84,6 +105,8 @@ export default authed(async (req, res, ctx) => {
   if (id && req.method === 'DELETE') {
     if (!canWrite) return fail(res, 'Forbidden', 403);
     const { data: before } = await sb.from('distributor_codes').select('*').eq('id', id).maybeSingle();
+    if (!before) return fail(res, 'Not found', 404);
+    if (!canTouch(before)) return fail(res, 'Forbidden', 403);
     await sb.from('distributor_codes').delete().eq('id', id);
     await recordAudit(req, { action: 'code.delete', entityType: 'distributor_code', entityId: id, before: before ? rowOut(before) : null });
     return ok(res, { message: 'Deleted' });

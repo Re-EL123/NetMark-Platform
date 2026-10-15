@@ -114,6 +114,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ success: false, message: 'Password required' });
       }
 
+      // Validate the optional distributor code before creating the account so we
+      // never leave an orphaned auth user behind for an invalid referral.
+      let codeRow: any = null;
+      if (distributorCode) {
+        const normalized = String(distributorCode).toUpperCase();
+        const { data } = await sb
+          .from('distributor_codes')
+          .select('*')
+          .eq('code', normalized)
+          .maybeSingle();
+        if (!data) return res.status(400).json({ success: false, message: 'Invalid distributor code' });
+        if (data.is_active === false) return res.status(400).json({ success: false, message: 'That code is no longer active' });
+        if (data.expires_at && new Date(data.expires_at) < new Date()) {
+          return res.status(400).json({ success: false, message: 'That code has expired' });
+        }
+        if (data.max_uses != null && Number(data.uses || 0) >= Number(data.max_uses)) {
+          return res.status(400).json({ success: false, message: 'That code has reached its usage limit' });
+        }
+        codeRow = data;
+      }
+
       const { data: created, error: authErr } = await sb.auth.admin.createUser({
         email,
         password,
@@ -151,7 +172,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           phone: phone || null,
           role,
           company_id: resolvedCompanyId,
-          distributor_code: distributorCode || null,
+          distributor_code: codeRow ? codeRow.code : null,
           verification_status: role === 'platformAdmin' ? 'verified' : 'pending'
         })
         .select('*')
@@ -161,19 +182,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(500).json({ success: false, message: 'Server error' });
       }
 
-      if (distributorCode) {
-        const { data: codeRow } = await sb
+      if (codeRow) {
+        await sb.from('users').update({ distributor_id: codeRow.distributor_id }).eq('id', uid);
+        await sb
           .from('distributor_codes')
-          .select('*')
-          .eq('code', String(distributorCode).toUpperCase())
-          .maybeSingle();
-        if (codeRow && codeRow.is_active !== false) {
-          await sb.from('users').update({ distributor_id: codeRow.distributor_id }).eq('id', uid);
-          await sb
-            .from('distributor_codes')
-            .update({ uses: Number(codeRow.uses || 0) + 1 })
-            .eq('id', codeRow.id);
-        }
+          .update({ uses: Number(codeRow.uses || 0) + 1 })
+          .eq('id', codeRow.id);
       }
 
       if (role === 'driver') {

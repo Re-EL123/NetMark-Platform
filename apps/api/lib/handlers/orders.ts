@@ -3,6 +3,7 @@ import { parseListQuery, runList } from '../paginate';
 import { hasPermission } from '../permissions';
 import { recordAudit } from '../audit';
 import { notify } from '../notify';
+import { storeIdsForUser } from '../scope';
 
 const ORDER_STATUSES = ['pending', 'confirmed', 'ready', 'completed', 'cancelled'];
 
@@ -21,9 +22,14 @@ export default authed(async (req, res, ctx) => {
   const slug = slugOf(req);
   const canWrite = ctx.isPlatform || hasPermission(ctx.role, 'orders.write');
 
+  // storeOwners have no company; scope them through the stores they own.
+  let storeIds: string[] | null = null;
+  if (ctx.role === 'storeOwner') storeIds = await storeIdsForUser(sb, ctx.userId, 'store_owner_id');
+
   function scope(q: any) {
     if (ctx.isPlatform) return q;
-    if (ctx.role === 'owner' || ctx.role === 'storeOwner') return q.eq('company_id', ctx.companyId);
+    if (ctx.role === 'owner') return q.eq('company_id', ctx.companyId);
+    if (ctx.role === 'storeOwner') return q.in('store_id', storeIds || []);
     if (ctx.role === 'distributor') return q.eq('distributor_id', ctx.userId);
     return q.eq('customer_id', ctx.userId);
   }
@@ -48,18 +54,13 @@ export default authed(async (req, res, ctx) => {
 
   // POST /orders
   if (slug.length === 0 && req.method === 'POST') {
-    const { storeId, items, address, notes, orderType, distributorId } = req.body || {};
+    const { storeId: bodyStoreId, items, address, notes, orderType, distributorId } = req.body || {};
     if (!Array.isArray(items) || !items.length) return fail(res, 'Order must contain at least one item');
-
-    let companyId = ctx.companyId;
-    if (storeId) {
-      const { data: store } = await sb.from('stores').select('*').eq('id', storeId).maybeSingle();
-      if (!store) return fail(res, 'Store not found', 404);
-      companyId = store.company_id;
-    }
 
     const lines: any[] = [];
     let subtotal = 0;
+    let derivedStoreId: string | null = null;
+    let derivedCompanyId: string | null = null;
     for (const item of items) {
       const productId = item.productId || item.id;
       const qty = Math.max(1, Number(item.quantity || 1));
@@ -70,6 +71,33 @@ export default authed(async (req, res, ctx) => {
       const price = Number(product.price || 0);
       lines.push({ productId, name: product.name, price, quantity: qty, lineTotal: price * qty });
       subtotal += price * qty;
+      if (!derivedStoreId) {
+        derivedStoreId = product.store_id || null;
+        derivedCompanyId = product.company_id || null;
+      }
+    }
+
+    // Resolve the store: explicit selection wins, otherwise the first product's.
+    let store: any = null;
+    let storeId = bodyStoreId || derivedStoreId;
+    let companyId = ctx.companyId;
+    if (storeId) {
+      const { data } = await sb.from('stores').select('*').eq('id', storeId).maybeSingle();
+      if (!data) return fail(res, 'Store not found', 404);
+      store = data;
+      companyId = store.company_id;
+    } else {
+      companyId = derivedCompanyId || ctx.companyId;
+    }
+
+    // Distributor attribution: explicit override for staff, otherwise fall back
+    // to the customer's referring distributor, then to the store's distributor.
+    let distributor = null;
+    if ((ctx.isPlatform || ctx.role === 'owner') && distributorId) {
+      distributor = distributorId;
+    } else {
+      const { data: me } = await sb.from('users').select('distributor_id').eq('id', ctx.userId).maybeSingle();
+      distributor = me?.distributor_id || store?.distributor_id || null;
     }
 
     const fee = orderType === 'pickup' ? 0 : await deliveryFee();
@@ -83,7 +111,7 @@ export default authed(async (req, res, ctx) => {
         customer_id: ctx.userId,
         user_id: ctx.userId,
         store_id: storeId || null,
-        distributor_id: distributorId || null,
+        distributor_id: distributor,
         order_status: 'pending',
         delivery_status: 'unassigned',
         subtotal,
@@ -108,6 +136,9 @@ export default authed(async (req, res, ctx) => {
     await recordAudit(req, { action: 'order.create', entityType: 'order', entityId: order.id, after: rowOut(order) });
     if (companyId) {
       await notify({ role: 'owner', companyId, type: 'order', title: 'New order', body: `Order ${order.order_number} placed (${total}).`, data: { orderId: order.id } });
+    }
+    if (distributor) {
+      await notify({ userId: distributor, type: 'order', title: 'New referred order', body: `Order ${order.order_number} was placed by a customer you referred.`, data: { orderId: order.id } });
     }
     return ok(res, { data: rowOut(order) }, 201);
   }
