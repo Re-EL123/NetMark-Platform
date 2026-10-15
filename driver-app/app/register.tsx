@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#D7263D',
+    color: '#E50914',
   },
   subtitle: {
     marginTop: 8,
@@ -307,8 +307,8 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   errorText: {
-    backgroundColor: '#fdecea',
-    color: '#c62828',
+    backgroundColor: '#FEE2E2',
+    color: '#B91C1C',
     padding: 12,
     borderRadius: 8,
     marginBottom: 16,
@@ -343,8 +343,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   vehicleChipSelected: {
-    backgroundColor: '#D7263D',
-    borderColor: '#D7263D',
+    backgroundColor: '#E50914',
+    borderColor: '#E50914',
   },
   vehicleChipText: {
     color: '#333',
@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   button: {
-    backgroundColor: '#D7263D',
+    backgroundColor: '#E50914',
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   linkText: {
-    color: '#D7263D',
+    color: '#E50914',
     fontSize: 14,
   },
 });

@@ -186,7 +186,7 @@ export default function ActiveDeliveryScreen() {
             <MaterialIcons
               name="map"
               size={32}
-              color="#D7263D"
+              color="#E50914"
             />
             <Text style={styles.webMapTitle}>
               Native map enabled on driver app
@@ -204,7 +204,7 @@ export default function ActiveDeliveryScreen() {
             <MaterialIcons
               name="map"
               size={32}
-              color="#D7263D"
+              color="#E50914"
             />
             <Text style={styles.webMapTitle}>
               Map preview not available on web yet
@@ -221,7 +221,7 @@ export default function ActiveDeliveryScreen() {
             <MaterialIcons
               name="location-searching"
               size={32}
-              color="#9E9E9E"
+              color="#6B7280"
             />
             <Text style={styles.webMapTitle}>
               Getting your location…
@@ -257,7 +257,7 @@ export default function ActiveDeliveryScreen() {
             <MaterialIcons
               name="store"
               size={20}
-              color="#D7263D"
+              color="#E50914"
             />
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>
@@ -277,7 +277,7 @@ export default function ActiveDeliveryScreen() {
                     style={styles.actionChip}
                     onPress={() => handleCall(activeDelivery.storeId?.contactInfo?.phone)}
                   >
-                    <MaterialIcons name="call" size={16} color="#D7263D" />
+                    <MaterialIcons name="call" size={16} color="#E50914" />
                     <Text style={styles.actionChipText}>Call Store</Text>
                   </TouchableOpacity>
                 ) : null}
@@ -289,8 +289,8 @@ export default function ActiveDeliveryScreen() {
                     )
                   }
                 >
-                  <MaterialIcons name="directions" size={16} color="#2196F3" />
-                  <Text style={[styles.actionChipText, { color: "#2196F3" }]}>Directions</Text>
+                  <MaterialIcons name="directions" size={16} color="#1D4ED8" />
+                  <Text style={[styles.actionChipText, { color: "#1D4ED8" }]}>Directions</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -303,7 +303,7 @@ export default function ActiveDeliveryScreen() {
             <MaterialIcons
               name="location-on"
               size={20}
-              color="#f44336"
+              color="#B91C1C"
             />
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>
@@ -323,7 +323,7 @@ export default function ActiveDeliveryScreen() {
                     style={styles.actionChip}
                     onPress={() => handleCall(activeDelivery.deliveryAddress?.phone)}
                   >
-                    <MaterialIcons name="call" size={16} color="#D7263D" />
+                    <MaterialIcons name="call" size={16} color="#E50914" />
                     <Text style={styles.actionChipText}>Call Customer</Text>
                   </TouchableOpacity>
                 ) : null}
@@ -335,8 +335,8 @@ export default function ActiveDeliveryScreen() {
                     )
                   }
                 >
-                  <MaterialIcons name="directions" size={16} color="#2196F3" />
-                  <Text style={[styles.actionChipText, { color: "#2196F3" }]}>Directions</Text>
+                  <MaterialIcons name="directions" size={16} color="#1D4ED8" />
+                  <Text style={[styles.actionChipText, { color: "#1D4ED8" }]}>Directions</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -399,7 +399,7 @@ export default function ActiveDeliveryScreen() {
             </TouchableOpacity>
           ) : (
             <View style={[styles.infoRow, { justifyContent: "center" }]}>
-              <Text style={{ color: "#D7263D", fontWeight: "600" }}>
+              <Text style={{ color: "#E50914", fontWeight: "600" }}>
                 Delivery completed
               </Text>
             </View>
@@ -421,11 +421,11 @@ export default function ActiveDeliveryScreen() {
 
 function getStatusColor(status: string) {
   const colors: any = {
-    ready: { backgroundColor: "#FF9800" },
-    in_transit: { backgroundColor: "#2196F3" },
-    delivered: { backgroundColor: "#D7263D" }
+    ready: { backgroundColor: "#B45309" },
+    in_transit: { backgroundColor: "#1D4ED8" },
+    delivered: { backgroundColor: "#E50914" }
   };
-  return colors[status] || { backgroundColor: "#9E9E9E" };
+  return colors[status] || { backgroundColor: "#6B7280" };
 }
 
 const styles = StyleSheet.create({
@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
     marginTop: 10
   },
   primaryButton: {
-    backgroundColor: "#D7263D",
+    backgroundColor: "#E50914",
     padding: 15,
     borderRadius: 8,
     alignItems: "center",
@@ -585,6 +585,6 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     fontSize: 13,
     fontWeight: "600",
-    color: "#D7263D",
+    color: "#E50914",
   }
 });

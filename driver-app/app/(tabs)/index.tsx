@@ -64,11 +64,11 @@ export default function HomeScreen() {
   const getAvailabilityColor = () => {
     switch (driverProfile?.availability) {
       case "available":
-        return "#D7263D";
+        return "#E50914";
       case "busy":
-        return "#FF9800";
+        return "#B45309";
       default:
-        return "#9E9E9E";
+        return "#6B7280";
     }
   };
 
@@ -116,7 +116,7 @@ export default function HomeScreen() {
           refreshing={refreshing}
           onRefresh={onRefresh}
           tintColor="#fff"
-          colors={["#D7263D"]}
+          colors={["#E50914"]}
         />
       }
     >
@@ -127,7 +127,7 @@ export default function HomeScreen() {
 
       {driverProfile.status !== "approved" && driverProfile.status !== "active" && (
         <View style={styles.pendingBanner}>
-          <MaterialIcons name="info" size={20} color="#E65100" />
+          <MaterialIcons name="info" size={20} color="#B45309" />
           <Text style={styles.pendingBannerText}>
             Account Status: {driverProfile.status?.toUpperCase() || "PENDING"}. Awaiting administrator approval before you can go online.
           </Text>
@@ -152,8 +152,8 @@ export default function HomeScreen() {
             {
               backgroundColor:
                 driverProfile.availability === "available"
-                  ? "#f44336"
-                  : "#9E9E9E"
+                  ? "#B91C1C"
+                  : "#6B7280"
             }
           ]}
           onPress={toggleAvailability}
@@ -206,7 +206,7 @@ export default function HomeScreen() {
           style={styles.actionButton}
           onPress={() => router.push("/orders")}
         >
-          <MaterialIcons name="list" size={24} color="#D7263D" />
+          <MaterialIcons name="list" size={24} color="#E50914" />
           <Text style={styles.actionButtonText}>
             View Available Deliveries
           </Text>
@@ -216,7 +216,7 @@ export default function HomeScreen() {
           style={styles.actionButton}
           onPress={() => router.push("/active-delivery")}
         >
-          <MaterialIcons name="local-shipping" size={24} color="#D7263D" />
+          <MaterialIcons name="local-shipping" size={24} color="#E50914" />
           <Text style={styles.actionButtonText}>Active Delivery</Text>
         </TouchableOpacity>
 
@@ -224,7 +224,7 @@ export default function HomeScreen() {
           style={styles.actionButton}
           onPress={() => router.push("/earnings")}
         >
-          <MaterialIcons name="attach-money" size={24} color="#D7263D" />
+          <MaterialIcons name="attach-money" size={24} color="#E50914" />
           <Text style={styles.actionButtonText}>View Earnings</Text>
         </TouchableOpacity>
       </View>
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 20,
-    backgroundColor: "#D7263D",
+    backgroundColor: "#E50914",
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8
@@ -294,8 +294,8 @@ const styles = StyleSheet.create({
     fontWeight: "bold"
   },
   pendingBanner: {
-    backgroundColor: "#FFF3E0",
-    borderColor: "#FFE0B2",
+    backgroundColor: "#FEF3C7",
+    borderColor: "#FDE68A",
     borderWidth: 1,
     borderRadius: 8,
     marginHorizontal: 15,
@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
     alignItems: "center"
   },
   pendingBannerText: {
-    color: "#E65100",
+    color: "#B45309",
     fontSize: 13,
     fontWeight: "500",
     marginLeft: 8,
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 24,
     fontWeight: "bold",
-    color: "#D7263D",
+    color: "#E50914",
     marginBottom: 5
   },
   statLabel: {

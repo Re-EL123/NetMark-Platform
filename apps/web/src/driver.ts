@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 import { apiRequest } from './api';
 
 const userName = document.getElementById('userName') as HTMLElement;
-const content = document.querySelector('.container .card') as HTMLElement;
+const content = document.querySelector('.content .card') as HTMLElement;
 
 (window as any).logout = async () => {
   await supabase.auth.signOut();
@@ -22,10 +22,10 @@ async function load() {
   const driver = meRes.data.driver;
 
   const statusColors: Record<string, string> = {
-    approved: '#4CAF50',
-    pending: '#FF9800',
-    rejected: '#F44336',
-    suspended: '#9E9E9E'
+    approved: '#15803D',
+    pending: '#B45309',
+    rejected: '#B91C1C',
+    suspended: '#6B7280'
   };
 
   let html = `

@@ -4,26 +4,35 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NetMark - Shop</title>
-  <style>
-    body { font-family: system-ui; margin: 0; background: #f5f5f5; }
-    header { background: #1A0A0D; color: #fff; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
-    .container { padding: 2rem; }
-    .card { background: #fff; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    button { padding: 0.5rem 1rem; background: #4CAF50; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
-  </style>
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/favicon-180.png">
+  <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
-  <header>
-    <h1>Customer Shop</h1>
-    <div>
-      <span id="userName"></span>
-      <button onclick="logout()">Logout</button>
-    </div>
-  </header>
-  <div class="container">
-    <div class="card">
-      <h2>Welcome to NetMark</h2>
-      <p>Browse products, shops, place orders, manage appointments.</p>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <img src="/netmark-logo.png" alt="NetMark">
+        <span>NetMark</span>
+      </div>
+      <nav>
+        <a href="/shop/" class="active">Shop</a>
+      </nav>
+    </aside>
+    <div class="main">
+      <header>
+        <h1>Customer Shop</h1>
+        <div class="user-meta">
+          <span id="userName" class="name"></span>
+          <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+      </header>
+      <div class="content">
+        <div class="card">
+          <h2>Welcome to NetMark</h2>
+          <p>Browse products, shops, place orders, manage appointments.</p>
+        </div>
+      </div>
     </div>
   </div>
   <script type="module" src="/src/shop.guard.ts"></script>

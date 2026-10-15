@@ -165,7 +165,7 @@ export default function ProfileScreen() {
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
           <Text style={styles.sectionTitle}>Bank Details</Text>
           <TouchableOpacity onPress={() => setBankModalVisible(true)}>
-            <Text style={{ color: "#D7263D", fontWeight: "600", fontSize: 14 }}>
+            <Text style={{ color: "#E50914", fontWeight: "600", fontSize: 14 }}>
               {driverProfile?.bankDetails?.accountNumber ? "Edit" : "+ Add"}
             </Text>
           </TouchableOpacity>
@@ -209,8 +209,8 @@ export default function ProfileScreen() {
             style={[styles.infoCard, { alignItems: "center", paddingVertical: 18, borderStyle: "dashed", borderWidth: 1, borderColor: "#bbb" }]}
             onPress={() => setBankModalVisible(true)}
           >
-            <MaterialIcons name="add-circle-outline" size={28} color="#D7263D" />
-            <Text style={{ marginTop: 6, color: "#D7263D", fontWeight: "600" }}>
+            <MaterialIcons name="add-circle-outline" size={28} color="#E50914" />
+            <Text style={{ marginTop: 6, color: "#E50914", fontWeight: "600" }}>
               Add Bank Account for Payouts
             </Text>
             <Text style={{ fontSize: 12, color: "#888", marginTop: 2 }}>
@@ -225,22 +225,22 @@ export default function ProfileScreen() {
           style={styles.actionButton}
           onPress={() => setBankModalVisible(true)}
         >
-          <MaterialIcons name="account-balance" size={24} color="#D7263D" />
+          <MaterialIcons name="account-balance" size={24} color="#E50914" />
           <Text style={styles.actionButtonText}>Update Bank Details</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionButton} onPress={handleEditProfile}>
-          <MaterialIcons name="directions-car" size={24} color="#D7263D" />
+          <MaterialIcons name="directions-car" size={24} color="#E50914" />
           <Text style={styles.actionButtonText}>Vehicle & License Info</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionButton} onPress={handleSettings}>
-          <MaterialIcons name="settings" size={24} color="#D7263D" />
+          <MaterialIcons name="settings" size={24} color="#E50914" />
           <Text style={styles.actionButtonText}>Settings</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.actionButton} onPress={handleHelp}>
-          <MaterialIcons name="help" size={24} color="#D7263D" />
+          <MaterialIcons name="help" size={24} color="#E50914" />
           <Text style={styles.actionButtonText}>Help & Support</Text>
         </TouchableOpacity>
 
@@ -248,7 +248,7 @@ export default function ProfileScreen() {
           style={[styles.actionButton, styles.logoutButton]}
           onPress={handleLogout}
         >
-          <MaterialIcons name="logout" size={24} color="#f44336" />
+          <MaterialIcons name="logout" size={24} color="#B91C1C" />
           <Text
             style={[styles.actionButtonText, styles.logoutText]}
           >
@@ -269,12 +269,12 @@ export default function ProfileScreen() {
 
 function getStatusColor(status?: string) {
   const colors: any = {
-    approved: { backgroundColor: "#D7263D" },
-    active: { backgroundColor: "#D7263D" },
-    pending: { backgroundColor: "#FF9800" },
-    inactive: { backgroundColor: "#9E9E9E" }
+    approved: { backgroundColor: "#E50914" },
+    active: { backgroundColor: "#E50914" },
+    pending: { backgroundColor: "#B45309" },
+    inactive: { backgroundColor: "#6B7280" }
   };
-  return colors[status || "inactive"] || { backgroundColor: "#9E9E9E" };
+  return colors[status || "inactive"] || { backgroundColor: "#6B7280" };
 }
 
 const styles = StyleSheet.create({
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent"
   },
   profileHeader: {
-    backgroundColor: "#D7263D",
+    backgroundColor: "#E50914",
     padding: 30,
     alignItems: "center"
   },
@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 36,
     fontWeight: "bold",
-    color: "#D7263D"
+    color: "#E50914"
   },
   nameText: {
     fontSize: 24,
@@ -387,6 +387,6 @@ const styles = StyleSheet.create({
     marginTop: 10
   },
   logoutText: {
-    color: "#f44336"
+    color: "#B91C1C"
   }
 });

@@ -115,7 +115,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#D7263D',
+    color: '#E50914',
     marginBottom: 8,
   },
   subtitle: {
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   button: {
-    backgroundColor: '#D7263D',
+    backgroundColor: '#E50914',
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   linkText: {
-    color: '#D7263D',
+    color: '#E50914',
     fontSize: 14,
   },
 });

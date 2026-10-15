@@ -10,7 +10,7 @@ import {
   type ViewStyle
 } from "react-native";
 
-export const APP_BACKGROUND_COLOR = "#1A0A0D";
+export const APP_BACKGROUND_COLOR = "#111111";
 
 const logoSource = require("../assets/netmark-logo.png");
 

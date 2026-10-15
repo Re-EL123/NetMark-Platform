@@ -79,28 +79,28 @@ export default function EarningsScreen() {
         <Text style={styles.summaryTitle}>Earnings Summary</Text>
         <View style={styles.summaryGrid}>
           <View style={styles.summaryItem}>
-            <MaterialIcons name="attach-money" size={32} color="#D7263D" />
+            <MaterialIcons name="attach-money" size={32} color="#E50914" />
             <Text style={styles.summaryValue}>
               {formatCurrency(summary?.totalEarnings || 0)}
             </Text>
             <Text style={styles.summaryLabel}>Total Earnings</Text>
           </View>
           <View style={styles.summaryItem}>
-            <MaterialIcons name="pending" size={32} color="#FF9800" />
+            <MaterialIcons name="pending" size={32} color="#B45309" />
             <Text style={styles.summaryValue}>
               {formatCurrency(summary?.pendingEarnings || 0)}
             </Text>
             <Text style={styles.summaryLabel}>Pending</Text>
           </View>
           <View style={styles.summaryItem}>
-            <MaterialIcons name="check-circle" size={32} color="#D7263D" />
+            <MaterialIcons name="check-circle" size={32} color="#E50914" />
             <Text style={styles.summaryValue}>
               {formatCurrency(summary?.paidEarnings || 0)}
             </Text>
             <Text style={styles.summaryLabel}>Paid Out</Text>
           </View>
           <View style={styles.summaryItem}>
-            <MaterialIcons name="local-shipping" size={32} color="#2196F3" />
+            <MaterialIcons name="local-shipping" size={32} color="#1D4ED8" />
             <Text style={styles.summaryValue}>
               {summary?.totalDeliveries || 0}
             </Text>
@@ -123,7 +123,7 @@ export default function EarningsScreen() {
             refreshing={refreshing}
             onRefresh={onRefresh}
             tintColor="#fff"
-            colors={["#D7263D"]}
+            colors={["#E50914"]}
           />
         }
         ListEmptyComponent={
@@ -139,11 +139,11 @@ export default function EarningsScreen() {
 
 function getPayoutStatusColor(status: string) {
   const colors: any = {
-    pending: { backgroundColor: "#FF9800" },
-    paid: { backgroundColor: "#D7263D" },
-    processing: { backgroundColor: "#2196F3" }
+    pending: { backgroundColor: "#B45309" },
+    paid: { backgroundColor: "#E50914" },
+    processing: { backgroundColor: "#1D4ED8" }
   };
-  return colors[status] || { backgroundColor: "#9E9E9E" };
+  return colors[status] || { backgroundColor: "#6B7280" };
 }
 
 const styles = StyleSheet.create({
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
     fontWeight: "500"
   },
   earningValue: {
-    color: "#D7263D",
+    color: "#E50914",
     fontWeight: "600"
   },
   emptyContainer: {

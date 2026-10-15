@@ -118,7 +118,7 @@ export function EditBankDetailsModal({
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
             <View style={styles.titleContainer}>
-              <MaterialIcons name="account-balance" size={24} color="#D7263D" />
+              <MaterialIcons name="account-balance" size={24} color="#E50914" />
               <Text style={styles.modalTitle}>Banking Details</Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -287,15 +287,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#fafafa",
   },
   bankChipSelected: {
-    borderColor: "#D7263D",
-    backgroundColor: "#FCEFF1",
+    borderColor: "#E50914",
+    backgroundColor: "#FEE2E2",
   },
   bankChipText: {
     fontSize: 12,
     color: "#666",
   },
   bankChipTextSelected: {
-    color: "#A11D2F",
+    color: "#B91C1C",
     fontWeight: "bold",
   },
   buttonContainer: {
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   saveButton: {
-    backgroundColor: "#D7263D",
+    backgroundColor: "#E50914",
   },
   saveButtonText: {
     color: "#fff",
