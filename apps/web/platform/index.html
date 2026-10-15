@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NetMark - Platform Admin</title>
+  <style>
+    body { font-family: system-ui; margin: 0; background: #f5f5f5; }
+    header { background: #1A0A0D; color: #fff; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+    .container { padding: 2rem; }
+    .card { background: #fff; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+    button { padding: 0.5rem 1rem; background: #4CAF50; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Platform Admin (platformAdmin)</h1>
+    <div>
+      <span id="userName"></span>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </header>
+  <div class="container">
+    <div class="card">
+      <h2>Platform Administration</h2>
+      <p>Global control over companies, users, stores, products, orders, drivers, and appointments.</p>
+    </div>
+    <div class="card">
+      <h3>Users</h3>
+      <div id="users"></div>
+    </div>
+    <div class="card">
+      <h3>Companies</h3>
+      <div id="companies"></div>
+    </div>
+  </div>
+  <script type="module" src="/src/platform.guard.ts"></script>
+  <script type="module" src="/src/platform.ts"></script>
+</body>
+</html>

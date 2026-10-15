@@ -1,0 +1,9 @@
+{
+  "name": "@netmark/shared",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --outDir dist --declaration --module commonjs --target es2019 --esModuleInterop true --moduleResolution node --skipLibCheck true src/index.ts 2>/dev/null || true"
+  }
+}

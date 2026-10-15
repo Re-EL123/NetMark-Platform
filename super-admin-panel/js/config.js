@@ -18,7 +18,7 @@ const FIREBASE_CONFIG = {
 const CONSTANTS = {
     TOKEN_KEY: 'greenworld_admin_token',
     USER_KEY: 'greenworld_admin_user',
-    ROLE: 'superAdmin',
+    ROLE: 'platformAdmin',
     PAGE_SIZE: 20,
     CURRENCY: 'ZAR',
     LOCALE: 'en-ZA',

@@ -29,7 +29,7 @@ class AuthService {
                 this.currentUser = response.data.user;
                 
                 // Check if user is super admin
-                if (this.currentUser.role !== 'superAdmin') {
+                if (this.currentUser.role !== 'platformAdmin') {
                     showToast('Access denied. Super Admin role required.', 'error');
                     await this.logout();
                     return;

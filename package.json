@@ -1,26 +1,21 @@
 {
-  "name": "netmark-frontend",
-  "version": "1.0.0",
-  "description": "NetMark Multi-Role Platform Frontend Monorepo",
+  "name": "netmark-platform",
   "private": true,
   "workspaces": [
     "super-admin-panel",
     "store-owner-panel",
     "customer-panel",
-    "driver-app"
+    "driver-app",
+    "apps/web",
+    "apps/api",
+    "packages/shared"
   ],
   "scripts": {
-    "dev:admin": "cd super-admin-panel && npm run dev",
-    "dev:store": "cd store-owner-panel && npm run dev",
-    "dev:customer": "cd customer-panel && npm run dev",
-    "dev:driver": "cd driver-app && npm start",
-    "build:admin": "cd super-admin-panel && npm run build",
-    "build:store": "cd store-owner-panel && npm run build",
-    "build:customer": "cd customer-panel && npm run build",
-    "build:driver": "cd driver-app && npm run build",
-    "install:all": "npm install && cd super-admin-panel && npm install && cd ../store-owner-panel && npm install && cd ../customer-panel && npm install && cd ../driver-app && npm install"
+    "dev:web": "npm run dev -w @netmark/web",
+    "build:web": "npm run build -w @netmark/web",
+    "build:shared": "npm run build -w @netmark/shared"
   },
-  "keywords": ["netmark", "ecommerce", "distribution"],
-  "author": "NetMark",
-  "license": "PROPRIETARY"
+  "dependencies": {
+    "vite": "^5.4.11"
+  }
 }

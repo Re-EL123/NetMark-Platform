@@ -1,0 +1,21 @@
+{
+  "name": "@netmark/api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "firebase-admin": "^12.7.0",
+    "mongoose": "^8.8.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/node": "^22.10.1",
+    "@vercel/node": "^3.2.24",
+    "typescript": "^5.9.3"
+  }
+}

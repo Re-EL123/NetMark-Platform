@@ -22,7 +22,10 @@ const CONSTANTS = {
     TOKEN_KEY: 'greenworld_customer_token',
     USER_KEY: 'greenworld_customer_user',
     ROLE: 'customer',
-    ALLOWED_ROLES: ['customer', 'distributor'],
+            OWNER: 'owner',
+
+        // ALLOWED_ROLES for registration
+        ALLOWED_ROLES: ['customer', 'distributor'],
     PAGE_SIZE: 20,
     CURRENCY: 'ZAR',
     LOCALE: 'en-ZA',

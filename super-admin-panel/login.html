@@ -222,7 +222,7 @@
                     });
                     const data = await response.json();
 
-                    if (data.success && data.data.user.role === 'superAdmin') {
+                    if (data.success && data.data.user.role === 'platformAdmin') {
                         window.location.href = 'index.html';
                     } else {
                         await auth.signOut();
@@ -270,7 +270,7 @@
                 }
 
                 // Check if user is super admin
-                if (data.data.user.role !== 'superAdmin') {
+                if (data.data.user.role !== 'platformAdmin') {
                     await auth.signOut();
                     throw new Error('Access denied. Super Admin role required.');
                 }
