@@ -1,10 +1,10 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { connectDB } from '../../lib/db';
-import { User } from '../../lib/models/User';
-import { Driver } from '../../lib/models/Driver';
-import { Company } from '../../lib/models/Company';
-import { verifyFirebaseToken, loadUser } from '../../lib/middleware';
-import { authAdmin } from '../../lib/firebase';
+import { connectDB } from '../db';
+import { User } from '../models/User';
+import { Driver } from '../models/Driver';
+import { Company } from '../models/Company';
+import { verifyFirebaseToken, loadUser } from '../middleware';
+import { authAdmin } from '../firebase';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');

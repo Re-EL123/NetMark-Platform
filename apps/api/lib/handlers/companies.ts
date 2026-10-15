@@ -1,7 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { connectDB } from '../../lib/db';
-import { Company } from '../../lib/models/Company';
-import { verifyFirebaseToken, loadUser } from '../../lib/middleware';
+import { connectDB } from '../db';
+import { Company } from '../models/Company';
+import { verifyFirebaseToken, loadUser } from '../middleware';
 import mongoose from 'mongoose';
 
 function slugify(s: string) {

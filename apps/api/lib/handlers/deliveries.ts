@@ -1,5 +1,5 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import driversHandler from '../drivers/[...slug]';
+import driversHandler from './drivers';
 
 // Backwards-compatible alias: /deliveries/* -> /drivers/deliveries/*
 export default async function handler(req: VercelRequest, res: VercelResponse) {

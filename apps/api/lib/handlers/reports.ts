@@ -1,7 +1,7 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { connectDB } from '../../lib/db';
+import { connectDB } from '../db';
 import mongoose from 'mongoose';
-import { verifyFirebaseToken, loadUser } from '../../lib/middleware';
+import { verifyFirebaseToken, loadUser } from '../middleware';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');

@@ -1,10 +1,10 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { connectDB } from '../../lib/db';
-import { Driver } from '../../lib/models/Driver';
-import { Order } from '../../lib/models/Order';
-import { DriverEarning } from '../../lib/models/DriverEarning';
-import { User } from '../../lib/models/User';
-import { verifyFirebaseToken, loadUser } from '../../lib/middleware';
+import { connectDB } from '../db';
+import { Driver } from '../models/Driver';
+import { Order } from '../models/Order';
+import { DriverEarning } from '../models/DriverEarning';
+import { User } from '../models/User';
+import { verifyFirebaseToken, loadUser } from '../middleware';
 
 function generateOtp(): string {
   return String(Math.floor(1000 + Math.random() * 9000));

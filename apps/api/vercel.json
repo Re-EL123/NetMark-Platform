@@ -1,7 +1,11 @@
 {
   "version": 2,
+  "installCommand": "npm install --no-workspaces",
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index" }
+  ],
   "functions": {
-    "api/**/*.ts": {
+    "api/index.ts": {
       "maxDuration": 10
     }
   }

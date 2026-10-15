@@ -1,8 +1,8 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
-import { connectDB } from '../../lib/db';
-import { Order } from '../../lib/models/Order';
-import { Driver } from '../../lib/models/Driver';
-import { verifyFirebaseToken, loadUser } from '../../lib/middleware';
+import { connectDB } from '../db';
+import { Order } from '../models/Order';
+import { Driver } from '../models/Driver';
+import { verifyFirebaseToken, loadUser } from '../middleware';
 
 function generateOtp(): string {
   return String(Math.floor(1000 + Math.random() * 9000));
