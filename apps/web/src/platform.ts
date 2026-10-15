@@ -7,7 +7,6 @@ import { openModal, confirmDialog, toast, money, titleCase, statCards, Field } f
 const ROLE_OPTIONS = [
   'platformAdmin',
   'owner',
-  'distributor',
   'storeOwner',
   'customer',
   'driver'
@@ -584,7 +583,7 @@ function renderCodes(c: HTMLElement) {
     bind: (root, reload) => {
       (root.querySelector('[data-new]') as HTMLElement).onclick = () =>
         openModal({
-          title: 'New distributor code',
+          title: 'New referral code',
           fields: [
             { name: 'code', label: 'Code', help: 'Leave blank to auto-generate' },
             { name: 'maxUses', label: 'Max uses', type: 'number' },

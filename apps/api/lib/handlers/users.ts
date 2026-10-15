@@ -8,7 +8,7 @@ function tempPassword() {
   return 'Nm-' + crypto.randomBytes(6).toString('base64url') + '!9';
 }
 
-const OWNER_CREATABLE = ['customer', 'storeOwner', 'distributor', 'driver'];
+const OWNER_CREATABLE = ['customer', 'storeOwner', 'driver'];
 
 export default authed(async (req, res, ctx) => {
   const sb = getSupabase();
@@ -18,11 +18,9 @@ export default authed(async (req, res, ctx) => {
   const canWrite = ctx.isPlatform || hasPermission(ctx.role, 'users.write');
   if (!canRead) return fail(res, 'Forbidden', 403);
 
-  // scope helper: platform sees everything, distributors see the customers they
-  // referred, everyone else sees their company.
+  // scope helper: platform sees everything, everyone else sees their company.
   const scope = (q: any) => {
     if (ctx.isPlatform) return q;
-    if (ctx.role === 'distributor') return q.eq('distributor_id', ctx.userId);
     return q.eq('company_id', ctx.companyId);
   };
 

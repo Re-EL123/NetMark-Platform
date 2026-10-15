@@ -35,7 +35,7 @@ create table if not exists public.users (
   email text unique not null,
   phone text,
   role text not null default 'customer'
-    check (role in ('platformAdmin','owner','distributor','storeOwner','customer','driver')),
+    check (role in ('platformAdmin','owner','storeOwner','customer','driver')),
   verification_status text not null default 'pending'
     check (verification_status in ('pending','verified','rejected')),
   company_id uuid references public.companies(id) on delete set null,

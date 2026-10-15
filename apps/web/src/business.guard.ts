@@ -1,2 +1,2 @@
 import { checkAuth } from './guard';
-checkAuth(['storeOwner', 'distributor']);
+checkAuth(['storeOwner']);

@@ -5,15 +5,13 @@ import { SupabaseClient } from '@supabase/supabase-js';
  *
  * The tenancy model is:
  *   - platformAdmin            -> everything
- *   - owner                    -> their company
+ *   - owner                    -> their company (catalog, orders, team)
  *   - storeOwner               -> stores they own (stores.store_owner_id)
- *   - distributor              -> stores attributed to them (stores.distributor_id)
- *                                 and customers they referred (users.distributor_id)
  *   - customer / driver        -> their own records
  *
- * storeOwner and distributor commonly have no company_id, so scoping them by
- * company would either leak company-less rows or return nothing. Use this
- * helper to resolve the set of store ids a user is responsible for.
+ * storeOwner has no company_id, so scoping them by company would either leak
+ * company-less rows or return nothing. Use this helper to resolve the set of
+ * store ids a user is responsible for.
  */
 export async function storeIdsForUser(
   sb: SupabaseClient,
@@ -26,5 +24,5 @@ export async function storeIdsForUser(
 
 /** True when the role resolves data through store ownership rather than company. */
 export function isStoreScopedRole(role: string): boolean {
-  return role === 'storeOwner' || role === 'distributor';
+  return role === 'storeOwner';
 }

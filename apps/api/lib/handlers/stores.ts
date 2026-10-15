@@ -12,7 +12,6 @@ export default authed(async (req, res, ctx) => {
     if (ctx.isPlatform) return q;
     if (ctx.role === 'owner') return q.eq('company_id', ctx.companyId);
     if (ctx.role === 'storeOwner') return q.eq('store_owner_id', ctx.userId);
-    if (ctx.role === 'distributor') return q.eq('distributor_id', ctx.userId);
     if (ctx.role === 'customer') return q.eq('is_active', true);
     return q.eq('company_id', ctx.companyId);
   }
@@ -40,7 +39,7 @@ export default authed(async (req, res, ctx) => {
         slug: `${autoSlug}-${Math.random().toString(36).slice(2, 6)}`,
         company_id: company || null,
         store_owner_id: ctx.role === 'storeOwner' ? ctx.userId : req.body.storeOwnerId || null,
-        distributor_id: ctx.role === 'distributor' ? ctx.userId : req.body.distributorId || null,
+        distributor_id: req.body.distributorId || null,
         address: req.body.address || null,
         is_active: req.body.isActive !== false,
         settings: req.body.settings || {}

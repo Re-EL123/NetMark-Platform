@@ -30,7 +30,6 @@ export default authed(async (req, res, ctx) => {
     if (ctx.isPlatform) return q;
     if (ctx.role === 'owner') return q.eq('company_id', ctx.companyId);
     if (ctx.role === 'storeOwner') return q.in('store_id', storeIds || []);
-    if (ctx.role === 'distributor') return q.eq('distributor_id', ctx.userId);
     return q.eq('customer_id', ctx.userId);
   }
 
@@ -68,7 +67,18 @@ export default authed(async (req, res, ctx) => {
       if (!product) return fail(res, `Product ${productId} not found`, 404);
       if (product.is_active === false) return fail(res, `${product.name} is unavailable`);
       if (Number(product.stock || 0) < qty) return fail(res, `Insufficient stock for ${product.name}`);
-      const price = Number(product.price || 0);
+      // Price comes from the store's listing (the store owner's retail price)
+      // when buying from a specific store, otherwise the company price.
+      let price = Number(product.price || 0);
+      if (bodyStoreId) {
+        const { data: listing } = await sb
+          .from('store_products')
+          .select('*')
+          .eq('store_id', bodyStoreId)
+          .eq('product_id', productId)
+          .maybeSingle();
+        if (listing && listing.is_active !== false && listing.price != null) price = Number(listing.price);
+      }
       lines.push({ productId, name: product.name, price, quantity: qty, lineTotal: price * qty });
       subtotal += price * qty;
       if (!derivedStoreId) {
@@ -93,11 +103,13 @@ export default authed(async (req, res, ctx) => {
     // Distributor attribution: explicit override for staff, otherwise fall back
     // to the customer's referring distributor, then to the store's distributor.
     let distributor = null;
-    if ((ctx.isPlatform || ctx.role === 'owner') && distributorId) {
+    if (ctx.isPlatform && distributorId) {
       distributor = distributorId;
     } else {
+      // Owner can be referrer if orders come from their customers
       const { data: me } = await sb.from('users').select('distributor_id').eq('id', ctx.userId).maybeSingle();
       distributor = me?.distributor_id || store?.distributor_id || null;
+      if (!distributor && ctx.role === 'owner') distributor = ctx.userId; // company as referrer fallback
     }
 
     const fee = orderType === 'pickup' ? 0 : await deliveryFee();

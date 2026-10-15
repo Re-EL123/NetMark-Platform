@@ -90,7 +90,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // Public signup may not create a platformAdmin once one already exists.
       // The very first platformAdmin is allowed as a bootstrap.
-      const PUBLIC_ROLES = ['customer', 'storeOwner', 'distributor', 'driver', 'owner'];
+      const PUBLIC_ROLES = ['customer', 'storeOwner', 'driver', 'owner'];
       if (!PUBLIC_ROLES.includes(role)) {
         if (role === 'platformAdmin') {
           const { count } = await sb
@@ -161,6 +161,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .select('*')
           .single();
         if (newCompany) resolvedCompanyId = newCompany.id;
+      } else if (role !== 'owner' && !resolvedCompanyId && codeRow?.company_id) {
+        // Referred customers/store owners join the referring company.
+        resolvedCompanyId = codeRow.company_id;
       }
 
       const { data: user, error: userErr } = await sb

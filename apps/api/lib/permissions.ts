@@ -7,7 +7,6 @@
 export type Role =
   | 'platformAdmin'
   | 'owner'
-  | 'distributor'
   | 'storeOwner'
   | 'customer'
   | 'driver';
@@ -15,11 +14,12 @@ export type Role =
 export const ROLES: Role[] = [
   'platformAdmin',
   'owner',
-  'distributor',
   'storeOwner',
   'customer',
   'driver'
 ];
+
+const DISTRIBUTOR_CAPS = []; // merged into owner
 
 const OWNER_CAPS = [
   'users.read',
@@ -42,25 +42,14 @@ const OWNER_CAPS = [
   'settings.write',
   'notifications.read',
   'payouts.read',
-  'payouts.write'
-];
-
-const DISTRIBUTOR_CAPS = [
-  'stores.read',
-  'products.read',
-  'orders.read',
-  'users.read',
-  'codes.read',
-  'codes.write',
-  'reports.read',
-  'notifications.read'
+  'payouts.write',
+  'referrals.read'
 ];
 
 const STORE_OWNER_CAPS = [
   'stores.read',
   'stores.write',
   'products.read',
-  'products.write',
   'orders.read',
   'orders.write',
   'appointments.read',
@@ -84,7 +73,6 @@ const DRIVER_CAPS = ['orders.read', 'notifications.read'];
 const CAPABILITIES: Record<Role, string[]> = {
   platformAdmin: ['*'],
   owner: OWNER_CAPS,
-  distributor: DISTRIBUTOR_CAPS,
   storeOwner: STORE_OWNER_CAPS,
   customer: CUSTOMER_CAPS,
   driver: DRIVER_CAPS

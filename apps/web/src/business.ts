@@ -1,8 +1,8 @@
 import { apiRequest } from './api';
-import { initPanel, NavItem, can } from './app';
+import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { crudView } from './crud';
-import { openModal, toast, money, titleCase, statCards, Field } from './ui';
+import { openModal, confirmDialog, toast, money, titleCase, statCards } from './ui';
 
 function opts(values: string[]) {
   return values.map((v) => ({ value: v, label: titleCase(v) }));
@@ -26,12 +26,11 @@ function tableSimple(headers: string[], rows: string[][]) {
 
 const nav: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard' },
-  { id: 'stores', label: 'Stores', capability: 'stores.read' },
-  { id: 'products', label: 'Products', capability: 'products.read' },
+  { id: 'stores', label: 'My Stores', capability: 'stores.read' },
+  { id: 'catalog', label: 'Catalog', capability: 'products.read' },
+  { id: 'listings', label: 'My Store Products', capability: 'products.read' },
   { id: 'orders', label: 'Orders', capability: 'orders.read' },
-  { id: 'customers', label: 'Customers', capability: 'users.read' },
   { id: 'appointments', label: 'Appointments', capability: 'appointments.read' },
-  { id: 'codes', label: 'Codes', capability: 'codes.read' },
   { id: 'reports', label: 'Reports', capability: 'reports.read' }
 ];
 
@@ -42,15 +41,19 @@ initPanel({
     const c = ctx.container;
     ctx.titleEl.textContent = nav.find((n) => n.id === route)?.label || 'Business';
     if (route === 'dashboard') return dashboard(c);
-    if (route === 'stores') return stores(c, ctx.user.role);
-    if (route === 'products') return products(c, ctx.user.role);
+    if (route === 'stores') return stores(c);
+    if (route === 'catalog') return catalog(c);
+    if (route === 'listings') return listings(c);
     if (route === 'orders') return orders(c);
-    if (route === 'customers') return customers(c);
-    if (route === 'appointments' && ctx.user.role === 'storeOwner') return appointments(c);
-    if (route === 'codes' && ctx.user.role === 'distributor') return codes(c);
+    if (route === 'appointments') return appointments(c);
     if (route === 'reports') return reports(c);
   }
 });
+
+async function myStores(): Promise<any[]> {
+  const res = await apiRequest('/stores?pageSize=100');
+  return res.data || [];
+}
 
 async function dashboard(c: HTMLElement) {
   const res = await apiRequest('/reports/overview');
@@ -61,10 +64,10 @@ async function dashboard(c: HTMLElement) {
       { label: 'Orders', value: t.orders },
       { label: 'Paid orders', value: t.paidOrders || 0 }
     ])}
-    <div class="card"><p>Manage your stores, products, orders and customer appointments.</p></div>`;
+    <div class="card"><p>Browse the company catalog, add products to your store with your own retail price, and manage orders.</p></div>`;
 }
 
-function stores(c: HTMLElement, role: string) {
+function stores(c: HTMLElement) {
   let rows: any[] = [];
   crudView(c, {
     endpoint: '/stores',
@@ -74,149 +77,154 @@ function stores(c: HTMLElement, role: string) {
       { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') },
       { key: 'address', label: 'Address' }
     ],
-    toolbar: role === 'storeOwner' ? () => `<button class="btn btn-sm" data-new>+ New store</button>` : undefined,
-    actions: role === 'storeOwner' ? (r) => act('edit', r.id, 'Edit') + act('toggle', r.id, r.isActive ? 'Deactivate' : 'Activate') : undefined,
+    toolbar: () => `<button class="btn btn-sm" data-new>+ New store</button>`,
+    actions: (r) => act('edit', r.id, 'Edit') + act('toggle', r.id, r.isActive ? 'Deactivate' : 'Activate'),
     bind: (root, reload) => {
-      if (role === 'storeOwner') {
-        (root.querySelector('[data-new]') as HTMLElement).onclick = () =>
-          openModal({
-            title: 'New store',
-            fields: [
-              { name: 'name', label: 'Store name', required: true },
-              { name: 'address', label: 'Address' }
-            ],
-            onSubmit: async (v) => {
-              await apiRequest('/stores', { method: 'POST', body: JSON.stringify(v) });
-              toast('Store created', 'success');
-              reload();
-            }
-          });
-        wire(root, {
-          edit: (id) =>
-            openModal({
-              title: 'Edit store',
-              fields: [{ name: 'name', label: 'Store name', value: rows.find((r) => r.id === id)?.name }, { name: 'address', label: 'Address', value: rows.find((r) => r.id === id)?.address }],
-              onSubmit: async (v) => {
-                await apiRequest(`/stores/${id}`, { method: 'PUT', body: JSON.stringify(v) });
-                toast('Store updated', 'success');
-                reload();
-              }
-            }),
-          toggle: async (id) => {
-            await apiRequest(`/stores/${id}/toggle`, { method: 'POST' });
-            reload();
-          }
-        });
-      }
-    }
-  });
-}
-
-function products(c: HTMLElement, role: string) {
-  let rows: any[] = [];
-  let storeOpts: { value: string; label: string }[] = [];
-  const writable = can('products.write');
-  const needsStore = role === 'storeOwner';
-  const storeField = (value: string): Field => ({
-    name: 'storeId',
-    label: 'Store',
-    type: 'select',
-    options: storeOpts,
-    value
-  });
-  crudView(c, {
-    endpoint: '/products',
-    onData: (r) => (rows = r),
-    columns: [
-      { key: 'name', label: 'Name' },
-      { key: 'price', label: 'Price', render: (r) => money(r.price) },
-      { key: 'stock', label: 'Stock' },
-      { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') }
-    ],
-    toolbar: writable ? () => `<button class="btn btn-sm" data-new>+ New product</button>` : undefined,
-    actions: writable ? (r) => act('edit', r.id, 'Edit') + act('stock', r.id, 'Stock') : undefined,
-    bind: (root, reload) => {
-      if (!writable) return;
-      (root.querySelector('[data-new]') as HTMLElement).onclick = async () => {
-        if (needsStore) {
-          const res = await apiRequest('/stores?pageSize=100');
-          storeOpts = (res.data || []).map((s: any) => ({ value: s.id, label: s.name }));
-        }
+      (root.querySelector('[data-new]') as HTMLElement).onclick = () =>
         openModal({
-          title: 'New product',
+          title: 'New store',
           fields: [
-            { name: 'name', label: 'Name', required: true },
-            { name: 'price', label: 'Price', type: 'number', step: '0.01' },
-            { name: 'stock', label: 'Stock', type: 'number' },
-            { name: 'category', label: 'Category' },
-            ...(needsStore ? [storeField(storeOpts[0]?.value || '')] : []),
-            { name: 'description', label: 'Description', type: 'textarea' },
-            { name: 'isActive', label: 'Active', type: 'checkbox', value: true }
+            { name: 'name', label: 'Store name', required: true },
+            { name: 'address', label: 'Address' }
           ],
           onSubmit: async (v) => {
-            const res = await apiRequest('/products', { method: 'POST', body: JSON.stringify(v) });
+            const res = await apiRequest('/stores', { method: 'POST', body: JSON.stringify(v) });
             if (!res.success) throw new Error(res.message || 'Failed');
-            toast('Product created', 'success');
+            toast('Store created', 'success');
             reload();
           }
         });
-      };
       wire(root, {
-        edit: async (id) => {
-          const row = rows.find((r) => r.id === id);
-          if (needsStore) {
-            const res = await apiRequest('/stores?pageSize=100');
-            storeOpts = (res.data || []).map((s: any) => ({ value: s.id, label: s.name }));
-          }
+        edit: (id) =>
           openModal({
-            title: 'Edit product',
+            title: 'Edit store',
             fields: [
-              { name: 'name', label: 'Name', value: row?.name },
-              { name: 'price', label: 'Price', type: 'number', step: '0.01', value: row?.price },
-              { name: 'stock', label: 'Stock', type: 'number', value: row?.stock },
-              ...(needsStore ? [storeField(row?.storeId || '')] : []),
-              { name: 'isActive', label: 'Active', type: 'checkbox', value: row?.isActive !== false }
+              { name: 'name', label: 'Store name', value: rows.find((r) => r.id === id)?.name },
+              { name: 'address', label: 'Address', value: rows.find((r) => r.id === id)?.address }
             ],
             onSubmit: async (v) => {
-              const res = await apiRequest(`/products/${id}`, { method: 'PUT', body: JSON.stringify(v) });
-              if (!res.success) throw new Error(res.message || 'Failed');
-              toast('Product updated', 'success');
+              await apiRequest(`/stores/${id}`, { method: 'PUT', body: JSON.stringify(v) });
+              toast('Store updated', 'success');
               reload();
             }
-          });
-        },
-        stock: async (id) =>
-          openModal({
-            title: 'Adjust stock',
-            fields: [{ name: 'delta', label: 'Change (+/-)', type: 'number', value: 0 }],
-            onSubmit: async (v) => {
-              await apiRequest(`/products/${id}/stock`, { method: 'POST', body: JSON.stringify(v) });
-              toast('Stock updated', 'success');
-              reload();
-            }
-          })
+          }),
+        toggle: async (id) => {
+          await apiRequest(`/stores/${id}/toggle`, { method: 'POST' });
+          reload();
+        }
       });
     }
   });
 }
 
-function customers(c: HTMLElement) {
+async function catalog(c: HTMLElement) {
+  c.innerHTML = '<p class="empty">Loading catalog…</p>';
+  const [prodRes, storeRes] = await Promise.all([apiRequest('/products?pageSize=100&isActive=true'), myStores()]);
+  const products = prodRes.data || [];
+  const stores = storeRes;
+
+  const storeOpts = stores.map((s: any) => ({ value: s.id, label: s.name }));
+  c.innerHTML = `
+    <div class="card"><p class="empty">These are products published by companies. Add them to one of your stores and set your own selling price.</p></div>
+    <div class="grid">
+      ${products
+        .map(
+          (p: any) => `<div class="product-card">
+        <div class="thumb">${p.image ? `<img src="${esc(p.image)}" alt="${esc(p.name)}">` : '🛍️'}</div>
+        <div class="body">
+          <div class="name">${esc(p.name)}</div>
+          <div class="desc">${esc(p.description || p.category || '')}</div>
+          <div class="price">Company price ${money(p.price)}</div>
+          <button class="btn btn-sm" data-add="${esc(p.id)}" ${storeOpts.length ? '' : 'disabled'}>Add to my store</button>
+        </div>
+      </div>`
+        )
+        .join('')}
+    </div>`;
+
+  if (!storeOpts.length) {
+    c.querySelectorAll('[data-add]').forEach((b) => ((b as HTMLButtonElement).title = 'Create a store first'));
+  }
+
+  c.querySelectorAll('[data-add]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const productId = (b as HTMLElement).dataset.add!;
+      const product = products.find((p: any) => p.id === productId);
+      openModal({
+        title: 'Add to my store',
+        fields: [
+          { name: 'storeId', label: 'Store', type: 'select', options: storeOpts, value: storeOpts[0]?.value },
+          {
+            name: 'price',
+            label: 'Your selling price',
+            type: 'number',
+            step: '0.01',
+            value: product?.price,
+            help: `Company price ${money(product?.price)} — set a higher price to earn a margin.`
+          }
+        ],
+        submitLabel: 'Add to store',
+        onSubmit: async (v) => {
+          const res = await apiRequest('/store-products', { method: 'POST', body: JSON.stringify({ productId, ...v }) });
+          if (!res.success) throw new Error(res.message || 'Failed');
+          toast('Added to store', 'success');
+        }
+      });
+    })
+  );
+}
+
+function listings(c: HTMLElement) {
+  let rows: any[] = [];
   crudView(c, {
-    endpoint: '/users',
-    searchPlaceholder: 'Search referred customers…',
+    endpoint: '/store-products',
+    onData: (r) => (rows = r),
     columns: [
-      { key: 'name', label: 'Name' },
-      { key: 'email', label: 'Email' },
-      { key: 'phone', label: 'Phone' },
-      { key: 'role', label: 'Role', render: (r) => badge(r.role, 'info') },
-      { key: 'createdAt', label: 'Joined', render: (r) => formatDate(r.createdAt) }
-    ]
+      { key: 'name', label: 'Product' },
+      { key: 'storeName', label: 'Store' },
+      { key: 'price', label: 'Retail', render: (r) => money(r.price) },
+      { key: 'basePrice', label: 'Company', render: (r) => money(r.basePrice) },
+      { key: 'margin', label: 'Margin', render: (r) => badge(money(r.margin), Number(r.margin) > 0 ? 'success' : 'neutral') },
+      { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') }
+    ],
+    actions: (r) => act('edit', r.id, 'Edit price') + act('toggle', r.id, r.isActive ? 'Hide' : 'Show') + act('remove', r.id, 'Remove', 'danger'),
+    bind: (root, reload) => {
+      wire(root, {
+        edit: (id) => {
+          const row = rows.find((r) => r.id === id);
+          openModal({
+            title: `Retail price — ${row?.name || ''}`,
+            fields: [
+              { name: 'price', label: 'Your retail price', type: 'number', step: '0.01', value: row?.price, help: `Company price ${money(row?.basePrice)}` }
+            ],
+            onSubmit: async (v) => {
+              const res = await apiRequest(`/store-products/${id}`, { method: 'PUT', body: JSON.stringify(v) });
+              if (!res.success) throw new Error(res.message || 'Failed');
+              toast('Price updated', 'success');
+              reload();
+            }
+          });
+        },
+        toggle: async (id) => {
+          const row = rows.find((r) => r.id === id);
+          await apiRequest(`/store-products/${id}`, { method: 'PUT', body: JSON.stringify({ isActive: !row?.isActive }) });
+          reload();
+        },
+        remove: async (id) => {
+          if (await confirmDialog('Remove this product from your store?', { danger: true, confirmLabel: 'Remove' })) {
+            await apiRequest(`/store-products/${id}`, { method: 'DELETE' });
+            toast('Removed', 'success');
+            reload();
+          }
+        }
+      });
+    }
   });
 }
 
 function orders(c: HTMLElement) {
   let rows: any[] = [];
-  const writable = can('orders.write');
+  const writable = true;
   crudView(c, {
     endpoint: '/orders',
     onData: (r) => (rows = r),
@@ -258,51 +266,11 @@ function appointments(c: HTMLElement) {
       { key: 'appointmentTime', label: 'Time' },
       { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) }
     ],
-    actions: (r) =>
-      act(
-        'status',
-        r.id,
-        r.status === 'confirmed' ? 'Complete' : 'Confirm'
-      ),
+    actions: (r) => act('status', r.id, r.status === 'confirmed' ? 'Complete' : 'Confirm'),
     bind: (root, reload) => {
       wire(root, {
         status: async (id) => {
           await apiRequest(`/appointments/${id}/status`, { method: 'PUT', body: JSON.stringify({ status: 'confirmed' }) });
-          reload();
-        }
-      });
-    }
-  });
-}
-
-function codes(c: HTMLElement) {
-  crudView(c, {
-    endpoint: '/codes',
-    columns: [
-      { key: 'code', label: 'Code', render: (r) => badge(r.code, 'info') },
-      { key: 'uses', label: 'Uses', render: (r) => `${r.uses || 0}${r.maxUses ? ' / ' + r.maxUses : ''}` },
-      { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') }
-    ],
-    toolbar: () => `<button class="btn btn-sm" data-new>+ New code</button>`,
-    actions: (r) => act('toggle', r.id, r.isActive ? 'Disable' : 'Enable'),
-    bind: (root, reload) => {
-      (root.querySelector('[data-new]') as HTMLElement).onclick = () =>
-        openModal({
-          title: 'New code',
-          fields: [
-            { name: 'code', label: 'Code', help: 'Leave blank to auto-generate' },
-            { name: 'maxUses', label: 'Max uses', type: 'number' },
-            { name: 'expiresAt', label: 'Expires', type: 'date' }
-          ],
-          onSubmit: async (v) => {
-            await apiRequest('/codes', { method: 'POST', body: JSON.stringify(v) });
-            toast('Code created', 'success');
-            reload();
-          }
-        });
-      wire(root, {
-        toggle: async (id) => {
-          await apiRequest(`/codes/${id}/toggle`, { method: 'POST' });
           reload();
         }
       });

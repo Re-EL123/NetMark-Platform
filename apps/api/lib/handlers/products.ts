@@ -2,23 +2,25 @@ import { authed, ok, fail, slugOf, getSupabase, rowOut, rowsOut } from '../http'
 import { parseListQuery, runList } from '../paginate';
 import { hasPermission } from '../permissions';
 import { recordAudit } from '../audit';
-import { storeIdsForUser } from '../scope';
 
+/**
+ * Company product catalog.
+ *
+ * A company (owner) owns products and their wholesale price. Store owners do
+ * not create products here — they list catalog products in their store and set
+ * a retail price via /store-products.
+ */
 export default authed(async (req, res, ctx) => {
   const sb = getSupabase();
   const slug = slugOf(req);
-  const canWrite = ctx.isPlatform || hasPermission(ctx.role, 'products.write');
-
-  // storeOwner/distributor have no company, so resolve their stores up front.
-  let storeIds: string[] | null = null;
-  if (ctx.role === 'storeOwner') storeIds = await storeIdsForUser(sb, ctx.userId, 'store_owner_id');
-  else if (ctx.role === 'distributor') storeIds = await storeIdsForUser(sb, ctx.userId, 'distributor_id');
+  const canWrite = ctx.isPlatform || ctx.role === 'owner';
 
   function scope(q: any) {
     if (ctx.isPlatform) return q;
-    if (ctx.role === 'customer') return q;
-    if (ctx.role === 'storeOwner' || ctx.role === 'distributor') return q.in('store_id', storeIds || []);
-    return q.eq('company_id', ctx.companyId);
+    if (ctx.role === 'owner') return q.eq('company_id', ctx.companyId);
+    // store owners browse the whole marketplace catalog; customers only see
+    // active products.
+    return q;
   }
 
   if (slug.length === 0 && req.method === 'GET') {
@@ -27,24 +29,21 @@ export default authed(async (req, res, ctx) => {
     q = scope(q);
     if (req.query.storeId) q = q.eq('store_id', String(req.query.storeId));
     if (req.query.category) q = q.eq('category', String(req.query.category));
-    if (ctx.role === 'customer') q = q.eq('is_active', true);
-    if (req.query.isActive !== undefined && ctx.role !== 'customer') q = q.eq('is_active', String(req.query.isActive) === 'true');
+    if (req.query.companyId && (ctx.isPlatform || ctx.role === 'owner')) {
+      q = q.eq('company_id', String(req.query.companyId));
+    }
+    // store owners and customers only ever see active products
+    if (ctx.role === 'storeOwner' || ctx.role === 'customer') q = q.eq('is_active', true);
+    else if (req.query.isActive !== undefined) q = q.eq('is_active', String(req.query.isActive) === 'true');
     const result = await runList(q, list, { searchColumns: ['name', 'sku', 'description'] });
     return ok(res, { data: rowsOut(result.data), meta: { count: result.count, page: result.page, pageSize: result.pageSize } });
   }
 
   if (slug.length === 0 && req.method === 'POST') {
     if (!canWrite) return fail(res, 'Forbidden', 403);
-    const { name, price, category, stock, sku, description, image, storeId, companyId, isActive } = req.body || {};
+    const { name, price, category, stock, sku, description, image, isActive } = req.body || {};
     if (!name) return fail(res, 'Name is required');
-    let targetCompany = ctx.isPlatform ? companyId || null : ctx.companyId;
-    // storeOwners own products through a store; require and validate it.
-    if (ctx.role === 'storeOwner') {
-      if (!storeId) return fail(res, 'Select one of your stores for this product');
-      const { data: store } = await sb.from('stores').select('id, company_id, store_owner_id').eq('id', storeId).maybeSingle();
-      if (!store || store.store_owner_id !== ctx.userId) return fail(res, 'Store not found', 403);
-      targetCompany = store.company_id || null;
-    }
+    const targetCompany = ctx.isPlatform ? req.body.companyId || null : ctx.companyId;
     const { data, error } = await sb
       .from('products')
       .insert({
@@ -55,7 +54,7 @@ export default authed(async (req, res, ctx) => {
         sku: sku || null,
         description: description || null,
         image: image || null,
-        store_id: storeId || null,
+        store_id: null,
         company_id: targetCompany,
         is_active: isActive !== false
       })
@@ -71,6 +70,9 @@ export default authed(async (req, res, ctx) => {
   if (id && req.method === 'GET') {
     const { data } = await scope(sb.from('products').select('*').eq('id', id)).maybeSingle();
     if (!data) return fail(res, 'Not found', 404);
+    if ((ctx.role === 'storeOwner' || ctx.role === 'customer') && data.is_active === false) {
+      return fail(res, 'Not found', 404);
+    }
     return ok(res, { data: rowOut(data) });
   }
 
@@ -80,19 +82,11 @@ export default authed(async (req, res, ctx) => {
     if (!before) return fail(res, 'Not found', 404);
     const b = req.body || {};
     const patch: any = {};
-    for (const k of ['name', 'price', 'category', 'stock', 'sku', 'description', 'image', 'store_id']) {
+    for (const k of ['name', 'price', 'category', 'stock', 'sku', 'description', 'image']) {
       if (b[k] !== undefined) patch[k] = b[k];
     }
-    if (b.storeId !== undefined) patch.store_id = b.storeId || null;
     if (b.isActive !== undefined) patch.is_active = b.isActive;
     if (b.companyId !== undefined && ctx.isPlatform) patch.company_id = b.companyId || null;
-    // A storeOwner may only move a product between stores they own.
-    if (ctx.role === 'storeOwner' && b.storeId !== undefined) {
-      if (!b.storeId) return fail(res, 'Select one of your stores for this product');
-      const { data: store } = await sb.from('stores').select('id, company_id, store_owner_id').eq('id', b.storeId).maybeSingle();
-      if (!store || store.store_owner_id !== ctx.userId) return fail(res, 'Store not found', 403);
-      patch.company_id = store.company_id || null;
-    }
     const { data: after } = await sb.from('products').update(patch).eq('id', id).select('*').single();
     await recordAudit(req, { action: 'product.update', entityType: 'product', entityId: id, before: rowOut(before), after: rowOut(after) });
     return ok(res, { data: rowOut(after) });
@@ -114,6 +108,7 @@ export default authed(async (req, res, ctx) => {
     const { data: before } = await scope(sb.from('products').select('*').eq('id', id)).maybeSingle();
     if (!before) return fail(res, 'Not found', 404);
     await sb.from('products').delete().eq('id', id);
+    await sb.from('store_products').delete().eq('product_id', id);
     await recordAudit(req, { action: 'product.delete', entityType: 'product', entityId: id, before: rowOut(before) });
     return ok(res, { message: 'Deleted' });
   }

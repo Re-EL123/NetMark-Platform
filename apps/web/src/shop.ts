@@ -49,13 +49,13 @@ initPanel({
 
 /* ------------------------------- catalog ------------------------------- */
 async function catalog(c: HTMLElement) {
-  c.innerHTML = '<p class="empty">Loading catalog…</p>';
-  const [productsRes, storesRes, settingsRes] = await Promise.all([
-    apiRequest('/products?pageSize=100&isActive=true'),
+  c.innerHTML = '<p class="empty">Loading products…</p>';
+  const [listingsRes, storesRes, settingsRes] = await Promise.all([
+    apiRequest('/store-products?pageSize=100'),
     apiRequest('/stores?pageSize=100'),
     apiRequest('/settings')
   ]);
-  const products = productsRes.data || [];
+  const listings = listingsRes.data || [];
   const stores = storesRes.data || [];
   const symbol = settingsRes.data?.platform?.currencySymbol || 'R';
 
@@ -69,21 +69,22 @@ async function catalog(c: HTMLElement) {
   function drawGrid() {
     const storeId = (document.getElementById('storeFilter') as HTMLSelectElement).value;
     const search = (document.getElementById('productSearch') as HTMLInputElement).value.toLowerCase();
-    const filtered = products.filter(
-      (p: any) => (!storeId || p.storeId === storeId) && (!search || String(p.name).toLowerCase().includes(search))
+    const filtered = listings.filter(
+      (l: any) => (!storeId || l.storeId === storeId) && (!search || String(l.name).toLowerCase().includes(search))
     );
     const grid = document.getElementById('grid')!;
     grid.innerHTML = filtered.length
       ? filtered
           .map(
-            (p: any) => `<div class="product-card">
-          <div class="thumb">${p.image ? `<img src="${esc(p.image)}" alt="${esc(p.name)}">` : '🛍️'}</div>
+            (l: any) => `<div class="product-card">
+          <div class="thumb">${l.image ? `<img src="${esc(l.image)}" alt="${esc(l.name)}">` : '🛍️'}</div>
           <div class="body">
-            <div class="name">${esc(p.name)}</div>
-            <div class="desc">${esc(p.description || p.category || '')}</div>
-            <div class="price">${money(p.price, symbol)}</div>
-            <button class="btn btn-sm" data-add="${esc(p.id)}" ${Number(p.stock) <= 0 ? 'disabled' : ''}>
-              ${Number(p.stock) <= 0 ? 'Out of stock' : 'Add to cart'}
+            <div class="name">${esc(l.name)}</div>
+            <div class="desc">${esc(l.description || l.category || '')}</div>
+            <div class="empty">${esc(l.storeName || '')}</div>
+            <div class="price">${money(l.price, symbol)}</div>
+            <button class="btn btn-sm" data-add="${esc(l.id)}" ${Number(l.stock) <= 0 ? 'disabled' : ''}>
+              ${Number(l.stock) <= 0 ? 'Out of stock' : 'Add to cart'}
             </button>
           </div>
         </div>`
@@ -94,13 +95,13 @@ async function catalog(c: HTMLElement) {
     grid.querySelectorAll('[data-add]').forEach((b) =>
       b.addEventListener('click', () => {
         const id = (b as HTMLElement).dataset.add!;
-        const product = products.find((p: any) => p.id === id);
+        const listing = listings.find((l: any) => l.id === id);
         const cart = getCart();
-        const existing = cart.find((l) => l.productId === id);
+        const existing = cart.find((l) => l.productId === listing.productId && l.storeId === listing.storeId);
         if (existing) existing.quantity += 1;
-        else cart.push({ productId: id, name: product.name, price: Number(product.price), quantity: 1, storeId: product.storeId, companyId: product.companyId });
+        else cart.push({ productId: listing.productId, name: listing.name, price: Number(listing.price), quantity: 1, storeId: listing.storeId, companyId: listing.companyId });
         setCart(cart);
-        toast(`${product.name} added`, 'success');
+        toast(`${listing.name} added`, 'success');
       })
     );
     const cartInfo = document.getElementById('cartInfo')!;
@@ -167,7 +168,9 @@ async function cart(c: HTMLElement, ctx: any) {
       ],
       submitLabel: 'Place order',
       onSubmit: async (v) => {
-        const storeId = lines[0]?.storeId;
+        const storeIds = [...new Set(lines.map((l) => l.storeId).filter(Boolean))];
+        if (storeIds.length > 1) throw new Error('Please order from one store at a time');
+        const storeId = storeIds[0];
         const res = await apiRequest('/orders', {
           method: 'POST',
           body: JSON.stringify({

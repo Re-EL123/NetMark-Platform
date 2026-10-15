@@ -14,11 +14,10 @@ export function createCrudHandler(
     'platformAdmin',
     'owner',
     'storeOwner',
-    'distributor',
     'customer',
     'driver'
   ];
-  const writeRoles = options.writeRoles || ['platformAdmin', 'owner', 'storeOwner', 'distributor'];
+  const writeRoles = options.writeRoles || ['platformAdmin', 'owner', 'storeOwner'];
 
   return async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Access-Control-Allow-Origin', '*');

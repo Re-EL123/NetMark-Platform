@@ -4,7 +4,7 @@ import { esc, statusBadge, badge, formatDate } from './render';
 import { crudView } from './crud';
 import { openModal, confirmDialog, toast, money, titleCase, statCards, Field } from './ui';
 
-const ROLE_OPTIONS = ['storeOwner', 'distributor', 'driver', 'customer'].map((r) => ({
+const ROLE_OPTIONS = ['storeOwner', 'driver', 'customer'].map((r) => ({
   value: r,
   label: titleCase(r)
 }));
@@ -27,6 +27,7 @@ const nav: NavItem[] = [
   { id: 'users', label: 'Team' },
   { id: 'stores', label: 'Stores' },
   { id: 'products', label: 'Products' },
+  { id: 'listings', label: 'Store Listings', capability: 'products.read' },
   { id: 'orders', label: 'Orders' },
   { id: 'drivers', label: 'Drivers' },
   { id: 'appointments', label: 'Appointments' },
@@ -46,6 +47,7 @@ initPanel({
     if (route === 'users') return users(c);
     if (route === 'stores') return stores(c);
     if (route === 'products') return products(c);
+    if (route === 'listings') return listings(c);
     if (route === 'orders') return orders(c);
     if (route === 'drivers') return drivers(c);
     if (route === 'appointments') return appointments(c);
@@ -231,19 +233,16 @@ function products(c: HTMLElement) {
 }
 
 async function productModal(row: any, reload: () => void) {
-  const storesRes = await apiRequest('/stores?pageSize=100');
-  const storeOpts = [{ value: '', label: 'None' }, ...(storesRes.data || []).map((s: any) => ({ value: s.id, label: s.name }))];
   await openModal({
     title: row ? 'Edit product' : 'New product',
     fields: [
       { name: 'name', label: 'Name', required: true, value: row?.name },
-      { name: 'price', label: 'Price', type: 'number', step: '0.01', value: row?.price ?? 0 },
+      { name: 'price', label: 'Company price', type: 'number', step: '0.01', value: row?.price ?? 0, help: 'Wholesale price store owners buy at.' },
       { name: 'stock', label: 'Stock', type: 'number', value: row?.stock ?? 0 },
       { name: 'category', label: 'Category', value: row?.category },
       { name: 'sku', label: 'SKU', value: row?.sku },
       { name: 'description', label: 'Description', type: 'textarea', value: row?.description },
       { name: 'image', label: 'Image URL', value: row?.image },
-      { name: 'storeId', label: 'Store', type: 'select', options: storeOpts, value: row?.storeId || '' },
       { name: 'isActive', label: 'Active', type: 'checkbox', value: row ? row.isActive !== false : true }
     ],
     onSubmit: async (v) => {
@@ -254,6 +253,21 @@ async function productModal(row: any, reload: () => void) {
       toast('Product saved', 'success');
       reload();
     }
+  });
+}
+
+function listings(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/store-products',
+    searchPlaceholder: 'Search listings…',
+    columns: [
+      { key: 'name', label: 'Product' },
+      { key: 'storeName', label: 'Store' },
+      { key: 'price', label: 'Retail', render: (r) => money(r.price) },
+      { key: 'basePrice', label: 'Company', render: (r) => money(r.basePrice) },
+      { key: 'margin', label: 'Store margin', render: (r) => money(r.margin) },
+      { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') }
+    ]
   });
 }
 
@@ -378,7 +392,7 @@ function codes(c: HTMLElement) {
     bind: (root, reload) => {
       (root.querySelector('[data-new]') as HTMLElement).onclick = () =>
         openModal({
-          title: 'New distributor code',
+          title: 'New referral code',
           fields: [
             { name: 'code', label: 'Code', help: 'Leave blank to auto-generate' },
             { name: 'maxUses', label: 'Max uses', type: 'number' },

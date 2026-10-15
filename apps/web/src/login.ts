@@ -25,7 +25,6 @@ loginForm.addEventListener('submit', async (e) => {
         platformAdmin: `${base}platform/`,
         owner: `${base}owner/`,
         storeOwner: `${base}business/`,
-        distributor: `${base}business/`,
         customer: `${base}shop/`,
         driver: `${base}driver/`
       };

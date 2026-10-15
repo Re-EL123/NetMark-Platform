@@ -51,8 +51,6 @@ export default authed(async (req, res, ctx) => {
     if (ctx.role === 'storeOwner') {
       const storeIds = await storeIdsForUser(sb, ctx.userId, 'store_owner_id');
       q = q.in('store_id', storeIds);
-    } else if (ctx.role === 'distributor') {
-      q = q.eq('distributor_id', ctx.userId);
     } else {
       q = q.eq('company_id', ctx.companyId);
     }

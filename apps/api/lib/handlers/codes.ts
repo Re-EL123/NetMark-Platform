@@ -27,9 +27,7 @@ export default authed(async (req, res, ctx) => {
   if (slug.length === 0 && req.method === 'GET') {
     const list = parseListQuery(req);
     let q = sb.from('distributor_codes').select('*', { count: 'exact' });
-    if (ctx.isPlatform) { /* all */ }
-    else if (ctx.role === 'owner') q = q.eq('company_id', ctx.companyId);
-    else q = q.eq('distributor_id', ctx.userId);
+    if (!ctx.isPlatform) q = q.eq('company_id', ctx.companyId);
     if (req.query.isActive !== undefined) q = q.eq('is_active', String(req.query.isActive) === 'true');
     const result = await runList(q, list, { searchColumns: ['code'] });
     return ok(res, { data: rowsOut(result.data), meta: { count: result.count, page: result.page, pageSize: result.pageSize } });
@@ -38,15 +36,9 @@ export default authed(async (req, res, ctx) => {
   if (slug.length === 0 && req.method === 'POST') {
     if (!canWrite) return fail(res, 'Forbidden', 403);
     const { code, distributorId, maxUses, expiresAt, companyId } = req.body || {};
-    const distributor = ctx.role === 'distributor' ? ctx.userId : distributorId || null;
+    // Owner-issued codes attribute referrals to the owner (company rep).
+    const distributor = ctx.role === 'owner' ? ctx.userId : distributorId || null;
     const targetCompany = ctx.isPlatform ? companyId || null : ctx.companyId;
-    // Owners may only issue codes for distributors within their own company.
-    if (ctx.role === 'owner' && distributor) {
-      const { data: rep } = await sb.from('users').select('id, company_id, role').eq('id', distributor).maybeSingle();
-      if (!rep || rep.role !== 'distributor' || rep.company_id !== ctx.companyId) {
-        return fail(res, 'Distributor not found in your company', 404);
-      }
-    }
     const { data, error } = await sb
       .from('distributor_codes')
       .insert({
@@ -69,12 +61,10 @@ export default authed(async (req, res, ctx) => {
 
   const id = slug[0];
 
-  // A code may only be touched by its owning distributor, the owning company's
-  // owner, or the platform.
+  // A code may only be touched by the owning company's owner or the platform.
   const canTouch = (code: any) => {
     if (ctx.isPlatform) return true;
-    if (ctx.role === 'owner') return code.company_id && code.company_id === ctx.companyId;
-    if (ctx.role === 'distributor') return code.distributor_id === ctx.userId;
+    if (ctx.role === 'owner') return !!code.company_id && code.company_id === ctx.companyId;
     return false;
   };
 
