@@ -403,6 +403,12 @@ header button {
 }
 
 /* ---------- Tables ---------- */
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
@@ -420,6 +426,44 @@ th {
   color: var(--text-secondary);
   font-weight: 600;
   font-size: 13px;
+  background: var(--grey-50);
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+tbody tr:hover td {
+  background: var(--grey-50);
+}
+
+.empty {
+  color: var(--text-secondary);
+  font-size: 14px;
+  padding: 8px 0;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+.detail-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.detail-label {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+[data-theme="dark"] th,
+[data-theme="dark"] tbody tr:hover td {
+  background: var(--dark);
 }
 
 @media (max-width: 720px) {
