@@ -77,6 +77,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ success: false, message: 'Missing required fields' });
       }
 
+      // Public signup may not create a platformAdmin once one already exists.
+      // The very first platformAdmin is allowed as a bootstrap.
+      const PUBLIC_ROLES = ['customer', 'storeOwner', 'distributor', 'driver', 'owner'];
+      if (!PUBLIC_ROLES.includes(role)) {
+        if (role === 'platformAdmin') {
+          const { count } = await sb
+            .from('users')
+            .select('id', { count: 'exact', head: true })
+            .eq('role', 'platformAdmin');
+          if ((count || 0) > 0) {
+            return res.status(403).json({ success: false, message: 'Registration not allowed for this role' });
+          }
+        } else {
+          return res.status(400).json({ success: false, message: 'Invalid role' });
+        }
+      }
+
       const { data: existing } = await sb.from('users').select('id').eq('email', email).maybeSingle();
       if (existing) {
         return res.status(400).json({ success: false, message: 'User already exists' });
