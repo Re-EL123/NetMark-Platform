@@ -27,6 +27,7 @@ const handlers: Record<string, Handler> = {
   stores,
   products,
   'store-products': storeProducts,
+  purchases,
   orders,
   drivers,
   appointments,
