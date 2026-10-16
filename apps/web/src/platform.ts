@@ -1135,8 +1135,12 @@ async function renderSettings(c: HTMLElement) {
 
 /* ------------------------------ plans ---------------------------------- */
 function renderPlans(c: HTMLElement) {
+  let plans: any[] = [];
   crudView(c, {
     endpoint: '/plans',
+    onData: (r) => {
+      plans = r;
+    },
     columns: [
       { key: 'name', label: 'Name' },
       { key: 'slug', label: 'Slug' },
@@ -1145,7 +1149,7 @@ function renderPlans(c: HTMLElement) {
       { key: 'perActiveDistributorZar', label: 'Per dist (ZAR)', render: (r) => money(r.perActiveDistributorZar || 0) },
       { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') }
     ],
-    toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>New plan</span></button>`,
+    toolbar: () => `<button class="btn btn-sm" data-assign>${icon('building-2')}<span>Assign to company</span></button><button class="btn btn-sm" data-new>${icon('plus')}<span>New plan</span></button>`,
     actions: (r) => act('edit', r.id, 'Edit'),
     bind: (root, reload) => {
       (root.querySelector('[data-new]') as HTMLElement).onclick = async () => {
@@ -1165,6 +1169,53 @@ function renderPlans(c: HTMLElement) {
           }
         });
       };
+      (root.querySelector('[data-assign]') as HTMLElement).onclick = async () => {
+        const companiesRes = await apiRequest('/companies?pageSize=100');
+        const companyOpts = (companiesRes.data || []).map((x: any) => ({ value: x.id, label: x.name || String(x.id).slice(0, 8) }));
+        if (!companyOpts.length) return toast('No companies yet', 'error');
+        await openModal({
+          title: 'Assign plan to company',
+          fields: [
+            { name: 'companyId', label: 'Company', type: 'select', options: companyOpts, required: true },
+            { name: 'planId', label: 'Plan', type: 'select', options: plans.map((p) => ({ value: p.id, label: `${p.name}${p.tier ? ' (' + p.tier + ')' : ''}` })) },
+            { name: 'baseFeeZar', label: 'Override base fee (ZAR)', type: 'number', step: '0.01', help: 'Leave blank to use plan default' },
+            { name: 'perActiveDistributorZar', label: 'Override per-distributor (ZAR)', type: 'number', step: '0.01' }
+          ],
+          onSubmit: async (v) => {
+            const body: any = { companyId: v.companyId, planId: v.planId || null };
+            if (v.baseFeeZar !== null && v.baseFeeZar !== '') body.baseFeeZar = v.baseFeeZar;
+            if (v.perActiveDistributorZar !== null && v.perActiveDistributorZar !== '') body.perActiveDistributorZar = v.perActiveDistributorZar;
+            const res = await apiRequest('/plans/assign', { method: 'POST', body: JSON.stringify(body) });
+            if (!res.success) throw new Error(res.message);
+            toast('Plan assigned', 'success');
+          }
+        });
+      };
+      wire(root, {
+        edit: async (id) => {
+          const p = plans.find((x) => x.id === id);
+          if (!p) return;
+          await openModal({
+            title: 'Edit plan',
+            fields: [
+              { name: 'name', label: 'Name', value: p.name },
+              { name: 'tier', label: 'Tier', value: p.tier || '' },
+              { name: 'baseFeeZar', label: 'Base fee (ZAR)', type: 'number', step: '0.01', value: String(p.baseFeeZar ?? 0) },
+              { name: 'perActiveDistributorZar', label: 'Per active distributor (ZAR)', type: 'number', step: '0.01', value: String(p.perActiveDistributorZar ?? 0) },
+              { name: 'isActive', label: 'Active', type: 'select', options: opts(['true', 'false']), value: String(!!p.isActive) }
+            ],
+            onSubmit: async (v) => {
+              const res = await apiRequest(`/plans/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ ...v, isActive: v.isActive === 'true' })
+              });
+              if (!res.success) throw new Error(res.message);
+              toast('Plan updated', 'success');
+              reload();
+            }
+          });
+        }
+      });
     }
   });
 }
