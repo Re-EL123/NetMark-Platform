@@ -28,6 +28,7 @@ export async function notify(input: NotifyInput): Promise<void> {
 
     if (input.userId) {
       await sb.from('notifications').insert({ ...base, user_id: input.userId });
+      void import('./email').then((m) => m.maybeEmail(input.userId || undefined, input.type, input.title, input.body));
       return;
     }
 
