@@ -5,6 +5,7 @@ import { recordAudit } from '../audit';
 import { notify } from '../notify';
 import { storeIdsForUser } from '../scope';
 import { validLinkKeysForOwners } from '../companyLinks';
+import { recordCommission } from '../commissionEngine';
 
 const ORDER_STATUSES = ['pending', 'confirmed', 'ready', 'completed', 'cancelled'];
 
@@ -208,6 +209,27 @@ export default authed(async (req, res, ctx) => {
     await recordAudit(req, { action: 'order.status', entityType: 'order', entityId: id, before: { status: before.order_status }, after: { status } });
     if (before.customer_id && status === 'confirmed') {
       await notify({ userId: before.customer_id, type: 'order', title: 'Order confirmed', body: `Order ${before.order_number} is confirmed.`, data: { orderId: id } });
+    }
+    // distributor commission on completion (driver earnings are paid on delivery in drivers.ts)
+    if (status === 'completed' && before.order_status !== 'completed') {
+      try {
+        const { data: gs } = await sb.from('settings').select('value').eq('scope', 'platform').eq('key', 'general').maybeSingle();
+        const pct = Number(gs?.value?.commissionPercent ?? 10);
+        const amount = Number(before.total || 0);
+        if (before.distributor_id && pct > 0 && amount > 0) {
+          await recordCommission(sb, {
+            tenantId: ctx.tenantId,
+            userId: before.distributor_id,
+            companyId: before.company_id || null,
+            orderId: id,
+            amountZar: Math.round(amount * (pct / 100) * 100) / 100,
+            bonusType: 'retail',
+            source: 'order'
+          });
+        }
+      } catch {
+        /* commission failures should not block order status */
+      }
     }
     return ok(res, { data: rowOut(after) });
   }
