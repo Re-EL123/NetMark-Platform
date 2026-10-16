@@ -378,7 +378,7 @@ async function appointments(c: HTMLElement) {
       ${tableSimple(
         ['Service', 'Date', 'Time', 'Status', ''],
         rows.map((a: any) => [
-          esc(a.service || '—'),
+          esc(a.service || ''),
           formatDate(a.appointmentDate),
           esc(a.appointmentTime || ''),
           statusBadge(a.status),
@@ -419,11 +419,14 @@ async function profile(c: HTMLElement, ctx: any) {
   c.innerHTML = `
     <div class="card">
       <h3>My profile</h3>
-      <div class="detail-grid">
-        <div><span class="detail-label">Name</span><span>${esc(u.name)}</span></div>
-        <div><span class="detail-label">Email</span><span>${esc(u.email)}</span></div>
-        <div><span class="detail-label">Phone</span><span>${esc(u.phone || '—')}</span></div>
-        <div><span class="detail-label">Role</span><span>${badge(u.role, 'info')}</span></div>
+      <div class="profile-head">
+        <span class="profile-avatar">${u.profileImage ? `<img src="${esc(u.profileImage)}" alt="" />` : icon('user')}</span>
+        <div class="detail-grid">
+          <div><span class="detail-label">Name</span><span>${esc(u.name)}</span></div>
+          <div><span class="detail-label">Email</span><span>${esc(u.email)}</span></div>
+          <div><span class="detail-label">Phone</span><span>${esc(u.phone || '')}</span></div>
+          <div><span class="detail-label">Role</span><span>${badge(u.role, 'info')}</span></div>
+        </div>
       </div>
       <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn btn-sm" id="editProfile">${icon('pencil')}<span>Edit profile</span></button>
@@ -435,7 +438,8 @@ async function profile(c: HTMLElement, ctx: any) {
       title: 'Edit profile',
       fields: [
         { name: 'name', label: 'Name', value: u.name },
-        { name: 'phone', label: 'Phone', type: 'tel', value: u.phone }
+        { name: 'phone', label: 'Phone', type: 'tel', value: u.phone },
+        { name: 'profileImage', label: 'Profile photo', type: 'image', folder: 'users', value: u.profileImage }
       ],
       onSubmit: async (v) => {
         const res = await apiRequest('/auth/me', { method: 'PUT', body: JSON.stringify(v) });

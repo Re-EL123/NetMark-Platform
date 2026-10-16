@@ -49,7 +49,7 @@ export default authed(async (req, res, ctx) => {
 
   if (slug.length === 0 && req.method === 'POST') {
     if (!canWrite) return fail(res, 'Forbidden', 403);
-    const { name, price, category, stock, sku, description, image, isActive } = req.body || {};
+    const { name, price, category, stock, sku, description, image, gallery, isActive } = req.body || {};
     if (!name) return fail(res, 'Name is required');
     const targetCompany = ctx.isPlatform ? req.body.companyId || null : ctx.companyId;
     const { data, error } = await sb
@@ -62,6 +62,7 @@ export default authed(async (req, res, ctx) => {
         sku: sku || null,
         description: description || null,
         image: image || null,
+        gallery: Array.isArray(gallery) ? gallery : [],
         store_id: null,
         company_id: targetCompany,
         is_active: isActive !== false
@@ -94,6 +95,7 @@ export default authed(async (req, res, ctx) => {
       if (b[k] !== undefined) patch[k] = b[k];
     }
     if (b.isActive !== undefined) patch.is_active = b.isActive;
+    if (b.gallery !== undefined) patch.gallery = Array.isArray(b.gallery) ? b.gallery : [];
     if (b.companyId !== undefined && ctx.isPlatform) patch.company_id = b.companyId || null;
     const { data: after } = await sb.from('products').update(patch).eq('id', id).select('*').single();
     await recordAudit(req, { action: 'product.update', entityType: 'product', entityId: id, before: rowOut(before), after: rowOut(after) });

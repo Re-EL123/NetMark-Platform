@@ -3,7 +3,8 @@ import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { crudView } from './crud';
 import { openModal, confirmDialog, toast, money, titleCase, emptyState, Field } from './ui';
-import { icon } from './icons';
+import { icon, iconify } from './icons';
+import { uploadFieldHtml, wireUploaders } from './upload';
 import { overviewStats, renderOverviewCharts } from './dashboard';
 
 const ROLE_OPTIONS = ['storeOwner', 'driver', 'customer'].map((r) => ({
@@ -147,6 +148,7 @@ async function userModal(row: any, reload: () => void) {
     { name: 'name', label: 'Full name', required: true, value: row?.name },
     { name: 'email', label: 'Email', type: 'email', required: !row, value: row?.email },
     { name: 'phone', label: 'Phone', type: 'tel', value: row?.phone },
+    { name: 'profileImage', label: 'Profile photo', type: 'image', folder: 'users', value: row?.profileImage },
     { name: 'role', label: 'Role', type: 'select', options: ROLE_OPTIONS, value: row?.role || 'customer' }
   ];
   if (!row) fields.push({ name: 'password', label: 'Password', type: 'password', help: 'Leave blank to auto-generate' });
@@ -202,6 +204,7 @@ async function storeModal(row: any, reload: () => void) {
     title: row ? 'Edit store' : 'New store',
     fields: [
       { name: 'name', label: 'Store name', required: true, value: row?.name },
+      { name: 'logo', label: 'Store logo', type: 'image', folder: 'stores', value: row?.logo },
       { name: 'address', label: 'Address', value: row?.address }
     ],
     onSubmit: async (v) => {
@@ -268,7 +271,8 @@ async function productModal(row: any, reload: () => void) {
       { name: 'category', label: 'Category', value: row?.category },
       { name: 'sku', label: 'SKU', value: row?.sku },
       { name: 'description', label: 'Description', type: 'textarea', value: row?.description },
-      { name: 'image', label: 'Image URL', value: row?.image },
+      { name: 'image', label: 'Image', type: 'image', folder: 'products', value: row?.image },
+      { name: 'gallery', label: 'Gallery', type: 'gallery', folder: 'products', value: row?.gallery },
       { name: 'isActive', label: 'Active', type: 'checkbox', value: row ? row.isActive !== false : true }
     ],
     onSubmit: async (v) => {
@@ -394,7 +398,7 @@ function drivers(c: HTMLElement) {
     endpoint: '/drivers',
     filters: () => [{ name: 'status', label: 'Status', options: opts(['pending', 'approved', 'rejected', 'suspended']) }],
     columns: [
-      { key: 'user', label: 'Driver', render: (r) => esc(r.user?.name || '—') },
+      { key: 'user', label: 'Driver', render: (r) => esc(r.user?.name || '') },
       { key: 'vehicleNumber', label: 'Vehicle' },
       { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
       { key: 'isAvailable', label: 'Online', render: (r) => statusBadge(r.isAvailable ? 'active' : 'inactive') }
@@ -555,8 +559,9 @@ async function reports(c: HTMLElement) {
 }
 
 async function settings(c: HTMLElement) {
-  const res = await apiRequest('/settings');
+  const [res, coRes] = await Promise.all([apiRequest('/settings'), apiRequest('/companies')]);
   const s = res.success ? res.data.company || {} : {};
+  const company = coRes.success ? (coRes.data || [])[0] : null;
   c.innerHTML = `<div class="card"><h3>Company settings</h3><div id="settingsForm"></div></div>`;
   const fields: Field[] = [
     { name: 'address', label: 'Business address', value: s.address },
@@ -567,6 +572,7 @@ async function settings(c: HTMLElement) {
   const host = document.getElementById('settingsForm')!;
   const form = document.createElement('form');
   form.innerHTML =
+    uploadFieldHtml({ name: 'logo', label: 'Company logo', kind: 'image', folder: 'companies', value: company?.logo }) +
     fields
       .map(
         (f) =>
@@ -574,6 +580,8 @@ async function settings(c: HTMLElement) {
       )
       .join('') + `<button class="btn btn-sm" type="submit">${icon('check')}<span>Save</span></button>`;
   host.appendChild(form);
+  iconify(form);
+  wireUploaders(form);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const value: any = {};
@@ -581,7 +589,9 @@ async function settings(c: HTMLElement) {
       const el = form.querySelector(`[name="${f.name}"]`) as HTMLInputElement;
       value[f.name] = f.type === 'number' ? (el.value === '' ? null : Number(el.value)) : el.value;
     }
+    const logo = (form.querySelector('[name="logo"]') as HTMLInputElement)?.value || '';
     const r = await apiRequest('/settings', { method: 'PUT', body: JSON.stringify({ scope: 'company', value }) });
+    if (company?.id) await apiRequest(`/companies/${company.id}`, { method: 'PUT', body: JSON.stringify({ logo }) });
     toast(r.success ? 'Settings saved' : r.message || 'Failed', r.success ? 'success' : 'error');
   });
 }

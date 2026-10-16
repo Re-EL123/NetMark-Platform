@@ -1,6 +1,7 @@
 import { esc } from './render';
 import { icon, iconify } from './icons';
 import { sparkline } from './charts';
+import { uploadFieldHtml, wireUploaders, type UploadField } from './upload';
 
 export type ToastType = 'info' | 'success' | 'error';
 
@@ -34,7 +35,7 @@ export function money(value: unknown, symbol = 'R'): string {
 }
 
 export function titleCase(value: unknown): string {
-  if (value === null || value === undefined || value === '') return '—';
+  if (value === null || value === undefined || value === '') return '';
   return String(value)
     .replace(/[_-]+/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase());
@@ -75,7 +76,23 @@ export function confirmDialog(message: string, opts: { title?: string; confirmLa
 export interface Field {
   name: string;
   label: string;
-  type?: 'text' | 'number' | 'email' | 'password' | 'tel' | 'date' | 'time' | 'select' | 'textarea' | 'checkbox';
+  type?:
+    | 'text'
+    | 'number'
+    | 'email'
+    | 'password'
+    | 'tel'
+    | 'date'
+    | 'time'
+    | 'select'
+    | 'textarea'
+    | 'checkbox'
+    | 'image'
+    | 'video'
+    | 'file'
+    | 'document'
+    | 'gallery'
+    | 'documents';
   required?: boolean;
   value?: any;
   options?: { value: string; label: string }[];
@@ -86,9 +103,29 @@ export interface Field {
   max?: string | number;
   rows?: number;
   full?: boolean;
+  folder?: string;
+  accept?: string;
+  kind?: UploadField['kind'];
+  multiple?: boolean;
 }
 
+const UPLOAD_TYPES = ['image', 'video', 'file', 'document', 'gallery', 'documents'];
+
 function fieldHtml(f: Field): string {
+  if (f.type && UPLOAD_TYPES.includes(f.type)) {
+    return uploadFieldHtml({
+      name: f.name,
+      label: f.label,
+      kind: (f.kind || f.type) as UploadField['kind'],
+      folder: f.folder,
+      accept: f.accept,
+      value: f.value,
+      required: f.required,
+      help: f.help,
+      multiple: f.multiple,
+      full: f.full
+    });
+  }
   const value = f.value ?? '';
   const common = `name="${esc(f.name)}" id="f_${esc(f.name)}" ${f.required ? 'required' : ''}`;
   if (f.type === 'checkbox') {
@@ -151,6 +188,7 @@ export function openModal(opts: ModalOptions): Promise<void> {
       </div>`;
     document.body.appendChild(overlay);
     iconify(overlay);
+    wireUploaders(overlay);
 
     const close = () => {
       overlay.remove();
@@ -170,7 +208,13 @@ export function openModal(opts: ModalOptions): Promise<void> {
         if (!el) continue;
         if (f.type === 'checkbox') values[f.name] = (el as HTMLInputElement).checked;
         else if (f.type === 'number') values[f.name] = el.value === '' ? null : Number(el.value);
-        else values[f.name] = el.value;
+        else if (f.type === 'gallery' || f.type === 'documents') {
+          try {
+            values[f.name] = JSON.parse(el.value || '[]');
+          } catch {
+            values[f.name] = [];
+          }
+        } else values[f.name] = el.value;
       }
       const submitBtn = overlay.querySelector('[data-submit]') as HTMLButtonElement | null;
       // The error box is part of the template, but guard against a missing or

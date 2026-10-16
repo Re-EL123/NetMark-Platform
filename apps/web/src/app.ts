@@ -6,6 +6,7 @@ import { icon, iconify, autoIconify } from './icons';
 import { initTooltips } from './tooltip';
 import { initMotion, animateIn } from './motion';
 import { startTour, hasSeenTour } from './tour';
+import { renderAdBanner, renderAdSections, renderAdPopup } from './ads';
 
 export interface NavItem {
   id: string;
@@ -140,6 +141,7 @@ export async function initPanel(opts: PanelOptions) {
             <button class="logout-btn" id="logoutBtn">${icon('log-out')}<span>Logout</span></button>
           </div>
         </header>
+        <div id="adBanner" class="ad-banner-slot"></div>
         <div class="content" id="content"></div>
       </div>
     </div>`;
@@ -190,6 +192,10 @@ export async function initPanel(opts: PanelOptions) {
     }
     iconify(content);
     animateIn(content);
+    const sectionHost = document.createElement('div');
+    sectionHost.className = 'ad-section-host';
+    content.appendChild(sectionHost);
+    renderAdSections(sectionHost);
     // Keep the active nav item in view on small screens.
     try {
       (navEl.querySelector('a.active') as HTMLElement | null)?.scrollIntoView({ block: 'nearest', inline: 'center' });
@@ -226,8 +232,16 @@ export async function initPanel(opts: PanelOptions) {
   const savedTheme = localStorage.getItem('netmark_theme');
   if (savedTheme) applyTheme(savedTheme);
 
+  renderAdBanner(document.getElementById('adBanner') as HTMLElement);
+
   await refreshBadge();
   await run(currentRoute());
+
+  // Show a dismissable popup ad shortly after the panel is ready.
+  if (!sessionStorage.getItem('netmark_ad_popup_shown')) {
+    sessionStorage.setItem('netmark_ad_popup_shown', '1');
+    setTimeout(() => renderAdPopup(), 1200);
+  }
 
   // First-time guided tour for this panel.
   if (!hasSeenTour(tourKey)) {

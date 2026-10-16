@@ -18,6 +18,8 @@ import admin from '../lib/handlers/admin';
 import settings from '../lib/handlers/settings';
 import notifications from '../lib/handlers/notifications';
 import reviews from '../lib/handlers/reviews';
+import uploads from '../lib/handlers/uploads';
+import ads from '../lib/handlers/ads';
 
 type Handler = (req: VercelRequest, res: VercelResponse) => unknown;
 
@@ -40,7 +42,9 @@ const handlers: Record<string, Handler> = {
   admin,
   settings,
   notifications,
-  reviews
+  reviews,
+  uploads,
+  ads
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

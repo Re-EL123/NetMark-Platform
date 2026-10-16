@@ -1,7 +1,7 @@
 type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
 export function esc(value: unknown): string {
-  if (value === null || value === undefined || value === '') return '&mdash;';
+  if (value === null || value === undefined || value === '') return '';
   return String(value)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -55,7 +55,7 @@ export function table(columns: Column[], rows: any[]): string {
 }
 
 export function formatDate(value: unknown): string {
-  if (!value) return '&mdash;';
+  if (!value) return '';
   const d = new Date(String(value));
   if (isNaN(d.getTime())) return esc(value);
   return d.toLocaleDateString(undefined, {

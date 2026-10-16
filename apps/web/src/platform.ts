@@ -6,6 +6,7 @@ import { openModal, confirmDialog, toast, money, titleCase, emptyState, statCard
 import { icon } from './icons';
 import { overviewStats, renderOverviewCharts } from './dashboard';
 import { donutChart, barList, chartCard } from './charts';
+import { platformAdsHtml, resetDismissedAds, type Ad } from './ads';
 
 const ROLE_OPTIONS = [
   'platformAdmin',
@@ -63,6 +64,7 @@ const nav: NavItem[] = [
   { id: 'payouts', label: 'Payouts', icon: 'wallet' },
   { id: 'payments', label: 'Payments', icon: 'credit-card' },
   { id: 'reports', label: 'Reports', icon: 'bar-chart-3' },
+  { id: 'ads', label: 'Adverts', icon: 'megaphone' },
   { id: 'announcements', label: 'Announcements', icon: 'bell' },
   { id: 'audit', label: 'Audit Log', icon: 'shield-check' },
   { id: 'settings', label: 'Settings', icon: 'settings' }
@@ -89,6 +91,7 @@ initPanel({
     if (route === 'payouts') return renderPayouts(c);
     if (route === 'payments') return renderPayments(c);
     if (route === 'reports') return renderReports(c);
+    if (route === 'ads') return renderAds(c);
     if (route === 'announcements') return renderAnnouncements(c);
     if (route === 'audit') return renderAudit(c);
     if (route === 'settings') return renderSettings(c);
@@ -126,7 +129,7 @@ async function renderDashboard(c: HTMLElement) {
         ['Order', 'Customer', 'Total', 'Payment', 'Status', 'Created'],
         d.recentOrders.map((o: any) => [
           esc(o.orderNumber || o.id),
-          esc(o.customerId ? o.customerId.slice(0, 8) : '—'),
+          esc(o.customerId ? o.customerId.slice(0, 8) : ''),
           money(o.total),
           statusBadge(o.paymentStatus),
           statusBadge(o.orderStatus),
@@ -209,6 +212,7 @@ async function userModal(row: any, reload: () => void) {
     { name: 'name', label: 'Full name', required: true, value: row?.name },
     { name: 'email', label: 'Email', type: 'email', required: !row, value: row?.email },
     { name: 'phone', label: 'Phone', type: 'tel', value: row?.phone },
+    { name: 'profileImage', label: 'Profile photo', type: 'image', folder: 'users', value: row?.profileImage },
     { name: 'role', label: 'Role', type: 'select', options: ROLE_OPTIONS, value: row?.role || 'customer' },
     { name: 'status', label: 'Status', type: 'select', options: opts(['active', 'suspended']), value: row?.status || 'active' },
     { name: 'companyId', label: 'Company', type: 'select', options: [{ value: '', label: 'None' }, ...companies], value: row?.companyId || '' }
@@ -289,6 +293,7 @@ async function companyModal(row: any, reload: () => void) {
     title: row ? 'Edit company' : 'New company',
     fields: [
       { name: 'name', label: 'Company name', required: true, value: row?.name },
+      { name: 'logo', label: 'Company logo', type: 'image', folder: 'companies', value: row?.logo },
       { name: 'plan', label: 'Plan', value: row?.plan || 'standard' },
       { name: 'ownerId', label: 'Owner', type: 'select', options: owners, value: row?.ownerId || '' }
     ],
@@ -344,6 +349,8 @@ async function storeModal(row: any, reload: () => void) {
     title: row ? 'Edit store' : 'New store',
     fields: [
       { name: 'name', label: 'Store name', required: true, value: row?.name },
+      { name: 'logo', label: 'Store logo', type: 'image', folder: 'stores', value: row?.logo },
+      { name: 'banner', label: 'Store banner', type: 'image', folder: 'stores', value: row?.banner },
       { name: 'address', label: 'Address', value: row?.address },
       { name: 'companyId', label: 'Company', type: 'select', options: [{ value: '', label: 'None' }, ...companies], value: row?.companyId || '' }
     ],
@@ -413,7 +420,8 @@ async function productModal(row: any, reload: () => void) {
       { name: 'category', label: 'Category', value: row?.category },
       { name: 'sku', label: 'SKU', value: row?.sku },
       { name: 'description', label: 'Description', type: 'textarea', value: row?.description },
-      { name: 'image', label: 'Image URL', value: row?.image },
+      { name: 'image', label: 'Image', type: 'image', folder: 'products', value: row?.image },
+      { name: 'gallery', label: 'Gallery', type: 'gallery', folder: 'products', value: row?.gallery, help: 'Extra images shown on the product page.' },
       { name: 'companyId', label: 'Company', type: 'select', options: [{ value: '', label: 'None' }, ...companies], value: row?.companyId || '' },
       { name: 'isActive', label: 'Active', type: 'checkbox', value: row ? row.isActive !== false : true }
     ],
@@ -521,23 +529,32 @@ async function assignModal(row: any, reload: () => void) {
 
 /* ------------------------------- drivers ------------------------------- */
 function renderDrivers(c: HTMLElement) {
+  let rows: any[] = [];
   crudView(c, {
     endpoint: '/drivers',
     searchPlaceholder: 'Search drivers…',
+    onData: (r) => (rows = r),
     filters: () => [{ name: 'status', label: 'Status', options: opts(['pending', 'approved', 'rejected', 'suspended']) }],
     columns: [
-      { key: 'user', label: 'Driver', render: (r) => esc(r.user?.name || '—') },
+      {
+        key: 'user',
+        label: 'Driver',
+        render: (r) =>
+          `<div class="cell-media"><span class="cell-thumb">${r.profileImage ? `<img src="${esc(r.profileImage)}" alt="" />` : icon('user')}</span>${esc(r.user?.name || '')}</div>`
+      },
       { key: 'vehicleType', label: 'Vehicle', render: (r) => esc(`${r.vehicleType || ''} ${r.vehicleNumber || ''}`.trim()) },
       { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
       { key: 'isAvailable', label: 'Online', render: (r) => statusBadge(r.isAvailable ? 'active' : 'inactive') },
       { key: 'stats', label: 'Deliveries', render: (r) => esc(r.stats?.totalDeliveries ?? 0) }
     ],
     actions: (r) =>
+      act('view', r.id, 'View') +
       act('approve', r.id, 'Approve') +
       act('reject', r.id, 'Reject', 'danger') +
       act('suspend', r.id, 'Suspend', 'danger'),
     bind: (root, reload) => {
       wire(root, {
+        view: (id) => driverModal(rows.find((r) => r.id === id), reload),
         approve: async (id) => {
           await apiRequest(`/drivers/${id}/approve`, { method: 'POST' });
           toast('Driver approved', 'success');
@@ -556,6 +573,28 @@ function renderDrivers(c: HTMLElement) {
           }
         }
       });
+    }
+  });
+}
+
+async function driverModal(row: any, reload: () => void) {
+  if (!row) return;
+  await openModal({
+    title: `Driver — ${row.user?.name || row.id.slice(0, 8)}`,
+    fields: [
+      { name: 'profileImage', label: 'Driver photo', type: 'image', folder: 'drivers', value: row.profileImage },
+      { name: 'vehicleType', label: 'Vehicle type', value: row.vehicleType },
+      { name: 'vehicleNumber', label: 'Vehicle number', value: row.vehicleNumber },
+      { name: 'vehicleModel', label: 'Vehicle model', value: row.vehicleModel },
+      { name: 'licenseNumber', label: 'Licence number', value: row.licenseNumber },
+      { name: 'licenseExpiry', label: 'Licence expiry', type: 'date', value: row.licenseExpiry ? String(row.licenseExpiry).slice(0, 10) : '' },
+      { name: 'documents', label: 'Documents', type: 'documents', folder: 'drivers', value: row.documents, help: 'Licence, ID and vehicle papers.' }
+    ],
+    onSubmit: async (v) => {
+      const res = await apiRequest(`/drivers/${row.id}`, { method: 'PUT', body: JSON.stringify(v) });
+      if (!res.success) throw new Error(res.message || 'Failed');
+      toast('Driver updated', 'success');
+      reload();
     }
   });
 }
@@ -601,7 +640,7 @@ function renderCodes(c: HTMLElement) {
       { key: 'code', label: 'Code', render: (r) => badge(r.code, 'info') },
       { key: 'uses', label: 'Uses', render: (r) => `${r.uses || 0}${r.maxUses ? ' / ' + r.maxUses : ''}` },
       { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') },
-      { key: 'expiresAt', label: 'Expires', render: (r) => (r.expiresAt ? formatDate(r.expiresAt) : '—') }
+      { key: 'expiresAt', label: 'Expires', render: (r) => (r.expiresAt ? formatDate(r.expiresAt) : '') }
     ],
     toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>New code</span></button>`,
     actions: (r) => act('toggle', r.id, r.isActive ? 'Disable' : 'Enable') + act('delete', r.id, 'Delete', 'danger'),
@@ -724,6 +763,103 @@ async function renderReports(c: HTMLElement) {
         .map(([s, n]) => `<div class="summary-row"><span>${titleCase(s)}</span><strong>${n}</strong></div>`)
         .join('')}
     </div>`;
+}
+
+/* ------------------------------- adverts ------------------------------- */
+const PLACEMENT_OPTIONS = [
+  { value: 'banner', label: 'Top banner' },
+  { value: 'popup', label: 'Pop-up' },
+  { value: 'section', label: 'Sponsored section' }
+];
+const MEDIA_TYPE_OPTIONS = [
+  { value: 'image', label: 'Image' },
+  { value: 'video', label: 'Video' },
+  { value: 'link', label: 'External link' },
+  { value: 'none', label: 'Text only' }
+];
+
+async function renderAds(c: HTMLElement) {
+  const res = await apiRequest('/ads?all=true');
+  const ads: Ad[] = res.success ? res.data : [];
+  c.innerHTML = `
+    <div class="toolbar">
+      <div class="spacer"></div>
+      <button class="btn btn-sm btn-ghost" id="resetAds" data-tip="Clear dismissed-ads memory on this device">${icon('rotate-ccw')}<span>Reset dismissals</span></button>
+      <button class="btn btn-sm" id="newAd">${icon('plus')}<span>New advert</span></button>
+    </div>
+    <div class="card">${await platformAdsHtml()}</div>`;
+  (document.getElementById('newAd') as HTMLElement).onclick = () => adModal(null, () => renderAds(c));
+  (document.getElementById('resetAds') as HTMLElement).onclick = () => {
+    resetDismissedAds();
+    toast('Dismissed adverts cleared', 'success');
+  };
+  c.querySelectorAll('[data-ad-edit]').forEach((b) =>
+    b.addEventListener('click', () => adModal(ads.find((a) => a.id === (b as HTMLElement).dataset.adEdit), () => renderAds(c)))
+  );
+  c.querySelectorAll('[data-ad-del]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      if (await confirmDialog('Delete this advert?', { danger: true, confirmLabel: 'Delete' })) {
+        await apiRequest(`/ads/${(b as HTMLElement).dataset.adDel}`, { method: 'DELETE' });
+        toast('Advert deleted', 'success');
+        renderAds(c);
+      }
+    })
+  );
+}
+
+function adModal(row: Ad | null | undefined, reload: () => void) {
+  const placements = row?.placements || ['banner'];
+  const mediaType = row?.mediaType || 'image';
+  const isVideo = mediaType === 'video';
+  return openModal({
+    title: row ? 'Edit advert' : 'New advert',
+    wide: true,
+    fields: [
+      { name: 'title', label: 'Title', required: true, value: row?.title },
+      { name: 'body', label: 'Message', type: 'textarea', value: row?.body },
+      { name: 'mediaType', label: 'Media type', type: 'select', options: MEDIA_TYPE_OPTIONS, value: mediaType },
+      {
+        name: 'mediaUrl',
+        label: isVideo ? 'Video' : 'Image',
+        type: isVideo ? 'video' : 'image',
+        folder: 'ads',
+        value: row?.mediaUrl,
+        help: 'Upload a file, or switch Media type to "External link" and paste a URL below.'
+      },
+      { name: 'linkUrl', label: 'Link URL', value: row?.linkUrl, help: 'Where the call-to-action button points.' },
+      { name: 'ctaLabel', label: 'Button label', value: row?.ctaLabel, placeholder: 'Learn more' },
+      {
+        name: 'audience',
+        label: 'Audience',
+        type: 'select',
+        options: [{ value: 'all', label: 'Everyone' }, ...ROLE_OPTIONS],
+        value: row?.audience || 'all'
+      },
+      { name: 'priority', label: 'Priority', type: 'number', value: row?.priority ?? 0, help: 'Higher shows first.' },
+      { name: 'dismissible', label: 'Dismissible', type: 'checkbox', value: row ? row.dismissible !== false : true },
+      { name: 'isActive', label: 'Active', type: 'checkbox', value: row ? row.isActive !== false : true },
+      { name: 'startsAt', label: 'Starts', type: 'date', value: row?.startsAt ? String(row.startsAt).slice(0, 10) : '' },
+      { name: 'endsAt', label: 'Ends', type: 'date', value: row?.endsAt ? String(row.endsAt).slice(0, 10) : '' }
+    ],
+    html: `<div class="form-group"><label>Placements</label><div>${PLACEMENT_OPTIONS.map(
+      (p) =>
+        `<label class="checkbox-inline"><input type="checkbox" name="placement_${p.value}" data-placement value="${p.value}" ${
+          placements.includes(p.value as any) ? 'checked' : ''
+        } /> ${esc(p.label)}</label>`
+    ).join('')}</div><p class="empty" style="font-size:12px">Where the advert appears. Pick one or more.</p></div>`,
+    onSubmit: async (v) => {
+      const chosen = Array.from(
+        document.querySelectorAll<HTMLInputElement>('[data-placement]:checked')
+      ).map((el) => el.value);
+      const payload: any = { ...v, placements: chosen.length ? chosen : ['banner'] };
+      const res = row
+        ? await apiRequest(`/ads/${row.id}`, { method: 'PUT', body: JSON.stringify(payload) })
+        : await apiRequest('/ads', { method: 'POST', body: JSON.stringify(payload) });
+      if (!res.success) throw new Error(res.message || 'Failed');
+      toast(row ? 'Advert updated' : 'Advert created', 'success');
+      reload();
+    }
+  });
 }
 
 /* ---------------------------- announcements ---------------------------- */

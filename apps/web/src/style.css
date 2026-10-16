@@ -1900,3 +1900,385 @@ svg.chart {
     display: none;
   }
 }
+
+/* ---------- File uploads ---------- */
+.upload-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  background: var(--grey-50);
+}
+
+[data-theme="dark"] .upload-group {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.upload-single-preview,
+.upload-multi-preview {
+  margin-bottom: 10px;
+}
+
+.upload-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 240px;
+  height: 140px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  border: 1px dashed var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+}
+
+.upload-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.upload-empty svg {
+  width: 30px;
+  height: 30px;
+}
+
+.upload-file-chip {
+  display: inline-flex;
+  color: var(--brand);
+}
+
+.upload-file-chip svg {
+  width: 34px;
+  height: 34px;
+}
+
+.upload-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.upload-url {
+  flex: 1;
+  min-width: 180px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13px;
+}
+
+.upload-status {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-height: 14px;
+}
+
+.upload-status.error {
+  color: var(--danger);
+}
+
+.upload-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.upload-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 26px 6px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  max-width: 220px;
+}
+
+.upload-item-thumb {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--grey-100);
+}
+
+.upload-item-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.upload-item-name {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-item-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 0;
+  display: inline-flex;
+}
+
+.upload-item-remove:hover {
+  color: var(--danger);
+}
+
+.upload-item-remove svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---------- Cell + profile media ---------- */
+.cell-media {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cell-thumb,
+.profile-avatar {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--grey-100);
+  color: var(--text-secondary);
+}
+
+.profile-avatar {
+  width: 64px;
+  height: 64px;
+}
+
+.cell-thumb img,
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cell-thumb svg,
+.profile-avatar svg {
+  width: 18px;
+  height: 18px;
+}
+
+.profile-head {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.doc-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.doc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--text-primary);
+  text-decoration: none;
+  background: var(--surface);
+}
+
+.doc-chip:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.checkbox-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 16px;
+  font-size: 14px;
+}
+
+/* ---------- Adverts ---------- */
+.ad-banner-slot:empty {
+  display: none;
+}
+
+.ad-banner-slot:not(:empty) {
+  padding: 16px 24px 4px;
+}
+
+.ad-banner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 44px 14px 16px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--brand);
+  border-radius: var(--radius-md);
+  background: linear-gradient(90deg, var(--netmark-red-soft), var(--surface));
+  overflow: hidden;
+}
+
+[data-theme="dark"] .ad-banner {
+  background: linear-gradient(90deg, rgba(229, 9, 20, 0.18), var(--surface));
+}
+
+.ad-media {
+  width: 96px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  flex: none;
+  background: var(--grey-100);
+}
+
+.ad-banner-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.ad-banner-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.ad-banner-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.ad-cta {
+  margin-top: 8px;
+}
+
+.ad-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 4px;
+  display: inline-flex;
+  border-radius: 50%;
+}
+
+.ad-close:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--text-primary);
+}
+
+.ad-close svg {
+  width: 16px;
+  height: 16px;
+}
+
+.ad-section {
+  margin-top: 20px;
+}
+
+.ad-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.ad-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.ad-card {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+.ad-card .ad-media {
+  width: 100%;
+  height: 150px;
+}
+
+.ad-card-body {
+  padding: 14px;
+}
+
+.ad-card-title {
+  font-weight: 600;
+}
+
+.ad-card-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.ad-popup-overlay {
+  z-index: 1100;
+}
+
+.ad-popup {
+  max-width: 480px;
+  margin-top: 10vh;
+}
+
+.ad-popup-media {
+  width: 100%;
+  height: auto;
+  max-height: 300px;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 720px) {
+  .ad-banner {
+    margin: 0 12px;
+  }
+
+  .ad-media {
+    width: 64px;
+    height: 48px;
+  }
+}
+

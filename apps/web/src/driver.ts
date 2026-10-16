@@ -6,9 +6,9 @@ import { icon } from './icons';
 import { chartCard, donutChart, barChart, ChartPoint } from './charts';
 
 function addressOf(value: any): string {
-  if (!value) return '—';
+  if (!value) return '';
   if (typeof value === 'string') return value;
-  return value.line1 || value.street || value.address || [value.suburb, value.city].filter(Boolean).join(', ') || '—';
+  return value.line1 || value.street || value.address || [value.suburb, value.city].filter(Boolean).join(', ') || '';
 }
 
 function tableSimple(headers: string[], rows: string[][]) {
@@ -187,7 +187,7 @@ async function manageDelivery(order: any, ctx: any) {
           <div><span class="detail-label">Status</span><span>${statusBadge(order.orderStatus)}</span></div>
           <div><span class="detail-label">Delivery</span><span>${statusBadge(order.deliveryStatus)}</span></div>
           <div><span class="detail-label">Address</span><span>${esc(addressOf(order.address))}</span></div>
-          <div><span class="detail-label">OTP</span><span>${esc(order.deliveryOtp || '—')}</span></div>
+          <div><span class="detail-label">OTP</span><span>${esc(order.deliveryOtp || '')}</span></div>
         </div>
         ${
           order.deliveryStatus === 'delivered'
@@ -259,35 +259,48 @@ async function earnings(c: HTMLElement) {
     <div class="card"><h3>${icon('receipt')} Earnings history</h3>${tableSimple(
       ['Order', 'Amount', 'Status', 'Date'],
       list.map((e: any) => [
-        esc(e.orderId || '—'),
+        esc(e.orderId || ''),
         money(e.amount),
         statusBadge(e.status),
-        e.createdAt ? new Date(e.createdAt).toLocaleDateString() : '—'
+        e.createdAt ? new Date(e.createdAt).toLocaleDateString() : ''
       ])
     )}</div>`;
 }
 
 async function profile(c: HTMLElement) {
+  const docs = Array.isArray(driver.documents) ? driver.documents : [];
   c.innerHTML = `
     <div class="card">
       <h3>Driver profile</h3>
-      <div class="detail-grid">
-        <div><span class="detail-label">Vehicle type</span><span>${esc(driver.vehicleType || '—')}</span></div>
-        <div><span class="detail-label">Vehicle number</span><span>${esc(driver.vehicleNumber || '—')}</span></div>
-        <div><span class="detail-label">Model</span><span>${esc(driver.vehicleModel || '—')}</span></div>
-        <div><span class="detail-label">Licence no.</span><span>${esc(driver.licenseNumber || '—')}</span></div>
+      <div class="profile-head">
+        <span class="profile-avatar">${driver.profileImage ? `<img src="${esc(driver.profileImage)}" alt="" />` : icon('truck')}</span>
+        <div class="detail-grid">
+          <div><span class="detail-label">Vehicle type</span><span>${esc(driver.vehicleType || '')}</span></div>
+          <div><span class="detail-label">Vehicle number</span><span>${esc(driver.vehicleNumber || '')}</span></div>
+          <div><span class="detail-label">Model</span><span>${esc(driver.vehicleModel || '')}</span></div>
+          <div><span class="detail-label">Licence no.</span><span>${esc(driver.licenseNumber || '')}</span></div>
+        </div>
       </div>
+      ${
+        docs.length
+          ? `<div class="doc-list">${docs
+              .map((d: any) => `<a class="doc-chip" href="${esc(d.url)}" target="_blank" rel="noopener">${icon('file-text')}<span>${esc(d.name || 'Document')}</span></a>`)
+              .join('')}</div>`
+          : ''
+      }
       <button class="btn btn-sm" id="editVehicle" style="margin-top:16px">${icon('pencil')}<span>Edit vehicle details</span></button>
     </div>`;
   (document.getElementById('editVehicle') as HTMLElement).onclick = () =>
     openModal({
       title: 'Edit vehicle details',
       fields: [
+        { name: 'profileImage', label: 'Profile photo', type: 'image', folder: 'drivers', value: driver.profileImage },
         { name: 'vehicleType', label: 'Vehicle type', value: driver.vehicleType },
         { name: 'vehicleNumber', label: 'Vehicle number', value: driver.vehicleNumber },
         { name: 'vehicleModel', label: 'Vehicle model', value: driver.vehicleModel },
         { name: 'licenseNumber', label: 'Licence number', value: driver.licenseNumber },
-        { name: 'licenseExpiry', label: 'Licence expiry', type: 'date', value: driver.licenseExpiry }
+        { name: 'licenseExpiry', label: 'Licence expiry', type: 'date', value: driver.licenseExpiry ? String(driver.licenseExpiry).slice(0, 10) : '' },
+        { name: 'documents', label: 'Documents', type: 'documents', folder: 'drivers', value: driver.documents, help: 'Licence, ID and vehicle papers.' }
       ],
       onSubmit: async (v) => {
         const r = await apiRequest('/drivers/me', { method: 'PUT', body: JSON.stringify(v) });

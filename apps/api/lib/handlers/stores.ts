@@ -41,6 +41,8 @@ export default authed(async (req, res, ctx) => {
         store_owner_id: ctx.role === 'storeOwner' ? ctx.userId : req.body.storeOwnerId || null,
         distributor_id: req.body.distributorId || null,
         address: req.body.address || null,
+        logo: req.body.logo || null,
+        banner: req.body.banner || null,
         is_active: req.body.isActive !== false,
         settings: req.body.settings || {}
       })
@@ -66,7 +68,10 @@ export default authed(async (req, res, ctx) => {
     const b = req.body || {};
     const patch: any = {};
     for (const k of ['name', 'slug', 'address']) if (b[k] !== undefined) patch[k] = b[k];
+    if (b.logo !== undefined) patch.logo = b.logo;
+    if (b.banner !== undefined) patch.banner = b.banner;
     if (b.isActive !== undefined) patch.is_active = b.isActive;
+    if (b.documents !== undefined) patch.documents = Array.isArray(b.documents) ? b.documents : [];
     if (b.storeOwnerId !== undefined && (ctx.isPlatform || ctx.role === 'owner')) patch.store_owner_id = b.storeOwnerId || null;
     if (b.distributorId !== undefined && (ctx.isPlatform || ctx.role === 'owner')) patch.distributor_id = b.distributorId || null;
     if (b.settings !== undefined) patch.settings = { ...(before.settings || {}), ...b.settings };

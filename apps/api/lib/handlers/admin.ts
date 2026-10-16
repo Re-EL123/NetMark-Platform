@@ -94,7 +94,7 @@ export default authed(async (req, res, ctx) => {
     }
 
     if (!id && req.method === 'POST') {
-      const { name, email, phone, password, role, companyId, status } = req.body || {};
+      const { name, email, phone, password, role, companyId, status, profileImage } = req.body || {};
       if (!name || !email) return fail(res, 'Name and email are required');
       if (role && !ROLES.includes(role)) return fail(res, 'Invalid role');
       const pw = password || tempPassword();
@@ -114,6 +114,7 @@ export default authed(async (req, res, ctx) => {
           phone: phone || null,
           role: role || 'customer',
           company_id: companyId || null,
+          profile_image: profileImage || null,
           status: status || 'active',
           verification_status: 'verified'
         })
@@ -144,6 +145,7 @@ export default authed(async (req, res, ctx) => {
       const patch: any = {};
       for (const k of ['name', 'phone', 'notes']) if (b[k] !== undefined) patch[k] = b[k];
       if (b.email) patch.email = b.email;
+      if (b.profileImage !== undefined) patch.profile_image = b.profileImage;
       if (b.role && ROLES.includes(b.role)) patch.role = b.role;
       if (b.status) patch.status = b.status;
       if (b.verificationStatus) patch.verification_status = b.verificationStatus;

@@ -107,6 +107,7 @@ function stores(c: HTMLElement) {
           title: 'New store',
           fields: [
             { name: 'name', label: 'Store name', required: true },
+            { name: 'logo', label: 'Store logo', type: 'image', folder: 'stores' },
             { name: 'address', label: 'Address' }
           ],
           onSubmit: async (v) => {
@@ -122,6 +123,7 @@ function stores(c: HTMLElement) {
             title: 'Edit store',
             fields: [
               { name: 'name', label: 'Store name', value: rows.find((r) => r.id === id)?.name },
+              { name: 'logo', label: 'Store logo', type: 'image', folder: 'stores', value: rows.find((r) => r.id === id)?.logo },
               { name: 'address', label: 'Address', value: rows.find((r) => r.id === id)?.address }
             ],
             onSubmit: async (v) => {
@@ -186,8 +188,8 @@ function companies(c: HTMLElement) {
                 ${rows
                   .map(
                     (r) => `<tr>
-                  <td>${esc(r.companyName || r.companyId || '—')}</td>
-                  <td>${r.code ? badge(esc(r.code), 'info') : '<span class="empty">—</span>'}</td>
+                  <td>${esc(r.companyName || r.companyId || '')}</td>
+                  <td>${r.code ? badge(esc(r.code), 'info') : ''}</td>
                   <td>${statusB(r.status)}</td>
                   <td>${r.expiresAt ? formatDate(r.expiresAt) : '<span class="empty">Never</span>'}</td>
                   <td><div class="row-actions">

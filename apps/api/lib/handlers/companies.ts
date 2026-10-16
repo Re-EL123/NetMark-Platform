@@ -22,14 +22,14 @@ export default authed(async (req, res, ctx) => {
 
   if (slug.length === 0 && req.method === 'POST') {
     if (!ctx.isPlatform) return fail(res, 'Forbidden', 403);
-    const { name, slug: companySlug, plan, ownerId, address, settings } = req.body || {};
+    const { name, slug: companySlug, plan, ownerId, address, settings, logo } = req.body || {};
     if (!name) return fail(res, 'Name is required');
     const autoSlug =
       (companySlug || name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') ||
       `company-${Date.now()}`;
     const { data, error } = await sb
       .from('companies')
-      .insert({ name, slug: autoSlug, plan: plan || 'standard', owner_id: ownerId || null, settings: settings || {} })
+      .insert({ name, slug: autoSlug, plan: plan || 'standard', logo: logo || null, owner_id: ownerId || null, settings: settings || {} })
       .select('*')
       .single();
     if (error) {
@@ -59,6 +59,9 @@ export default authed(async (req, res, ctx) => {
     const b = req.body || {};
     const patch: any = {};
     for (const k of ['name', 'slug', 'plan']) if (b[k] !== undefined) patch[k] = b[k];
+    if (b.logo !== undefined) patch.logo = b.logo;
+    if (b.coverImage !== undefined) patch.cover_image = b.coverImage;
+    if (b.documents !== undefined) patch.documents = Array.isArray(b.documents) ? b.documents : [];
     if (b.settings !== undefined) patch.settings = { ...(before.settings || {}), ...b.settings };
     if (b.ownerId !== undefined && ctx.isPlatform) patch.owner_id = b.ownerId || null;
     if (b.status && ctx.isPlatform) patch.status = b.status;

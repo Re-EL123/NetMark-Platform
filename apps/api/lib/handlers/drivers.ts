@@ -43,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       if (path === 'me' && req.method === 'PUT') {
         if (!driver) return res.status(403).json({ success: false, message: 'Driver only' });
-        const { vehicleType, vehicleNumber, vehicleModel, licenseNumber, licenseExpiry, bankDetails } = req.body || {};
+        const { vehicleType, vehicleNumber, vehicleModel, licenseNumber, licenseExpiry, bankDetails, profileImage, documents } = req.body || {};
         const patch: any = {};
         if (vehicleType !== undefined) patch.vehicle_type = vehicleType;
         if (vehicleNumber !== undefined) patch.vehicle_number = vehicleNumber;
@@ -51,6 +51,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (licenseNumber !== undefined) patch.license_number = licenseNumber;
         if (licenseExpiry) patch.license_expiry = new Date(licenseExpiry).toISOString().slice(0, 10);
         if (bankDetails !== undefined) patch.bank_details = bankDetails;
+        if (profileImage !== undefined) patch.profile_image = profileImage;
+        if (documents !== undefined) patch.documents = Array.isArray(documents) ? documents : [];
         const { data } = await sb.from('drivers').update(patch).eq('id', driver.id).select('*').single();
         return res.status(200).json({ success: true, data: { driver: rowOut(data) } });
       }
@@ -293,6 +295,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         let q = sb.from('drivers').select('*').eq('id', slug[0]);
         if (user.role !== 'platformAdmin' && user.company_id) q = q.eq('company_id', user.company_id);
         const { data } = await q.maybeSingle();
+        if (!data) return res.status(404).json({ success: false, message: 'Not found' });
+        return res.status(200).json({ success: true, data: rowOut(data) });
+      }
+
+      if (slug.length === 1 && req.method === 'PUT') {
+        if (!isAdmin) return res.status(403).json({ success: false, message: 'Forbidden' });
+        const b = req.body || {};
+        const patch: any = {};
+        if (b.vehicleType !== undefined) patch.vehicle_type = b.vehicleType;
+        if (b.vehicleNumber !== undefined) patch.vehicle_number = b.vehicleNumber;
+        if (b.vehicleModel !== undefined) patch.vehicle_model = b.vehicleModel;
+        if (b.licenseNumber !== undefined) patch.license_number = b.licenseNumber;
+        if (b.licenseExpiry) patch.license_expiry = new Date(b.licenseExpiry).toISOString().slice(0, 10);
+        if (b.profileImage !== undefined) patch.profile_image = b.profileImage;
+        if (b.documents !== undefined) patch.documents = Array.isArray(b.documents) ? b.documents : [];
+        if (b.isAvailable !== undefined && user.role === 'platformAdmin') patch.is_available = !!b.isAvailable;
+        let q = sb.from('drivers').update(patch).eq('id', slug[0]);
+        if (user.role !== 'platformAdmin' && user.company_id) q = q.eq('company_id', user.company_id);
+        const { data } = await q.select('*').maybeSingle();
         if (!data) return res.status(404).json({ success: false, message: 'Not found' });
         return res.status(200).json({ success: true, data: rowOut(data) });
       }
