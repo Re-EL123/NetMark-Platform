@@ -173,13 +173,17 @@ export function icon(name: string, className = ''): string {
 }
 
 /**
- * Replace every `[data-icon]` placeholder under `root` with its SVG. Safe to
- * call repeatedly: rendered SVGs carry `data-lucide` (not `data-icon`), so they
- * are never processed twice.
+ * Replace every `[data-icon]` placeholder under `root` with its SVG.
+ *
+ * Lucide copies the placeholder's own `data-icon` attribute onto the generated
+ * `<svg>`, so we strip it afterwards. Without this, any later `iconify()` (or
+ * the `autoIconify` observer) would keep matching the rendered SVGs and loop
+ * forever.
  */
 export function iconify(root: Document | Element | DocumentFragment = document): void {
   try {
     createIcons({ icons: REGISTRY, nameAttr: 'data-icon', root, attrs: { 'stroke-width': '2' } });
+    root.querySelectorAll('svg[data-icon]').forEach((svg) => svg.removeAttribute('data-icon'));
   } catch {
     /* never let an icon failure break the UI */
   }
@@ -203,6 +207,7 @@ export function autoIconify(): void {
       m.addedNodes.forEach((node) => {
         if (node.nodeType !== 1) return;
         const el = node as Element;
+        if (el.matches?.('svg.lucide')) return;
         if (el.matches?.('[data-icon]')) iconify(el.parentElement || el);
         else if (el.querySelector?.('[data-icon]')) iconify(el);
       });
