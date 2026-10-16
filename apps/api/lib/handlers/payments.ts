@@ -12,6 +12,7 @@ import {
 } from '../http';
 import { recordAudit } from '../audit';
 import { notify } from '../notify';
+import { completeCodePurchase, completeStorePurchase } from '../purchases';
 import {
   payfastConfig,
   buildPaymentFields,
@@ -116,6 +117,7 @@ const authedHandler = authed(async (req, res, ctx) => {
       itemDescription: order.notes || 'NetMark order',
       paymentId: payment.id,
       orderId: order.id,
+      kind: 'order',
       nameFirst: first,
       nameLast: rest.join(' '),
       email: ctx.user.email,
@@ -199,68 +201,85 @@ async function handleItn(req: VercelRequest, res: VercelResponse) {
     }
 
     if (status === 'COMPLETE') {
-      const orderIdToUse = body.custom_str1 || payment?.order_id;
-      if (orderIdToUse) {
-        const { data: order } = await sb.from('orders').select('*').eq('id', orderIdToUse).maybeSingle();
-        if (order) {
-          const amountGross = Number(body.amount_gross || payment?.amount || 0);
-          const expected = Number(order.total || 0);
-          const amountOk = !amountGross || Math.abs(amountGross - expected) < 0.01;
-          if (amountOk) {
-            await sb
-              .from('orders')
-              .update({
-                payment_status: 'paid',
-                payment_method: 'payfast',
-                payment_ref: body.pf_payment_id || null,
-                order_status: order.order_status === 'pending' ? 'confirmed' : order.order_status
-              })
-              .eq('id', order.id);
-            if (order.customer_id) {
-              await notify({
-                userId: order.customer_id,
-                type: 'payment',
-                title: 'Payment received',
-                body: `We received your payment for order ${order.order_number || order.id}.`,
-                data: { orderId: order.id }
-              });
+      const kind = String(body.custom_str2 || '');
+      const relatedId = body.custom_str1 || payment?.order_id;
+      const amountGross = Number(body.amount_gross || payment?.amount || 0);
+
+      if (kind === 'code_purchase' && relatedId) {
+        const { data: cp } = await sb.from('code_purchases').select('*').eq('id', relatedId).maybeSingle();
+        if (cp && Math.abs(amountGross - Number(cp.price_zar || 0)) < 0.01) {
+          await completeCodePurchase(sb, relatedId, body.pf_payment_id || null);
+        } else if (cp) {
+          console.warn('PayFast ITN: code purchase amount mismatch', { amountGross, expected: cp.price_zar });
+        }
+      } else if (kind === 'store_purchase' && relatedId) {
+        const { data: sp } = await sb.from('store_purchases').select('*').eq('id', relatedId).maybeSingle();
+        if (sp && Math.abs(amountGross - Number(sp.price_zar || 0)) < 0.01) {
+          await completeStorePurchase(sb, relatedId, body.pf_payment_id || null);
+        } else if (sp) {
+          console.warn('PayFast ITN: store purchase amount mismatch', { amountGross, expected: sp.price_zar });
+        }
+      } else {
+        const orderIdToUse = body.custom_str1 || payment?.order_id;
+        if (orderIdToUse) {
+          const { data: order } = await sb.from('orders').select('*').eq('id', orderIdToUse).maybeSingle();
+          if (order) {
+            const expected = Number(order.total || 0);
+            const amountOk = !amountGross || Math.abs(amountGross - expected) < 0.01;
+            if (amountOk) {
+              await sb
+                .from('orders')
+                .update({
+                  payment_status: 'paid',
+                  payment_method: 'payfast',
+                  payment_ref: body.pf_payment_id || null,
+                  order_status: order.order_status === 'pending' ? 'confirmed' : order.order_status
+                })
+                .eq('id', order.id);
+              if (order.customer_id) {
+                await notify({
+                  userId: order.customer_id,
+                  type: 'payment',
+                  title: 'Payment received',
+                  body: `We received your payment for order ${order.order_number || order.id}.`,
+                  data: { orderId: order.id }
+                });
+              }
+            } else {
+              console.warn('PayFast ITN: amount mismatch', { amountGross, expected });
             }
-          } else {
-            console.warn('PayFast ITN: amount mismatch', { amountGross, expected });
           }
         }
-      }
-    }
 
-    // Wholesale purchases (store owner buying stock from their company) share
-    // the same ITN channel — custom_str1 carries the purchase id for these.
-    if (status === 'COMPLETE' && body.custom_str1) {
-      const { data: purchase } = await sb.from('purchases').select('*').eq('id', body.custom_str1).maybeSingle();
-      if (purchase && purchase.payment_status !== 'paid') {
-        const amountGross = Number(body.amount_gross || 0);
-        const expected = Number(purchase.total || 0);
-        const amountOk = !amountGross || Math.abs(amountGross - expected) < 0.01;
-        if (amountOk) {
-          await sb
-            .from('purchases')
-            .update({
-              payment_status: 'paid',
-              payment_method: 'payfast',
-              payment_ref: body.pf_payment_id || null,
-              status: purchase.status === 'pending' ? 'confirmed' : purchase.status
-            })
-            .eq('id', purchase.id);
-          if (purchase.store_owner_id) {
-            await notify({
-              userId: purchase.store_owner_id,
-              type: 'payment',
-              title: 'Payment received',
-              body: `We received your payment for purchase ${purchase.reference || purchase.id}.`,
-              data: { purchaseId: purchase.id }
-            });
+        // Wholesale purchases share the same ITN channel.
+        if (body.custom_str1) {
+          const { data: purchase } = await sb.from('purchases').select('*').eq('id', body.custom_str1).maybeSingle();
+          if (purchase && purchase.payment_status !== 'paid') {
+            const expected = Number(purchase.total || 0);
+            const amountOk = !amountGross || Math.abs(amountGross - expected) < 0.01;
+            if (amountOk) {
+              await sb
+                .from('purchases')
+                .update({
+                  payment_status: 'paid',
+                  payment_method: 'payfast',
+                  payment_ref: body.pf_payment_id || null,
+                  status: purchase.status === 'pending' ? 'confirmed' : purchase.status
+                })
+                .eq('id', purchase.id);
+              if (purchase.store_owner_id) {
+                await notify({
+                  userId: purchase.store_owner_id,
+                  type: 'payment',
+                  title: 'Payment received',
+                  body: `We received your payment for purchase ${purchase.reference || purchase.id}.`,
+                  data: { purchaseId: purchase.id }
+                });
+              }
+            } else {
+              console.warn('PayFast ITN: purchase amount mismatch', { amountGross, expected });
+            }
           }
-        } else {
-          console.warn('PayFast ITN: purchase amount mismatch', { amountGross, expected });
         }
       }
     }

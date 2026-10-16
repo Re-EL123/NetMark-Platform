@@ -1,5 +1,7 @@
 import { authed, ok, fail, slugOf, getSupabase, rowOut, rowsOut } from '../http';
 import { recordAudit } from '../audit';
+import { completeStorePurchase } from '../purchases';
+import { payfastConfig, buildPaymentFields } from '../payfast';
 
 export default authed(async (req, res, ctx) => {
   const sb = getSupabase();
@@ -40,12 +42,36 @@ export default authed(async (req, res, ctx) => {
   const id = slug[0];
   if (id && slug[1] === 'complete' && req.method === 'POST') {
     if (!isPlatform) return fail(res, 'Forbidden', 403);
-    const { data: p } = await sb.from('store_purchases').select('*').eq('id', id).maybeSingle();
-    if (!p) return fail(res, 'Not found', 404);
-    await sb.from('stores').update({ purchased: true, purchased_by: p.purchaser_id, purchased_at: new Date().toISOString(), is_for_sale: false, owned_by_company: p.company_id }).eq('id', p.store_id);
-    await sb.from('store_purchases').update({ status: 'completed', payment_status: 'paid' }).eq('id', id);
+    const done = await completeStorePurchase(sb, id);
+    if (!done) return fail(res, 'Not found', 404);
     await recordAudit(req, { action: 'store.purchase.complete', entityType: 'store_purchase', entityId: id });
     return ok(res, { message: 'Completed' });
+  }
+
+  if (id && slug[1] === 'payfast' && slug[2] === 'initiate' && req.method === 'POST') {
+    const { data: p } = await sb.from('store_purchases').select('*').eq('id', id).maybeSingle();
+    if (!p) return fail(res, 'Not found', 404);
+    if (p.purchaser_id !== ctx.userId && !isPlatform) return fail(res, 'Forbidden', 403);
+    if (p.payment_status === 'paid') return fail(res, 'This purchase is already paid');
+    const cfg = payfastConfig();
+    if (!cfg.configured) return fail(res, 'PayFast is not configured on the server.', 503);
+    const amount = Number(p.price_zar || 0);
+    if (amount <= 0) return fail(res, 'Purchase price is invalid');
+    const [first, ...rest] = String(ctx.user?.name || 'NetMark').split(' ');
+    const fields = buildPaymentFields({
+      amount,
+      itemName: `NetMark store ${p.store_name || p.id}`,
+      itemDescription: 'Store ownership purchase',
+      paymentId: p.id,
+      relatedId: p.id,
+      kind: 'store_purchase',
+      nameFirst: first,
+      nameLast: rest.join(' '),
+      email: ctx.user?.email,
+      cellNumber: ctx.user?.phone || undefined
+    });
+    await recordAudit(req, { action: 'store.purchase.payfast', entityType: 'store_purchase', entityId: p.id, companyId: p.company_id, metadata: { amount } });
+    return ok(res, { data: { paymentId: p.id, sandbox: cfg.sandbox, processUrl: cfg.processUrl, fields } });
   }
 
   return fail(res, 'Not found', 404);

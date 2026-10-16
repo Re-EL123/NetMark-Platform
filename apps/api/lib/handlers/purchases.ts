@@ -153,6 +153,7 @@ export default authed(async (req, res, ctx) => {
       itemDescription: purchase.notes || 'Wholesale restock',
       paymentId: purchase.id,
       orderId: purchase.id,
+      kind: 'purchase',
       nameFirst: first,
       nameLast: rest.join(' '),
       email: ctx.user?.email,

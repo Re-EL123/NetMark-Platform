@@ -141,7 +141,9 @@ export default authed(async (req, res, ctx) => {
     }
 
     const fee = orderType === 'pickup' ? 0 : await deliveryFee();
-    const total = subtotal + fee;
+    const vatRate = 0.15;
+    const vat = Math.round(subtotal * vatRate * 100) / 100;
+    const total = subtotal + fee + vat;
 
     const { data: order, error } = await sb
       .from('orders')
@@ -155,13 +157,19 @@ export default authed(async (req, res, ctx) => {
         order_status: 'pending',
         delivery_status: 'unassigned',
         subtotal,
+        subtotal_excl_vat: subtotal,
+        vat_rate: vatRate,
+        vat_amount: vat,
         delivery_fee: fee,
         total,
         payment_status: 'unpaid',
         items: lines,
         address: address || null,
         notes: notes || null,
-        order_type: orderType || 'delivery'
+        order_type: orderType || 'delivery',
+        cpa_disclosures_accepted: !!(req.body?.cpaDisclosuresAccepted || req.body?.disclosuresAccepted),
+        direct_marketing_optout: !!req.body?.directMarketingOptOut,
+        cooling_off_expires_at: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString()
       })
       .select('*')
       .single();

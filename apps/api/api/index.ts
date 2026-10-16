@@ -34,6 +34,7 @@ import analytics from '../lib/handlers/analytics';
 import apiKeys from '../lib/handlers/apiKeys';
 import webhooks from '../lib/handlers/webhooks';
 import featureFlags from '../lib/handlers/featureFlags';
+import cron from '../lib/handlers/cron';
 
 type Handler = (req: VercelRequest, res: VercelResponse) => unknown;
 
@@ -60,6 +61,7 @@ const handlers: Record<string, Handler> = {
   'api-keys': apiKeys,
   webhooks,
   'feature-flags': featureFlags,
+  cron,
   orders,
   drivers,
   appointments,

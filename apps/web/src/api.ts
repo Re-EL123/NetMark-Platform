@@ -56,3 +56,19 @@ export async function apiRequest(endpoint: string, options: RequestInit = {}) {
   });
   return res.json();
 }
+
+/** Submit a hidden form to PayFast with the fields returned by a payfast/initiate call. */
+export function submitPayFast(processUrl: string, fields: Record<string, string>) {
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = processUrl;
+  for (const [k, val] of Object.entries(fields || {})) {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = k;
+    input.value = String(val);
+    form.appendChild(input);
+  }
+  document.body.appendChild(form);
+  form.submit();
+}

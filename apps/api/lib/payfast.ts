@@ -125,6 +125,10 @@ export interface PaymentFieldInput {
   email?: string;
   cellNumber?: string;
   orderId?: string;
+  /** Explicit id placed in custom_str1 (defaults to orderId). */
+  relatedId?: string;
+  /** Entity kind placed in custom_str2, e.g. 'order', 'purchase', 'code_purchase', 'store_purchase'. */
+  kind?: string;
 }
 
 /**
@@ -147,7 +151,8 @@ export function buildPaymentFields(input: PaymentFieldInput): Record<string, str
     amount: Number(input.amount || 0).toFixed(2),
     item_name: input.itemName,
     item_description: input.itemDescription || '',
-    custom_str1: input.orderId || ''
+    custom_str1: input.relatedId || input.orderId || '',
+    custom_str2: input.kind || ''
   };
   const signature = signFields(fields, cfg.passphrase);
   return { ...fields, signature };

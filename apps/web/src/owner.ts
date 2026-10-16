@@ -1,4 +1,4 @@
-import { apiRequest } from './api';
+import { apiRequest, submitPayFast } from './api';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { crudView } from './crud';
@@ -682,7 +682,15 @@ async function codeMarket(c: HTMLElement) {
       if (!(await confirmDialog('Purchase this code?', { confirmLabel: 'Purchase' }))) return;
       const r = await apiRequest('/code-purchases', { method: 'POST', body: JSON.stringify({ codeId: id }) });
       if (!r.success) return toast(r.message || 'Could not purchase', 'error');
-      toast('Code purchased — awaiting payment confirmation', 'success');
+      const purchaseId = r.data?.id;
+      if (!purchaseId) return toast('Code purchased — awaiting payment confirmation', 'success');
+      const pay = await apiRequest(`/code-purchases/${purchaseId}/payfast/initiate`, { method: 'POST' });
+      if (!pay.success) {
+        toast(pay.message || 'Purchase saved — awaiting payment confirmation', 'info');
+        return;
+      }
+      toast('Redirecting to PayFast…', 'info');
+      submitPayFast(pay.data.processUrl, pay.data.fields);
     };
   });
 }
