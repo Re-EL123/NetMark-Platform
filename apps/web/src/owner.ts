@@ -768,40 +768,94 @@ async function billing(c: HTMLElement) {
   c.innerHTML = '<p class="empty">Loading plan…</p>';
   const [mine, catalog] = await Promise.all([
     apiRequest('/plans/my').catch(() => null),
-    apiRequest('/plans').catch(() => null)
+    apiRequest('/plans?isActive=true').catch(() => null)
   ]);
   const my: any = mine?.success ? mine.data : null;
   const plans: any[] = catalog?.success ? catalog.data || [] : [];
+  const ent = my?.entitlements || {};
+  const usage = my?.usage || {};
+  const planName = my?.planName || my?.plan?.name || 'Free';
+
   c.innerHTML = `
     <div class="card">
       <h3>${icon('credit-card')} Your current plan</h3>
-      ${
-        my
-          ? `${statCards([
-              { label: 'Plan', value: my.plan?.name || my.name || '—', format: 'text' },
-              { label: 'Base fee (ZAR)', value: Number(my.plan?.baseFeeZar ?? my.baseFeeZar ?? 0), format: 'money' },
-              { label: 'Per active distributor', value: Number(my.plan?.perActiveDistributorZar ?? my.perActiveDistributorZar ?? 0), format: 'money' },
-              { label: 'Price (ZAR)', value: Number(my.plan?.priceZar ?? my.priceZar ?? 0), format: 'money' }
-            ])}`
-          : '<p class="empty">No plan assigned yet. Contact the platform admin.</p>'
-      }
+      ${statCards([
+        { label: 'Plan', value: planName, format: 'text', accent: true, tone: 'brand' },
+        { label: 'Monthly price', value: Number(my?.plan?.baseFeeZar ?? my?.baseFeeZar ?? 0), format: 'money' },
+        { label: 'Commission depth', value: Number(ent.commissionLevels || 1) >= 3 ? '3 levels' : 'Level 1', format: 'text' },
+        { label: 'Payouts', value: ent.payouts ? 'Enabled' : 'Disabled', format: 'text' }
+      ])}
     </div>
     <div class="card">
-      <h3>${icon('layers')} Available plans</h3>
+      <h3>${icon('gauge')} Usage</h3>
+      ${tableSimple(
+        ['Resource', 'Used', 'Limit'],
+        [
+          ['Products', String(usage.products ?? 0), entValue(ent.maxProducts)],
+          ['Stores', String(usage.stores ?? 0), entValue(ent.maxStores)],
+          ['Team seats', String(usage.teamMembers ?? 0), entValue(ent.maxTeamMembers)],
+          ['Referral codes', String(usage.codes ?? 0), entValue(ent.maxCodes)]
+        ]
+      )}
+    </div>
+    <div class="card">
+      <h3>${icon('layers')} What your plan includes</h3>
+      ${tableSimple(
+        ['Feature', 'Included'],
+        entRows(ent)
+      )}
+    </div>
+    <div class="card">
+      <h3>${icon('tag')} Available plans</h3>
       ${plans.length
         ? tableSimple(
-            ['Plan', 'Tier', 'Base (ZAR)', 'Per distributor (ZAR)'],
+            ['Plan', 'Price / month', 'Highlights'],
             plans.map((p: any) => [
-              esc(p.name),
-              esc(p.tier || '—'),
+              `${esc(p.name)}${p.isDefault ? ' <span class="badge">default</span>' : ''}`,
               money(p.baseFeeZar || 0),
-              money(p.perActiveDistributorZar || 0)
+              esc(planHighlights(p.features || {}))
             ])
           )
         : '<p class="empty">No plans available.</p>'}
+      <p class="empty">Contact the platform admin to change your plan.</p>
     </div>`;
   iconify(c);
 }
+
+function entValue(max: unknown): string {
+  const n = Number(max);
+  if (!Number.isFinite(n)) return '—';
+  return n < 0 ? 'Unlimited' : String(n);
+}
+
+function entRows(ent: any): string[][] {
+  if (!ent || !Object.keys(ent).length) return [['—', '—']];
+  return [
+    ['Products', entValue(ent.maxProducts)],
+    ['Stores', entValue(ent.maxStores)],
+    ['Team seats', entValue(ent.maxTeamMembers)],
+    ['Referral codes', entValue(ent.maxCodes)],
+    ['Commission depth', Number(ent.commissionLevels) >= 3 ? '3 levels' : `Level ${ent.commissionLevels || 1}`],
+    ['Payouts', ent.payouts ? 'Yes' : 'No'],
+    ['Reports', ent.reports === 'full' ? 'Full' : 'Basic'],
+    ['Autoship', ent.autoship ? 'Yes' : 'No'],
+    ['White-label', ent.whiteLabel ? 'Yes' : 'No'],
+    ['API & webhooks', ent.api || ent.webhooks ? 'Yes' : 'No']
+  ];
+}
+
+function planHighlights(f: any): string {
+  const bits: string[] = [];
+  bits.push(`${entValue(f.maxProducts)} products`);
+  bits.push(`${entValue(f.maxStores)} stores`);
+  bits.push(Number(f.commissionLevels) >= 3 ? '3-level commissions' : 'Level-1 commissions');
+  if (f.payouts === true) bits.push('payouts');
+  if (f.whiteLabel === true) bits.push('white-label');
+  if (f.api === true || f.webhooks === true) bits.push('API');
+  if (f.autoship === true) bits.push('autoship');
+  return bits.join(' · ');
+}
+
 
 /* -------------------------------- wallet ------------------------------- */
 async function wallet(c: HTMLElement) {

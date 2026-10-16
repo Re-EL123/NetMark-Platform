@@ -1,6 +1,7 @@
 import { authed, ok, fail, slugOf, getSupabase, rowOut, rowsOut } from '../http';
 import { recordAudit } from '../audit';
 import { newWebhookSecret } from '../webhooks';
+import { entitlementsForCtx } from '../planLimits';
 
 const EVENTS = ['*', 'order.completed', 'order.created', 'commission.paid', 'payout.paid', 'customer.created'];
 
@@ -19,6 +20,10 @@ export default authed(async (req, res, ctx) => {
   if (slug.length === 0 && req.method === 'POST') {
     const url = String(req.body?.url || '').trim();
     if (!/^https:\/\//i.test(url)) return fail(res, 'A valid https:// URL is required');
+    if (!ctx.isPlatform) {
+      const ent = await entitlementsForCtx(sb, ctx);
+      if (!ent.webhooks) return fail(res, 'Webhooks are not included in your current plan. Upgrade to enable them.', 402);
+    }
     const events = Array.isArray(req.body?.events) && req.body.events.length ? req.body.events.filter((e: string) => EVENTS.includes(e)) : ['*'];
     if (!events.length) return fail(res, 'No valid events supplied');
     const secret = req.body?.secret ? String(req.body.secret) : newWebhookSecret();

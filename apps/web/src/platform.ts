@@ -1184,6 +1184,55 @@ async function renderPlatformCommission(c: HTMLElement) {
 }
 
 /* ------------------------------ plans ---------------------------------- */
+function planEntitlementFields(p: any = {}): any[] {
+  const f = p.features || {};
+  return [
+    { name: 'maxProducts', label: 'Max products', type: 'number', value: String(f.maxProducts ?? 10), help: '-1 = unlimited' },
+    { name: 'maxStores', label: 'Max stores', type: 'number', value: String(f.maxStores ?? 1), help: '-1 = unlimited' },
+    { name: 'maxTeamMembers', label: 'Max team seats', type: 'number', value: String(f.maxTeamMembers ?? 1), help: '-1 = unlimited' },
+    { name: 'maxCodes', label: 'Max referral codes', type: 'number', value: String(f.maxCodes ?? 3), help: '-1 = unlimited' },
+    {
+      name: 'commissionLevels',
+      label: 'Commission depth',
+      type: 'select',
+      value: String(f.commissionLevels ?? 1),
+      options: [
+        { value: '1', label: '1 level' },
+        { value: '2', label: '2 levels' },
+        { value: '3', label: '3 levels' }
+      ]
+    },
+    { name: 'reports', label: 'Reports', type: 'select', value: f.reports || 'basic', options: [{ value: 'basic', label: 'Basic' }, { value: 'full', label: 'Full' }] },
+    { name: 'payouts', label: 'Payouts (withdrawals)', type: 'checkbox', value: !!f.payouts },
+    { name: 'autoship', label: 'Autoship', type: 'checkbox', value: !!f.autoship },
+    { name: 'whiteLabel', label: 'White-label', type: 'checkbox', value: !!f.whiteLabel },
+    { name: 'api', label: 'API access', type: 'checkbox', value: !!f.api },
+    { name: 'webhooks', label: 'Webhooks', type: 'checkbox', value: !!f.webhooks }
+  ];
+}
+
+function planFeaturesFrom(v: any) {
+  return {
+    maxProducts: v.maxProducts === null ? -1 : Number(v.maxProducts),
+    maxStores: v.maxStores === null ? -1 : Number(v.maxStores),
+    maxTeamMembers: v.maxTeamMembers === null ? -1 : Number(v.maxTeamMembers),
+    maxCodes: v.maxCodes === null ? -1 : Number(v.maxCodes),
+    commissionLevels: Number(v.commissionLevels) || 1,
+    payouts: !!v.payouts,
+    reports: v.reports === 'full' ? 'full' : 'basic',
+    autoship: !!v.autoship,
+    whiteLabel: !!v.whiteLabel,
+    api: !!v.api,
+    webhooks: !!v.webhooks
+  };
+}
+
+function planLimit(r: any, key: string, fallback = 0): string {
+  const f = r.features || {};
+  const n = Number(f[key] ?? fallback);
+  return n < 0 ? 'Unlimited' : String(n);
+}
+
 function renderPlans(c: HTMLElement) {
   let plans: any[] = [];
   crudView(c, {
@@ -1194,9 +1243,12 @@ function renderPlans(c: HTMLElement) {
     columns: [
       { key: 'name', label: 'Name' },
       { key: 'slug', label: 'Slug' },
-      { key: 'tier', label: 'Tier' },
-      { key: 'baseFeeZar', label: 'Base (ZAR)', render: (r) => money(r.baseFeeZar || 0) },
-      { key: 'perActiveDistributorZar', label: 'Per dist (ZAR)', render: (r) => money(r.perActiveDistributorZar || 0) },
+      { key: 'baseFeeZar', label: 'Price / mo', render: (r) => money(r.baseFeeZar || 0) },
+      { key: 'maxProducts', label: 'Products', render: (r) => planLimit(r, 'maxProducts', 10) },
+      { key: 'maxStores', label: 'Stores', render: (r) => planLimit(r, 'maxStores', 1) },
+      { key: 'commissionLevels', label: 'Commission', render: (r) => `${Number((r.features || {}).commissionLevels ?? 1)}-level` },
+      { key: 'payouts', label: 'Payouts', render: (r) => ((r.features || {}).payouts ? 'Yes' : 'No') },
+      { key: 'isDefault', label: 'Default', render: (r) => (r.isDefault ? 'Yes' : 'No') },
       { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') }
     ],
     toolbar: () => `<button class="btn btn-sm" data-assign>${icon('building-2')}<span>Assign to company</span></button><button class="btn btn-sm" data-new>${icon('plus')}<span>New plan</span></button>`,
@@ -1205,14 +1257,29 @@ function renderPlans(c: HTMLElement) {
       (root.querySelector('[data-new]') as HTMLElement).onclick = async () => {
         await openModal({
           title: 'New plan',
+          wide: true,
           fields: [
             { name: 'name', label: 'Name', required: true },
-            { name: 'slug', label: 'Slug' },
-            { name: 'baseFeeZar', label: 'Base fee (ZAR)', type: 'number', step: '0.01' },
-            { name: 'perActiveDistributorZar', label: 'Per active distributor (ZAR)', type: 'number', step: '0.01' }
+            { name: 'slug', label: 'Slug', help: 'Leave blank to derive from the name' },
+            { name: 'baseFeeZar', label: 'Monthly fee (ZAR)', type: 'number', value: '0' },
+            ...planEntitlementFields({}),
+            { name: 'isDefault', label: 'Default plan for new companies', type: 'checkbox' },
+            { name: 'sortOrder', label: 'Sort order', type: 'number', value: '0' }
           ],
+          submitLabel: 'Create plan',
           onSubmit: async (v) => {
-            const res = await apiRequest('/plans', { method: 'POST', body: JSON.stringify(v) });
+            const res = await apiRequest('/plans', {
+              method: 'POST',
+              body: JSON.stringify({
+                name: v.name,
+                slug: v.slug || undefined,
+                baseFeeZar: v.baseFeeZar || 0,
+                features: planFeaturesFrom(v),
+                isDefault: !!v.isDefault,
+                sortOrder: v.sortOrder || 0,
+                isActive: true
+              })
+            });
             if (!res.success) throw new Error(res.message);
             toast('Plan created', 'success');
             reload();
@@ -1225,16 +1292,15 @@ function renderPlans(c: HTMLElement) {
         if (!companyOpts.length) return toast('No companies yet', 'error');
         await openModal({
           title: 'Assign plan to company',
+          wide: true,
           fields: [
             { name: 'companyId', label: 'Company', type: 'select', options: companyOpts, required: true },
-            { name: 'planId', label: 'Plan', type: 'select', options: plans.map((p) => ({ value: p.id, label: `${p.name}${p.tier ? ' (' + p.tier + ')' : ''}` })) },
-            { name: 'baseFeeZar', label: 'Override base fee (ZAR)', type: 'number', step: '0.01', help: 'Leave blank to use plan default' },
-            { name: 'perActiveDistributorZar', label: 'Override per-distributor (ZAR)', type: 'number', step: '0.01' }
+            { name: 'planId', label: 'Plan', type: 'select', options: plans.map((p) => ({ value: p.id, label: `${p.name} — ${money(p.baseFeeZar || 0)}/mo` })) },
+            { name: 'baseFeeZar', label: 'Override monthly fee (ZAR)', type: 'number', help: 'Leave blank to use the plan default' }
           ],
           onSubmit: async (v) => {
             const body: any = { companyId: v.companyId, planId: v.planId || null };
             if (v.baseFeeZar !== null && v.baseFeeZar !== '') body.baseFeeZar = v.baseFeeZar;
-            if (v.perActiveDistributorZar !== null && v.perActiveDistributorZar !== '') body.perActiveDistributorZar = v.perActiveDistributorZar;
             const res = await apiRequest('/plans/assign', { method: 'POST', body: JSON.stringify(body) });
             if (!res.success) throw new Error(res.message);
             toast('Plan assigned', 'success');
@@ -1247,17 +1313,28 @@ function renderPlans(c: HTMLElement) {
           if (!p) return;
           await openModal({
             title: 'Edit plan',
+            wide: true,
             fields: [
               { name: 'name', label: 'Name', value: p.name },
               { name: 'tier', label: 'Tier', value: p.tier || '' },
-              { name: 'baseFeeZar', label: 'Base fee (ZAR)', type: 'number', step: '0.01', value: String(p.baseFeeZar ?? 0) },
-              { name: 'perActiveDistributorZar', label: 'Per active distributor (ZAR)', type: 'number', step: '0.01', value: String(p.perActiveDistributorZar ?? 0) },
-              { name: 'isActive', label: 'Active', type: 'select', options: opts(['true', 'false']), value: String(!!p.isActive) }
+              { name: 'baseFeeZar', label: 'Monthly fee (ZAR)', type: 'number', value: String(p.baseFeeZar ?? 0) },
+              ...planEntitlementFields(p),
+              { name: 'isDefault', label: 'Default plan for new companies', type: 'checkbox', value: !!p.isDefault },
+              { name: 'sortOrder', label: 'Sort order', type: 'number', value: String(p.sortOrder ?? 0) },
+              { name: 'isActive', label: 'Active', type: 'checkbox', value: p.isActive !== false }
             ],
             onSubmit: async (v) => {
               const res = await apiRequest(`/plans/${id}`, {
                 method: 'PUT',
-                body: JSON.stringify({ ...v, isActive: v.isActive === 'true' })
+                body: JSON.stringify({
+                  name: v.name,
+                  tier: v.tier || undefined,
+                  baseFeeZar: v.baseFeeZar || 0,
+                  features: planFeaturesFrom(v),
+                  isDefault: !!v.isDefault,
+                  sortOrder: v.sortOrder || 0,
+                  isActive: !!v.isActive
+                })
               });
               if (!res.success) throw new Error(res.message);
               toast('Plan updated', 'success');

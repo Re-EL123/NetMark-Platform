@@ -1,7 +1,7 @@
 -- NetMark Platform — Supabase (Postgres) schema (COMPLETE)
 -- Run this in the Supabase SQL editor (Project → SQL Editor → New query).
 -- This single file builds the entire schema: the base tables plus migrations
--- 002 → 014 consolidated below. It is idempotent — safe to run repeatedly.
+-- 002 → 015 consolidated below. It is idempotent — safe to run repeatedly.
 -- (The same statements also live under supabase/migrations/ for reference.)
 -- The API talks to the database with the service_role key, so RLS is enabled
 -- with no policies (deny all) to keep the anon/authenticated keys locked out.
@@ -211,7 +211,7 @@ end;
 $$;
 
 -- ===========================================================================
--- Migrations 002 → 014 — consolidated below so this single file builds the
+-- Migrations 002 → 015 — consolidated below so this single file builds the
 -- complete schema. Every statement is idempotent and safe to re-run.
 -- ===========================================================================
 
@@ -620,12 +620,30 @@ create table if not exists public.store_purchases (
   updated_at timestamptz not null default now()
 );
 
-insert into public.plans (name, slug, tier, base_fee_zar, per_active_distributor_zar, min_distributors, max_distributors, features, is_active, is_default, sort_order)
+-- ---------------------------------------------------------------------------
+-- 015: company billing plans.
+-- Flat monthly fee per plan (`base_fee_zar`); `features` jsonb holds the
+-- entitlement set enforced by apps/api/lib/planLimits.ts (-1 = unlimited).
+-- Lineup: Free / Starter / Pro. Free is the default for unassigned companies.
+-- ---------------------------------------------------------------------------
+update public.plans set is_default = false where is_default = true;
+update public.plans set is_active = false where slug in ('growth', 'scale');
+
+insert into public.plans (name, slug, tier, base_fee_zar, per_active_distributor_zar, features, is_active, is_default, sort_order)
 values
-  ('Starter', 'starter', 'starter', 299, 1.50, 1, 500, '{"users":true,"stores":true,"codes":true}', true, true, 1),
-  ('Growth', 'growth', 'growth', 599, 1.00, 501, 2000, '{"users":true,"stores":true,"codes":true,"whiteLabel":true}', true, false, 2),
-  ('Scale', 'scale', 'scale', 999, 0.70, 2001, null, '{"users":true,"stores":true,"codes":true,"whiteLabel":true,"api":true}', true, false, 3)
-on conflict (slug) do nothing;
+  ('Free', 'free', 'free', 0, 0, '{"maxProducts":10,"maxStores":1,"maxTeamMembers":1,"maxCodes":3,"commissionLevels":1,"payouts":false,"reports":"basic","autoship":false,"whiteLabel":false,"api":false,"webhooks":false}', true, true, 1),
+  ('Starter', 'starter', 'starter', 299, 0, '{"maxProducts":100,"maxStores":5,"maxTeamMembers":10,"maxCodes":-1,"commissionLevels":3,"payouts":true,"reports":"full","autoship":true,"whiteLabel":false,"api":false,"webhooks":false}', true, false, 2),
+  ('Pro', 'pro', 'pro', 999, 0, '{"maxProducts":-1,"maxStores":-1,"maxTeamMembers":-1,"maxCodes":-1,"commissionLevels":3,"payouts":true,"reports":"full","autoship":true,"whiteLabel":true,"api":true,"webhooks":true}', true, false, 3)
+on conflict (slug) do update set
+  name = excluded.name,
+  tier = excluded.tier,
+  base_fee_zar = excluded.base_fee_zar,
+  per_active_distributor_zar = excluded.per_active_distributor_zar,
+  features = excluded.features,
+  is_active = true,
+  is_default = excluded.is_default,
+  sort_order = excluded.sort_order;
+
 
 -- ---------------------------------------------------------------------------
 -- 010: SA compliance, tenant, billing, consent, wallet, commissions, orders.

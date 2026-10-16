@@ -1,5 +1,6 @@
 import { authed, ok, fail, slugOf, getSupabase, rowOut, rowsOut } from '../http';
 import { recordAudit } from '../audit';
+import { entitlementsForCtx } from '../planLimits';
 
 export default authed(async (req, res, ctx) => {
   const sb = getSupabase();
@@ -30,6 +31,10 @@ export default authed(async (req, res, ctx) => {
   }
 
   if (slug[0] === 'withdraw' && req.method === 'POST') {
+    if (ctx.companyId) {
+      const ent = await entitlementsForCtx(sb, ctx);
+      if (!ent.payouts) return fail(res, 'Payouts are not included in your current plan. Upgrade to withdraw.', 402);
+    }
     const amount = Math.max(0, Number(req.body?.amountZar || 0));
     if (amount < 1) return fail(res, 'Invalid amount');
     const { data: w } = await sb.from('wallets').select('*').eq('user_id', ctx.userId).maybeSingle();

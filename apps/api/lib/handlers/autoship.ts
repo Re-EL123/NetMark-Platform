@@ -1,5 +1,6 @@
 import { authed, ok, fail, slugOf, getSupabase, rowOut, rowsOut } from '../http';
 import { recordAudit } from '../audit';
+import { getCompanyEntitlements } from '../planLimits';
 
 export default authed(async (req, res, ctx) => {
   const sb = getSupabase();
@@ -17,6 +18,13 @@ export default authed(async (req, res, ctx) => {
   if (slug.length === 0 && req.method === 'POST') {
     const { orderId, intervalDays, items } = req.body || {};
     if (!orderId) return fail(res, 'orderId required');
+    const { data: order } = await sb.from('orders').select('company_id').eq('id', orderId).maybeSingle();
+    if (order?.company_id) {
+      const { entitlements } = await getCompanyEntitlements(sb, order.company_id);
+      if (!entitlements.autoship) {
+        return fail(res, 'Autoship is not available for this order. The store must upgrade to enable it.', 402);
+      }
+    }
     const next = new Date(Date.now() + (Number(intervalDays)||30)*86400000).toISOString();
     const { data, error } = await sb.from('autoship_subscriptions').insert({
       tenant_id: ctx.tenantId,

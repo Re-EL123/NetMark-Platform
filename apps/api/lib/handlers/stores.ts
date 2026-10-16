@@ -2,6 +2,7 @@ import { authed, ok, fail, slugOf, getSupabase, rowOut, rowsOut } from '../http'
 import { parseListQuery, runList } from '../paginate';
 import { hasPermission } from '../permissions';
 import { recordAudit } from '../audit';
+import { entitlementsForCtx, withinLimit, limitMessage } from '../planLimits';
 
 export default authed(async (req, res, ctx) => {
   const sb = getSupabase();
@@ -38,6 +39,16 @@ export default authed(async (req, res, ctx) => {
     if (!name) return fail(res, 'Name is required');
     const autoSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `store-${Date.now()}`;
     const company = ctx.isPlatform ? req.body.companyId || ctx.companyId : ctx.companyId;
+    if (company) {
+      const ent = await entitlementsForCtx(sb, ctx);
+      const { count } = await sb
+        .from('stores')
+        .select('id', { count: 'exact', head: true })
+        .eq('company_id', company);
+      if (!withinLimit(ent.maxStores, count || 0)) {
+        return fail(res, limitMessage('stores', ent.maxStores), 402);
+      }
+    }
     const { data, error } = await sb
       .from('stores')
       .insert({

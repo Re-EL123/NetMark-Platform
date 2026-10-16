@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { notify } from './notify';
+import { getCompanyEntitlements } from './planLimits';
 
 /**
  * Commission engine v2.
@@ -383,7 +384,10 @@ export async function payOrderCommissions(sb: SupabaseClient, order: any): Promi
   if (base <= 0) return 0;
 
   const cfg = await getCommissionConfig(sb, order.company_id);
-  const rates = [cfg.l1Percent, cfg.l2Percent, cfg.l3Percent];
+  // A company's plan caps how deep the retail override reaches (Free = level 1).
+  const { entitlements } = await getCompanyEntitlements(sb, order.company_id || null);
+  const depth = Math.max(1, Math.min(3, entitlements.commissionLevels));
+  const rates = [cfg.l1Percent, cfg.l2Percent, cfg.l3Percent].slice(0, depth);
   if (!rates.some((r) => r > 0)) return 0;
 
   const chain = await walkSponsors(sb, first, rates.length, order.customer_id);

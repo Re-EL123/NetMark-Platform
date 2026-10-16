@@ -1,4 +1,5 @@
 import { authed, ok, fail, slugOf, getSupabase } from '../http';
+import { entitlementsForCtx } from '../planLimits';
 
 // Best-effort metrics: any query against a not-yet-migrated table returns null
 // instead of failing the whole endpoint.
@@ -19,6 +20,15 @@ export default authed(async (req, res, ctx) => {
   const sb = getSupabase();
   const slug = slugOf(req);
   if (!ctx.isPlatform && !ctx.companyId && ctx.role !== 'owner') return fail(res, 'Forbidden', 403);
+
+  // The 'basic' reports entitlement exposes the overview only; the deeper
+  // cohort / LTV / retail analyses need the 'full' reports plan.
+  if (!ctx.isPlatform && ['cohorts', 'ltv', 'retail'].includes(slug[0])) {
+    const ent = await entitlementsForCtx(sb, ctx);
+    if (ent.reports !== 'full') {
+      return fail(res, 'Advanced analytics are not included in your current plan. Upgrade to unlock them.', 402);
+    }
+  }
 
   function scope<T extends any>(q: T): any {
     if (ctx.isPlatform) return q;

@@ -3,6 +3,7 @@ import { parseListQuery, runList } from '../paginate';
 import { hasPermission } from '../permissions';
 import { recordAudit } from '../audit';
 import { validCompanyIdsForOwner, ZERO_UUID } from '../companyLinks';
+import { entitlementsForCtx, withinLimit, limitMessage } from '../planLimits';
 
 /**
  * Company product catalog.
@@ -52,6 +53,16 @@ export default authed(async (req, res, ctx) => {
     const { name, price, category, stock, sku, description, image, gallery, isActive } = req.body || {};
     if (!name) return fail(res, 'Name is required');
     const targetCompany = ctx.isPlatform ? req.body.companyId || null : ctx.companyId;
+    if (targetCompany) {
+      const ent = await entitlementsForCtx(sb, ctx);
+      const { count } = await sb
+        .from('products')
+        .select('id', { count: 'exact', head: true })
+        .eq('company_id', targetCompany);
+      if (!withinLimit(ent.maxProducts, count || 0)) {
+        return fail(res, limitMessage('products', ent.maxProducts), 402);
+      }
+    }
     const { data, error } = await sb
       .from('products')
       .insert({

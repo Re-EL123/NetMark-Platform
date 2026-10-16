@@ -1,6 +1,7 @@
 import { authed, ok, fail, slugOf, getSupabase, rowOut, rowsOut } from '../http';
 import { parseListQuery, runList } from '../paginate';
 import { recordAudit } from '../audit';
+import { getCompanyEntitlements } from '../planLimits';
 
 export default authed(async (req, res, ctx) => {
   const sb = getSupabase();
@@ -18,10 +19,31 @@ export default authed(async (req, res, ctx) => {
 
   if (slug[0] === 'my' && req.method === 'GET') {
     if (!ctx.companyId) return ok(res, { data: null });
+
+    const { entitlements, planName, planId } = await getCompanyEntitlements(sb, ctx.companyId);
+
+    const count = async (table: string) => {
+      const { count: c } = await sb
+        .from(table)
+        .select('id', { count: 'exact', head: true })
+        .eq('company_id', ctx.companyId);
+      return c || 0;
+    };
+    const [products, stores, teamMembers, codes] = await Promise.all([
+      count('products'),
+      count('stores'),
+      count('users'),
+      count('distributor_codes')
+    ]);
+
     const { data: cp } = await sb.from('companies_plans').select('*, plan:plans(*)').eq('company_id', ctx.companyId).maybeSingle();
-    if (!cp) return ok(res, { data: null });
-    return ok(res, { data: rowOut(cp) });
+    const data: any = cp ? rowOut(cp) : { plan: null };
+    if (cp?.plan) (data as any).plan = rowOut((cp as any).plan);
+    data.planName = planName;
+    data.planId = planId;
+    return ok(res, { data: { ...data, entitlements, usage: { products, stores, teamMembers, codes } } });
   }
+
 
   if (slug[0] === 'assign' && req.method === 'POST') {
     if (!isPlatform) return fail(res, 'Forbidden', 403);
@@ -42,7 +64,7 @@ export default authed(async (req, res, ctx) => {
   if (!canWrite) return fail(res, 'Forbidden', 403);
 
   if (slug.length === 0 && req.method === 'POST') {
-    const { name, slug: sl, tier, baseFeeZar, perActiveDistributorZar, minDistributors, maxDistributors, features, isActive } = req.body || {};
+    const { name, slug: sl, tier, baseFeeZar, perActiveDistributorZar, minDistributors, maxDistributors, features, isActive, isDefault, sortOrder } = req.body || {};
     if (!name) return fail(res, 'name required');
     const { data, error } = await sb.from('plans').insert({
       name,
@@ -53,7 +75,9 @@ export default authed(async (req, res, ctx) => {
       min_distributors: minDistributors ?? null,
       max_distributors: maxDistributors ?? null,
       features: features || {},
-      is_active: isActive !== false
+      is_active: isActive !== false,
+      is_default: isDefault === true,
+      sort_order: Number(sortOrder) || 0
     }).select('*').single();
     if (error) return fail(res, error.message);
     await recordAudit(req, { action: 'plan.create', entityType: 'plan', entityId: data.id, after: rowOut(data) });
@@ -75,9 +99,10 @@ export default authed(async (req, res, ctx) => {
     if (b.maxDistributors !== undefined) patch.max_distributors = b.maxDistributors;
     if (b.features !== undefined) patch.features = b.features;
     if (b.isActive !== undefined) patch.is_active = b.isActive;
-    if (b.sortOrder !== undefined) patch.sort_order = b.sortOrder;
+    if (b.isDefault !== undefined) patch.is_default = b.isDefault;
+    if (b.sortOrder !== undefined) patch.sort_order = Number(b.sortOrder) || 0;
     const { data: after } = await sb.from('plans').update(patch).eq('id', id).select('*').single();
-    await recordAudit(req, { action: 'plan.update', entityType: 'plan', entityId: id, after: rowOut(after) });
+    await recordAudit(req, { action: 'plan.update', entityType: 'plan', entityId: id, before: rowOut(before), after: rowOut(after) });
     return ok(res, { data: rowOut(after) });
   }
 

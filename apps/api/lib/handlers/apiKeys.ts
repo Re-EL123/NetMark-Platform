@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from 'crypto';
 import { authed, ok, fail, slugOf, getSupabase, rowOut, rowsOut } from '../http';
 import { recordAudit } from '../audit';
+import { entitlementsForCtx } from '../planLimits';
 
 function hash(key: string) {
   return createHash('sha256').update(key).digest('hex');
@@ -21,6 +22,10 @@ export default authed(async (req, res, ctx) => {
   if (slug.length === 0 && req.method === 'POST') {
     const name = String(req.body?.name || '').trim();
     if (!name) return fail(res, 'name is required');
+    if (!ctx.isPlatform) {
+      const ent = await entitlementsForCtx(sb, ctx);
+      if (!ent.api) return fail(res, 'API access is not included in your current plan. Upgrade to enable it.', 402);
+    }
     const scopes = Array.isArray(req.body?.scopes) && req.body.scopes.length ? req.body.scopes : ['read'];
     const raw = 'nm_' + randomBytes(24).toString('hex');
     const prefix = raw.slice(0, 11);

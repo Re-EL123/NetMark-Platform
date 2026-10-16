@@ -4,6 +4,7 @@ import { parseListQuery, runList } from '../paginate';
 import { hasPermission, ROLES } from '../permissions';
 import { recordAudit } from '../audit';
 import { rateLimit, rateLimitFail } from '../rateLimit';
+import { entitlementsForCtx, withinLimit, limitMessage } from '../planLimits';
 
 function tempPassword() {
   return 'Nm-' + crypto.randomBytes(6).toString('base64url') + '!9';
@@ -47,6 +48,17 @@ export default authed(async (req, res, ctx) => {
       return fail(res, 'You cannot create a user with that role', 403);
     }
     if (!ctx.isPlatform && !targetCompany) return fail(res, 'No company scope');
+
+    if (targetCompany) {
+      const ent = await entitlementsForCtx(sb, ctx);
+      const { count } = await sb
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('company_id', targetCompany);
+      if (!withinLimit(ent.maxTeamMembers, count || 0)) {
+        return fail(res, limitMessage('team members', ent.maxTeamMembers), 402);
+      }
+    }
 
     const pw = password || tempPassword();
     const { data: created, error: authErr } = await sb.auth.admin.createUser({

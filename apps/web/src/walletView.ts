@@ -9,12 +9,15 @@ import { icon, iconify } from './icons';
  */
 export async function renderWallet(c: HTMLElement) {
   c.innerHTML = '<p class="empty">Loading wallet…</p>';
-  const [w, ledger] = await Promise.all([
+  const [w, ledger, plan] = await Promise.all([
     apiRequest('/wallets/me').catch(() => null),
-    apiRequest('/wallets/ledger').catch(() => null)
+    apiRequest('/wallets/ledger').catch(() => null),
+    apiRequest('/plans/my').catch(() => null)
   ]);
   const wd: any = w?.success ? w.data : null;
   const rows: any[] = ledger?.success ? ledger.data || [] : [];
+  const planData: any = plan?.success ? plan.data : null;
+  const payoutsAllowed = !planData || planData.entitlements?.payouts !== false;
 
   c.innerHTML = `
     <div class="card">
@@ -25,7 +28,11 @@ export async function renderWallet(c: HTMLElement) {
         { label: 'Pending withdrawal (ZAR)', value: Number(wd?.pendingZar || 0), format: 'money', tone: 'warning' }
       ])}
       <div class="toolbar" style="margin-top:12px">
-        <button class="btn btn-sm" id="withdraw">${icon('banknote')}<span>Withdraw</span></button>
+        ${
+          payoutsAllowed
+            ? `<button class="btn btn-sm" id="withdraw">${icon('banknote')}<span>Withdraw</span></button>`
+            : `<p class="empty">Withdrawals are not included in your current plan. Upgrade to enable payouts.</p>`
+        }
       </div>
     </div>
     <div class="card">

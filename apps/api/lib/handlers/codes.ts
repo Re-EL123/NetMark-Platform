@@ -3,6 +3,7 @@ import { authed, ok, fail, slugOf, getSupabase, rowOut, rowsOut } from '../http'
 import { parseListQuery, runList } from '../paginate';
 import { hasPermission } from '../permissions';
 import { recordAudit } from '../audit';
+import { entitlementsForCtx, withinLimit, limitMessage } from '../planLimits';
 
 function makeCode(prefix = 'NM') {
   return `${prefix}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
@@ -88,6 +89,16 @@ export default authed(async (req, res, ctx) => {
     // distributor explicitly.
     const distributor = ['owner', 'storeOwner'].includes(ctx.role) ? ctx.userId : distributorId || null;
     const targetCompany = ctx.isPlatform ? companyId || null : ctx.companyId;
+    if (targetCompany) {
+      const ent = await entitlementsForCtx(sb, ctx);
+      const { count } = await sb
+        .from('distributor_codes')
+        .select('id', { count: 'exact', head: true })
+        .eq('company_id', targetCompany);
+      if (!withinLimit(ent.maxCodes, count || 0)) {
+        return fail(res, limitMessage('codes', ent.maxCodes), 402);
+      }
+    }
     const { data, error } = await sb
       .from('distributor_codes')
       .insert({
