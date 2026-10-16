@@ -191,6 +191,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .from('distributor_codes')
           .update({ uses: Number(codeRow.uses || 0) + 1 })
           .eq('id', codeRow.id);
+
+        // Store owners unlock companies through links (one per company). A
+        // signup code seeds the first link so their catalog is available.
+        if (role === 'storeOwner' && codeRow.company_id) {
+          const { error: linkErr } = await sb.from('company_links').upsert(
+            {
+              store_owner_id: uid,
+              company_id: codeRow.company_id,
+              code_id: codeRow.id,
+              code: codeRow.code,
+              is_active: true,
+              expires_at: codeRow.expires_at || null,
+              last_renewed_at: new Date().toISOString()
+            },
+            { onConflict: 'store_owner_id,company_id' }
+          );
+          if (linkErr) console.error('register company_link error', linkErr);
+        }
       }
 
       if (role === 'driver') {

@@ -27,6 +27,7 @@ function tableSimple(headers: string[], rows: string[][]) {
 const nav: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'stores', label: 'My Stores', capability: 'stores.read' },
+  { id: 'companies', label: 'Companies', capability: 'companies.link' },
   { id: 'catalog', label: 'Catalog', capability: 'products.read' },
   { id: 'listings', label: 'My Store Products', capability: 'products.read' },
   { id: 'purchases', label: 'Buy From Company', capability: 'orders.read' },
@@ -43,6 +44,7 @@ initPanel({
     ctx.titleEl.textContent = nav.find((n) => n.id === route)?.label || 'Business';
     if (route === 'dashboard') return dashboard(c);
     if (route === 'stores') return stores(c);
+    if (route === 'companies') return companies(c);
     if (route === 'catalog') return catalog(c);
     if (route === 'listings') return listings(c);
     if (route === 'purchases') return purchases(c);
@@ -119,6 +121,96 @@ function stores(c: HTMLElement) {
   });
 }
 
+function companies(c: HTMLElement) {
+  let rows: any[] = [];
+
+  const statusB = (s: string) =>
+    badge(titleCase(s || ''), s === 'active' ? 'success' : s === 'expired' ? 'danger' : 'neutral');
+
+  const load = async () => {
+    const res = await apiRequest('/company-links');
+    rows = (res.success && res.data) || [];
+    render();
+  };
+
+  const linkModal = (existing?: any) =>
+    openModal({
+      title: existing ? `Renew ${existing.companyName || 'company'}` : 'Link a company',
+      fields: [
+        {
+          name: 'code',
+          label: 'Company code',
+          required: true,
+          help: 'The code provided by the company. Linking unlocks its catalog and wholesale prices.'
+        }
+      ],
+      submitLabel: existing ? 'Renew link' : 'Link company',
+      onSubmit: async (v) => {
+        const res = await apiRequest('/company-links', { method: 'POST', body: JSON.stringify(v) });
+        if (!res.success) throw new Error(res.message || 'Failed to link company');
+        toast(existing ? 'Link renewed' : 'Company linked', 'success');
+        load();
+      }
+    });
+
+  function render() {
+    c.innerHTML = `
+      <div class="card">
+        <div class="row-actions" style="justify-content:flex-start">
+          <button class="btn btn-sm" id="linkCompany">+ Link a company</button>
+        </div>
+        <p class="empty">Enter a company's code to unlock its catalog and buy stock at wholesale. If a code expires or the company disables it, your listings from that company stay here but are hidden from customers until you link a valid code again.</p>
+      </div>
+      <div class="card"><h3>Linked companies</h3>
+        ${
+          rows.length
+            ? `<div class="table-wrap"><table><thead><tr><th>Company</th><th>Code</th><th>Status</th><th>Expires</th><th></th></tr></thead><tbody>
+                ${rows
+                  .map(
+                    (r) => `<tr>
+                  <td>${esc(r.companyName || r.companyId || '—')}</td>
+                  <td>${r.code ? badge(esc(r.code), 'info') : '<span class="empty">—</span>'}</td>
+                  <td>${statusB(r.status)}</td>
+                  <td>${r.expiresAt ? formatDate(r.expiresAt) : '<span class="empty">Never</span>'}</td>
+                  <td><div class="row-actions">
+                    ${act('renew', r.id, r.status === 'active' ? 'Renew' : 'Reactivate')}
+                    ${act('toggle', r.id, r.isActive ? 'Pause' : 'Resume')}
+                    ${act('unlink', r.id, 'Unlink', 'danger')}
+                  </div></td>
+                </tr>`
+                  )
+                  .join('')}
+              </tbody></table></div>`
+            : '<p class="empty">No companies linked yet.</p>'
+        }
+      </div>`;
+
+    (c.querySelector('#linkCompany') as HTMLElement).onclick = () => linkModal();
+    wire(c, {
+      toggle: async (id) => {
+        const row = rows.find((r) => r.id === id);
+        const res = await apiRequest(`/company-links/${id}`, { method: 'PUT', body: JSON.stringify({ isActive: !row?.isActive }) });
+        if (!res.success) return toast(res.message || 'Failed', 'error');
+        load();
+      },
+      unlink: async (id) => {
+        if (await confirmDialog('Unlink this company? Its products will be hidden from your storefront.', { danger: true, confirmLabel: 'Unlink' })) {
+          await apiRequest(`/company-links/${id}`, { method: 'DELETE' });
+          toast('Company unlinked', 'success');
+          load();
+        }
+      }
+    });
+    // renew needs the row, wire() only passes the id
+    c.querySelectorAll('[data-act="renew"]').forEach((b) => {
+      const el = b as HTMLElement;
+      el.onclick = () => linkModal(rows.find((r) => r.id === el.dataset.id));
+    });
+  }
+
+  load();
+}
+
 async function catalog(c: HTMLElement) {
   c.innerHTML = '<p class="empty">Loading catalog…</p>';
   const [prodRes, storeRes] = await Promise.all([apiRequest('/products?pageSize=100&isActive=true'), myStores()]);
@@ -127,7 +219,12 @@ async function catalog(c: HTMLElement) {
 
   const storeOpts = stores.map((s: any) => ({ value: s.id, label: s.name }));
   c.innerHTML = `
-    <div class="card"><p class="empty">These are products published by companies. Add them to one of your stores and set your own selling price.</p></div>
+    <div class="card"><p class="empty">These are products published by companies you are linked to. Add them to one of your stores and set your own selling price.</p></div>
+    ${
+      products.length
+        ? ''
+        : '<div class="card"><p class="empty">No products to show. Open the Companies tab and enter a company code to unlock its catalog.</p></div>'
+    }
     <div class="grid">
       ${products
         .map(
@@ -187,6 +284,7 @@ function listings(c: HTMLElement) {
       { key: 'price', label: 'Retail', render: (r) => money(r.price) },
       { key: 'basePrice', label: 'Company', render: (r) => money(r.basePrice) },
       { key: 'margin', label: 'Margin', render: (r) => badge(money(r.margin), Number(r.margin) > 0 ? 'success' : 'neutral') },
+      { key: 'companyLinked', label: 'Company link', render: (r) => (r.companyLinked ? statusBadge('active') : badge('Hidden — renew code', 'danger')) },
       { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') }
     ],
     actions: (r) => act('edit', r.id, 'Edit price') + act('toggle', r.id, r.isActive ? 'Hide' : 'Show') + act('remove', r.id, 'Remove', 'danger'),
@@ -227,15 +325,21 @@ function listings(c: HTMLElement) {
 function purchases(c: HTMLElement) {
   let stores: any[] = [];
   let products: any[] = [];
+  let companies: { id: string; name: string }[] = [];
 
   const load = async () => {
-    const [pRes, sRes, prRes] = await Promise.all([
+    const [pRes, sRes, prRes, clRes] = await Promise.all([
       apiRequest('/purchases'),
       myStores(),
-      apiRequest('/products?pageSize=200&isActive=true')
+      apiRequest('/products?pageSize=200&isActive=true'),
+      apiRequest('/company-links')
     ]);
     stores = sRes;
     products = (prRes.success && prRes.data) || [];
+    const links = (clRes.success && clRes.data) || [];
+    const nameById = new Map(links.map((l: any) => [l.companyId, l.companyName]));
+    const ids = [...new Set(products.map((p: any) => p.companyId).filter(Boolean))] as string[];
+    companies = ids.map((id) => ({ id, name: String(nameById.get(id) || 'Company') }));
     render((pRes.success && pRes.data) || []);
   };
 
@@ -247,7 +351,7 @@ function purchases(c: HTMLElement) {
       ${noStores ? '<div class="card"><p class="empty">Create a store first on the My Stores tab.</p></div>' : ''}
       ${
         !noStores && !linked
-          ? '<div class="card"><p class="empty">You are not linked to a company yet. Register or update your account with the referral code provided by the company to buy their products.</p></div>'
+          ? '<div class="card"><p class="empty">You have no linked companies. Open the Companies tab and enter a company code to buy its products.</p></div>'
           : ''
       }
       ${!noStores && linked ? builderHtml(storeOpts) : ''}
@@ -260,22 +364,16 @@ function purchases(c: HTMLElement) {
   }
 
   function builderHtml(storeOpts: string) {
+    const companyOpts = companies
+      .map((co) => `<option value="${esc(co.id)}">${esc(co.name)}</option>`)
+      .join('');
     return `
     <div class="card" id="buyCard">
-      <h3>Buy from your company</h3>
-      <p class="empty">Pick a store, choose products at the company (wholesale) price, then place the order. You keep the margin when you resell them.</p>
+      <h3>Buy from a company</h3>
+      <p class="empty">Pick a company and store, choose products at the company (wholesale) price, then place the order. You keep the margin when you resell them. One purchase order covers a single company.</p>
+      <div class="form-group"><label for="buyCompany">Company</label><select id="buyCompany">${companyOpts}</select></div>
       <div class="form-group"><label for="buyStore">Store</label><select id="buyStore">${storeOpts}</select></div>
-      <div class="table-wrap"><table><thead><tr><th>Product</th><th>Company price</th><th>Quantity</th></tr></thead><tbody>
-        ${products
-          .map(
-            (p: any) => `<tr>
-          <td>${esc(p.name)}${p.category ? ` <span class="empty">${esc(p.category)}</span>` : ''}</td>
-          <td>${money(p.price)}</td>
-          <td><input type="number" min="0" step="1" value="0" data-buy-qty="${esc(p.id)}" style="width:90px" /></td>
-        </tr>`
-          )
-          .join('')}
-      </tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>Product</th><th>Company price</th><th>Quantity</th></tr></thead><tbody id="buyRows"></tbody></table></div>
       <div class="form-group"><label for="buyNotes">Notes</label><input type="text" id="buyNotes" placeholder="Optional delivery notes" /></div>
       <div class="summary-row total"><span>Total</span><span id="buyTotal">${money(0)}</span></div>
       <button class="btn" id="placeBuy">Place purchase order</button>
@@ -305,6 +403,10 @@ function purchases(c: HTMLElement) {
   function wireBuilder() {
     const card = c.querySelector('#buyCard');
     if (!card) return;
+    const rowsEl = c.querySelector('#buyRows') as HTMLElement | null;
+    const companySel = c.querySelector('#buyCompany') as HTMLSelectElement | null;
+    if (!rowsEl || !companySel) return;
+
     const updateTotal = () => {
       let total = 0;
       c.querySelectorAll<HTMLInputElement>('[data-buy-qty]').forEach((inp) => {
@@ -315,7 +417,27 @@ function purchases(c: HTMLElement) {
       const el = c.querySelector('#buyTotal');
       if (el) el.textContent = money(total);
     };
-    c.querySelectorAll('[data-buy-qty]').forEach((inp) => inp.addEventListener('input', updateTotal));
+
+    const renderRows = () => {
+      const cid = companySel.value;
+      const list = products.filter((p: any) => p.companyId === cid);
+      rowsEl.innerHTML = list.length
+        ? list
+            .map(
+              (p: any) => `<tr>
+            <td>${esc(p.name)}${p.category ? ` <span class="empty">${esc(p.category)}</span>` : ''}</td>
+            <td>${money(p.price)}</td>
+            <td><input type="number" min="0" step="1" value="0" data-buy-qty="${esc(p.id)}" style="width:90px" /></td>
+          </tr>`
+            )
+            .join('')
+        : '<tr><td colspan="3" class="empty">No products available for this company.</td></tr>';
+      rowsEl.querySelectorAll('[data-buy-qty]').forEach((inp) => inp.addEventListener('input', updateTotal));
+      updateTotal();
+    };
+
+    companySel.onchange = renderRows;
+    renderRows();
 
     const place = c.querySelector('#placeBuy') as HTMLButtonElement | null;
     if (place) {

@@ -3,6 +3,7 @@ import { parseListQuery } from '../paginate';
 import { hasPermission } from '../permissions';
 import { recordAudit } from '../audit';
 import { storeIdsForUser } from '../scope';
+import { validCompanyIdsForOwner, validLinkKeysForOwners } from '../companyLinks';
 
 /**
  * Store product listings — the bridge between a company's catalog and the
@@ -46,7 +47,8 @@ async function decorate(sb: any, listings: any[]) {
       stock: p.stock ?? 0,
       productActive: p.is_active !== false,
       storeName: s.name,
-      storeActive: s.is_active !== false
+      storeActive: s.is_active !== false,
+      storeOwnerId: s.store_owner_id || null
     };
   });
 }
@@ -95,9 +97,23 @@ export default authed(async (req, res, ctx) => {
     let items = await decorate(sb, data || []);
 
     if (ctx.role === 'customer') {
-      items = items.filter((i) => i.isActive && i.productActive && i.storeActive);
+      // A listing is only shoppable while its store owner holds a valid link to
+      // the company that owns the product. If the company's code expired (or was
+      // disabled) the listing stays in the store owner's panel but is hidden here.
+      const ownerIds = [...new Set(items.map((i) => i.storeOwnerId).filter(Boolean))];
+      const valid = await validLinkKeysForOwners(sb, ownerIds);
+      items = items.filter(
+        (i) =>
+          i.isActive &&
+          i.productActive &&
+          i.storeActive &&
+          !!i.companyId &&
+          valid.has(`${i.storeOwnerId}:${i.companyId}`)
+      );
     } else if (ctx.role === 'storeOwner') {
       items = items.filter((i) => (ownedStoreIds || []).includes(i.storeId));
+      const linked = new Set(await validCompanyIdsForOwner(sb, ctx.userId));
+      items = items.map((i) => ({ ...i, companyLinked: i.companyId ? linked.has(i.companyId) : false }));
     }
     if (list.search) {
       const s = list.search.toLowerCase();
@@ -121,15 +137,12 @@ export default authed(async (req, res, ctx) => {
     if (!product) return fail(res, 'Product not found', 404);
     if (product.is_active === false) return fail(res, 'That product is not available');
 
-    // A store owner may only list products from the company they joined.
+    // A store owner may only list products from a company they hold a valid
+    // link to (i.e. they entered that company's code and it hasn't expired).
     if (ctx.role === 'storeOwner') {
-      if (!ctx.companyId) return fail(res, 'Join a company with a referral code before adding products', 403);
-      if (product.company_id && product.company_id !== ctx.companyId) {
-        return fail(res, 'That product belongs to another company', 403);
-      }
-      const { data: store } = await sb.from('stores').select('company_id').eq('id', storeId).maybeSingle();
-      if (store?.company_id && product.company_id && store.company_id !== product.company_id) {
-        return fail(res, 'That store is linked to a different company', 403);
+      const linked = await validCompanyIdsForOwner(sb, ctx.userId);
+      if (!product.company_id || !linked.includes(product.company_id)) {
+        return fail(res, 'Link that company with a valid code before listing its products', 403);
       }
     }
 

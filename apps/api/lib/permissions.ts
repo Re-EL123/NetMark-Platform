@@ -49,6 +49,7 @@ const OWNER_CAPS = [
 const STORE_OWNER_CAPS = [
   'stores.read',
   'stores.write',
+  'companies.link',
   'products.read',
   'orders.read',
   'orders.write',

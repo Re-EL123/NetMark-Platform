@@ -3,6 +3,7 @@ import { authed, ok, fail, slugOf, getSupabase, rowOut } from '../http';
 import { recordAudit } from '../audit';
 import { notify } from '../notify';
 import { payfastConfig, buildPaymentFields } from '../payfast';
+import { validCompanyIdsForOwner } from '../companyLinks';
 
 /**
  * Wholesale purchases — how a store owner restocks from the company they joined.
@@ -69,23 +70,31 @@ export default authed(async (req, res, ctx) => {
     const { storeId, items, notes } = req.body || {};
     if (!storeId) return fail(res, 'Store is required');
     if (!Array.isArray(items) || !items.length) return fail(res, 'At least one item is required');
-    if (!ctx.companyId) return fail(res, 'Join a company with a referral code before buying', 403);
 
     const { data: store } = await sb.from('stores').select('*').eq('id', storeId).maybeSingle();
     if (!store) return fail(res, 'Store not found', 404);
     if (ctx.role === 'storeOwner' && store.store_owner_id !== ctx.userId) return fail(res, 'Forbidden', 403);
+
+    // A store owner can only buy from companies they hold a valid link to.
+    const linked = ctx.isPlatform ? null : await validCompanyIdsForOwner(sb, ctx.userId);
 
     const productIds = items.map((i: any) => i.productId).filter(Boolean);
     const { data: products } = await sb.from('products').select('*').in('id', productIds);
     const prodMap = new Map((products || []).map((p: any) => [p.id, p]));
 
     const lines: any[] = [];
+    let purchaseCompanyId: string | null = null;
     for (const item of items) {
       const product: any = prodMap.get(item.productId);
       const qty = Math.max(1, Number(item.quantity || 1));
       if (!product) return fail(res, 'A selected product no longer exists', 404);
-      if (product.company_id && product.company_id !== ctx.companyId) {
-        return fail(res, `That product belongs to another company`, 403);
+      if (!product.company_id) return fail(res, 'That product is no longer available');
+      if (linked && !linked.includes(product.company_id)) {
+        return fail(res, 'Link that company with a valid code before buying its products', 403);
+      }
+      if (!purchaseCompanyId) purchaseCompanyId = product.company_id;
+      else if (purchaseCompanyId !== product.company_id) {
+        return fail(res, 'A purchase order can only contain products from one company');
       }
       const price = Number(product.price || 0);
       lines.push({
@@ -102,7 +111,7 @@ export default authed(async (req, res, ctx) => {
       .from('purchases')
       .insert({
         reference: makeReference(),
-        company_id: ctx.companyId,
+        company_id: purchaseCompanyId,
         store_id: storeId,
         store_owner_id: ctx.userId,
         items: lines,
@@ -115,9 +124,9 @@ export default authed(async (req, res, ctx) => {
       .select('*')
       .single();
     if (error || !data) return fail(res, 'Could not create purchase');
-    await recordAudit(req, { action: 'purchase.create', entityType: 'purchase', entityId: data.id, companyId: ctx.companyId, after: rowOut(data) });
-    if (ctx.companyId) {
-      const { data: owner } = await sb.from('users').select('id').eq('company_id', ctx.companyId).eq('role', 'owner').limit(1);
+    await recordAudit(req, { action: 'purchase.create', entityType: 'purchase', entityId: data.id, companyId: purchaseCompanyId, after: rowOut(data) });
+    if (purchaseCompanyId) {
+      const { data: owner } = await sb.from('users').select('id').eq('company_id', purchaseCompanyId).eq('role', 'owner').limit(1);
       for (const o of owner || []) {
         await notify({ userId: o.id, type: 'order', title: 'New purchase order', body: `${ctx.user?.name || 'A store'} placed purchase ${data.reference}.`, data: { purchaseId: data.id } });
       }

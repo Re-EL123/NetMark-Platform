@@ -2,6 +2,7 @@ import { authed, ok, fail, slugOf, getSupabase, rowOut, rowsOut } from '../http'
 import { parseListQuery, runList } from '../paginate';
 import { hasPermission } from '../permissions';
 import { recordAudit } from '../audit';
+import { validCompanyIdsForOwner, ZERO_UUID } from '../companyLinks';
 
 /**
  * Company product catalog.
@@ -15,15 +16,17 @@ export default authed(async (req, res, ctx) => {
   const slug = slugOf(req);
   const canWrite = ctx.isPlatform || ctx.role === 'owner';
 
+  // A store owner sees the catalog of every company they have a valid link to.
+  let linkedCompanyIds: string[] | null = null;
+  if (ctx.role === 'storeOwner') linkedCompanyIds = await validCompanyIdsForOwner(sb, ctx.userId);
+
   function scope(q: any) {
     if (ctx.isPlatform) return q;
     if (ctx.role === 'owner') return q.eq('company_id', ctx.companyId);
-    // Store owners only ever see the catalog of the company they joined with a
-    // referral code. Unlinked store owners see nothing.
     if (ctx.role === 'storeOwner') {
-      return ctx.companyId
-        ? q.eq('company_id', ctx.companyId)
-        : q.eq('id', '00000000-0000-0000-0000-000000000000');
+      return linkedCompanyIds && linkedCompanyIds.length
+        ? q.in('company_id', linkedCompanyIds)
+        : q.eq('id', ZERO_UUID);
     }
     return q;
   }
