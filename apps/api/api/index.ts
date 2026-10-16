@@ -21,6 +21,9 @@ import notifications from '../lib/handlers/notifications';
 import reviews from '../lib/handlers/reviews';
 import uploads from '../lib/handlers/uploads';
 import ads from '../lib/handlers/ads';
+import plans from '../lib/handlers/plans';
+import codePurchases from '../lib/handlers/codePurchases';
+import storePurchases from '../lib/handlers/storePurchases';
 
 type Handler = (req: VercelRequest, res: VercelResponse) => unknown;
 
@@ -34,6 +37,9 @@ const handlers: Record<string, Handler> = {
   purchases,
   'company-links': companyLinks,
   'company-changes': companyChanges,
+  plans,
+  'code-purchases': codePurchases,
+  'store-purchases': storePurchases,
   orders,
   drivers,
   appointments,
@@ -47,9 +53,7 @@ const handlers: Record<string, Handler> = {
   reviews,
   uploads,
   ads
-};
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+};export default async function handler(req: VercelRequest, res: VercelResponse) {
   // The vercel.json rewrite sends every /api/* request here while preserving
   // the original URL in req.url. We split it into a domain + remaining
   // segments and hand off to the matching domain handler with req.query.slug

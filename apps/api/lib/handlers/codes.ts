@@ -47,6 +47,9 @@ export default authed(async (req, res, ctx) => {
         company_id: targetCompany,
         max_uses: maxUses ?? null,
         expires_at: expiresAt || null,
+        price_zar: Number((req.body as any)?.priceZar || 0),
+        is_for_sale: !!(req.body as any)?.isForSale,
+        purchased: false,
         is_active: true
       })
       .select('*')
@@ -78,6 +81,8 @@ export default authed(async (req, res, ctx) => {
     if (b.maxUses !== undefined) patch.max_uses = b.maxUses;
     if (b.isActive !== undefined) patch.is_active = b.isActive;
     if (b.expiresAt !== undefined) patch.expires_at = b.expiresAt || null;
+    if (b.priceZar !== undefined) patch.price_zar = Number(b.priceZar || 0);
+    if (b.isForSale !== undefined) patch.is_for_sale = !!b.isForSale;
     const { data: after } = await sb.from('distributor_codes').update(patch).eq('id', id).select('*').single();
     await recordAudit(req, { action: 'code.update', entityType: 'distributor_code', entityId: id, after: rowOut(after) });
     return ok(res, { data: rowOut(after) });

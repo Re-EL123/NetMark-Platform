@@ -44,6 +44,9 @@ export default authed(async (req, res, ctx) => {
         logo: req.body.logo || null,
         banner: req.body.banner || null,
         is_active: req.body.isActive !== false,
+        price_zar: Number(req.body?.priceZar || 0),
+        is_for_sale: !!req.body?.isForSale,
+        purchased: false,
         settings: req.body.settings || {}
       })
       .select('*')
