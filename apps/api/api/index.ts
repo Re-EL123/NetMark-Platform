@@ -29,6 +29,7 @@ import dsar from '../lib/handlers/dsar';
 import wallets from '../lib/handlers/wallets';
 import commissions from '../lib/handlers/commissions';
 import payouts from '../lib/handlers/payouts';
+import autoship from '../lib/handlers/autoship';
 
 type Handler = (req: VercelRequest, res: VercelResponse) => unknown;
 
