@@ -2,7 +2,8 @@ import { supabase } from './supabase';
 import { apiRequest } from './api';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
-import { openModal, confirmDialog, toast, money } from './ui';
+import { openModal, confirmDialog, toast, money, emptyState } from './ui';
+import { icon } from './icons';
 
 interface CartLine {
   productId: string;
@@ -27,16 +28,18 @@ function setCart(lines: CartLine[]) {
 }
 
 const nav: NavItem[] = [
-  { id: 'catalog', label: 'Shop' },
-  { id: 'cart', label: 'Cart' },
-  { id: 'orders', label: 'My Orders' },
-  { id: 'appointments', label: 'Appointments' },
-  { id: 'profile', label: 'Profile' }
+  { id: 'catalog', label: 'Shop', icon: 'shopping-bag' },
+  { id: 'cart', label: 'Cart', icon: 'shopping-cart' },
+  { id: 'orders', label: 'My Orders', icon: 'receipt' },
+  { id: 'appointments', label: 'Appointments', icon: 'calendar-clock' },
+  { id: 'profile', label: 'Profile', icon: 'user' }
 ];
 
 initPanel({
   title: 'Shop',
   nav,
+  tourIntro:
+    'Browse products from every store, add them to your cart and check out. Products from different companies check out as separate orders.',
   render: async (route, ctx) => {
     ctx.titleEl.textContent = nav.find((n) => n.id === route)?.label || 'Shop';
     const c = ctx.container;
@@ -78,14 +81,14 @@ async function catalog(c: HTMLElement) {
       ? filtered
           .map(
             (l: any) => `<div class="product-card">
-          <div class="thumb">${l.image ? `<img src="${esc(l.image)}" alt="${esc(l.name)}">` : '🛍️'}</div>
+          <div class="thumb">${l.image ? `<img src="${esc(l.image)}" alt="${esc(l.name)}">` : icon('shopping-bag')}</div>
           <div class="body">
             <div class="name">${esc(l.name)}</div>
             <div class="desc">${esc(l.description || l.category || '')}</div>
             <div class="empty">${esc(l.storeName || '')}${l.companyName ? ` · ${esc(l.companyName)}` : ''}</div>
             <div class="price">${money(l.price, symbol)}</div>
             <button class="btn btn-sm" data-add="${esc(l.id)}" ${Number(l.stock) <= 0 ? 'disabled' : ''}>
-              ${Number(l.stock) <= 0 ? 'Out of stock' : 'Add to cart'}
+              ${Number(l.stock) <= 0 ? `${icon('ban')}<span>Out of stock</span>` : `${icon('shopping-cart')}<span>Add to cart</span>`}
             </button>
           </div>
         </div>`
@@ -139,7 +142,11 @@ function groupCart(lines: CartLine[]): CartGroup[] {
 async function cart(c: HTMLElement, ctx: any) {
   const lines = getCart();
   if (!lines.length) {
-    c.innerHTML = `<div class="card"><p class="empty">Your cart is empty.</p><button class="btn btn-sm" onclick="location.hash='catalog'">Browse products</button></div>`;
+    c.innerHTML = `<div class="card">${emptyState(
+      "Your cart is empty. Browse the shop to add products.",
+      'shopping-cart',
+      `<button class="btn btn-sm" onclick="location.hash='catalog'">${icon('shopping-bag')}<span>Browse products</span></button>`
+    )}</div>`;
     return;
   }
   const settingsRes = await apiRequest('/settings');
@@ -178,10 +185,10 @@ async function cart(c: HTMLElement, ctx: any) {
           return `<div class="cart-line" ${unavailable.has(i) ? 'style="opacity:.55"' : ''}>
         <div><div class="name">${esc(l.name)}${unavailable.has(i) ? ' <span class="empty">— currently unavailable from this store</span>' : ''}</div><div class="empty">${money(l.price, symbol)}</div></div>
         <div class="qty">
-          <button class="link-btn" data-dec="${i}">−</button>
+          <button class="link-btn" data-tip="Decrease" data-dec="${i}">${icon('minus')}</button>
           <span>${l.quantity}</span>
-          <button class="link-btn" data-inc="${i}">+</button>
-          <button class="link-btn danger" data-rm="${i}">Remove</button>
+          <button class="link-btn" data-tip="Increase" data-inc="${i}">${icon('plus')}</button>
+          <button class="link-btn danger" data-rm="${i}">${icon('trash-2')}<span>Remove</span></button>
         </div>
       </div>`;
         })
@@ -192,7 +199,9 @@ async function cart(c: HTMLElement, ctx: any) {
         <div class="summary-row"><span>Subtotal</span><span>${money(subtotal, symbol)}</span></div>
         <div class="summary-row"><span>Delivery</span><span>${money(deliveryFee, symbol)}</span></div>
         <div class="summary-row total"><span>Total</span><span>${money(total, symbol)}</span></div>
-        <button class="btn btn-sm" data-checkout="${gi}" style="margin-top:12px" ${groupUnavailable ? 'disabled title="Remove unavailable items to continue"' : ''}>Checkout${g.companyName ? ` ${esc(g.companyName)}` : ''}</button>
+        <button class="btn btn-sm" data-checkout="${gi}" style="margin-top:12px" ${groupUnavailable ? 'disabled title="Remove unavailable items to continue"' : ''}>${icon(
+          'credit-card'
+        )}<span>Checkout${g.companyName ? ` ${esc(g.companyName)}` : ''}</span></button>
       </div>`;
     })
     .join('');
@@ -211,7 +220,7 @@ async function cart(c: HTMLElement, ctx: any) {
     ${groupCards}
     ${
       hasUnavailable
-        ? '<div class="card"><button class="link-btn danger" id="rmUnavailable">Remove unavailable items</button></div>'
+        ? '<div class="card"><button class="link-btn danger" id="rmUnavailable">' + icon('trash-2') + '<span>Remove unavailable items</span></button></div>'
         : ''
     }`;
 
@@ -321,9 +330,9 @@ async function orders(c: HTMLElement, ctx: any) {
         </div>
         <div style="text-align:right">
           <div class="price">${money(o.total)}</div>
-          ${o.paymentStatus !== 'paid' && o.orderStatus !== 'cancelled' ? `<button class="btn btn-sm" data-pay="${esc(o.id)}">Pay</button>` : ''}
-          ${['pending', 'confirmed'].includes(o.orderStatus) ? `<button class="link-btn danger" data-cancel="${esc(o.id)}">Cancel</button>` : ''}
-          ${o.orderStatus === 'completed' ? `<button class="link-btn" data-review="${esc(o.id)}">Review</button>` : ''}
+          ${o.paymentStatus !== 'paid' && o.orderStatus !== 'cancelled' ? `<button class="btn btn-sm" data-pay="${esc(o.id)}">${icon('credit-card')}<span>Pay</span></button>` : ''}
+          ${['pending', 'confirmed'].includes(o.orderStatus) ? `<button class="link-btn danger" data-cancel="${esc(o.id)}">${icon('ban')}<span>Cancel</span></button>` : ''}
+          ${o.orderStatus === 'completed' ? `<button class="link-btn" data-review="${esc(o.id)}">${icon('star')}<span>Review</span></button>` : ''}
         </div>
       </div>`
               )
@@ -364,7 +373,7 @@ async function appointments(c: HTMLElement) {
   const rows = listRes.data || [];
   const stores = storesRes.data || [];
   c.innerHTML = `
-    <div class="toolbar"><div class="spacer"></div><button class="btn btn-sm" id="newAppt">+ Book appointment</button></div>
+    <div class="toolbar"><div class="spacer"></div><button class="btn btn-sm" id="newAppt">${icon('plus')}<span>Book appointment</span></button></div>
     <div class="card">
       ${tableSimple(
         ['Service', 'Date', 'Time', 'Status', ''],
@@ -373,7 +382,7 @@ async function appointments(c: HTMLElement) {
           formatDate(a.appointmentDate),
           esc(a.appointmentTime || ''),
           statusBadge(a.status),
-          ['pending', 'confirmed'].includes(a.status) ? `<button class="link-btn danger" data-cancel="${esc(a.id)}">Cancel</button>` : ''
+          ['pending', 'confirmed'].includes(a.status) ? `<button class="link-btn danger" data-cancel="${esc(a.id)}">${icon('ban')}<span>Cancel</span></button>` : ''
         ])
       )}
     </div>`;
@@ -417,8 +426,8 @@ async function profile(c: HTMLElement, ctx: any) {
         <div><span class="detail-label">Role</span><span>${badge(u.role, 'info')}</span></div>
       </div>
       <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn btn-sm" id="editProfile">Edit profile</button>
-        <button class="btn btn-sm btn-ghost" id="changePw">Change password</button>
+        <button class="btn btn-sm" id="editProfile">${icon('pencil')}<span>Edit profile</span></button>
+        <button class="btn btn-sm btn-ghost" id="changePw">${icon('refresh-cw')}<span>Change password</span></button>
       </div>
     </div>`;
   (document.getElementById('editProfile') as HTMLElement).onclick = () =>
@@ -448,7 +457,7 @@ async function profile(c: HTMLElement, ctx: any) {
 }
 
 function tableSimple(headers: string[], rows: string[][]) {
-  if (!rows.length) return '<p class="empty">No records.</p>';
+  if (!rows.length) return emptyState('No records.', 'inbox');
   return `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows
     .map((r) => `<tr>${r.map((cell) => `<td>${cell}</td>`).join('')}</tr>`)
     .join('')}</tbody></table></div>`;

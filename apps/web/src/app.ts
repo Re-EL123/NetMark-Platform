@@ -2,12 +2,17 @@ import { supabase } from './supabase';
 import { apiRequest } from './api';
 import { esc } from './render';
 import { toast, openModal } from './ui';
+import { icon, iconify, autoIconify } from './icons';
+import { initTooltips } from './tooltip';
+import { initMotion, animateIn } from './motion';
+import { startTour, hasSeenTour } from './tour';
 
 export interface NavItem {
   id: string;
   label: string;
   capability?: string;
   group?: string;
+  icon?: string;
 }
 
 export interface PanelContext {
@@ -24,6 +29,8 @@ export interface PanelContext {
 export interface PanelOptions {
   title: string;
   nav: NavItem[];
+  /** Optional extra copy for the first-time guided tour. */
+  tourIntro?: string;
   render: (id: string, ctx: PanelContext) => Promise<void> | void;
 }
 
@@ -100,6 +107,16 @@ async function refreshBadge() {
   updateBadge(res.success ? res.data?.length || res.meta?.unread || 0 : 0);
 }
 
+function applyTheme(theme: string) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('netmark_theme', theme);
+  const btn = document.getElementById('themeToggle');
+  if (btn) {
+    btn.innerHTML = icon(theme === 'dark' ? 'sun' : 'moon');
+    iconify(btn);
+  }
+}
+
 export async function initPanel(opts: PanelOptions) {
   if (!(await loadMe())) return;
 
@@ -109,22 +126,28 @@ export async function initPanel(opts: PanelOptions) {
       <aside class="sidebar">
         <div class="brand"><img src="${import.meta.env.BASE_URL}netmark-logo.png" alt="NetMark" /></div>
         <nav id="nav"></nav>
-        <div style="margin-top:auto">
-          <button id="themeToggle" class="icon-btn" title="Toggle theme" style="color:#fff">◐</button>
+        <div class="sidebar-foot">
+          <button id="themeToggle" class="icon-btn" data-tip="Toggle light / dark theme" data-tip-pos="right" title="Toggle theme" style="color:#fff">${icon('moon')}</button>
         </div>
       </aside>
       <div class="main">
         <header>
           <h1 id="pageTitle">${esc(opts.title)}</h1>
           <div class="user-meta">
-            <button id="notifBtn" class="icon-btn" title="Notifications">🔔<span id="notifCount" class="notif-count"></span></button>
+            <button id="helpBtn" class="icon-btn" data-tip="Take the tour" title="Take the tour">${icon('compass')}<span class="icon-glow"></span></button>
+            <button id="notifBtn" class="icon-btn" data-tip="Notifications" title="Notifications">${icon('bell')}<span id="notifCount" class="notif-count"></span></button>
             <span id="userName" class="name">${esc(user.name || user.email)}</span>
-            <button class="logout-btn" id="logoutBtn">Logout</button>
+            <button class="logout-btn" id="logoutBtn">${icon('log-out')}<span>Logout</span></button>
           </div>
         </header>
         <div class="content" id="content"></div>
       </div>
     </div>`;
+
+  initTooltips();
+  initMotion();
+  autoIconify();
+  iconify(document);
 
   const navEl = document.getElementById('nav') as HTMLElement;
   const content = document.getElementById('content') as HTMLElement;
@@ -132,8 +155,12 @@ export async function initPanel(opts: PanelOptions) {
 
   const visible = opts.nav.filter((n) => !n.capability || can(n.capability));
   navEl.innerHTML = visible
-    .map((n) => `<a href="#${n.id}" data-nav="${n.id}">${esc(n.label)}</a>`)
+    .map(
+      (n) =>
+        `<a href="#${n.id}" data-nav="${n.id}">${icon(n.icon || 'circle-dot')}<span>${esc(n.label)}</span></a>`
+    )
     .join('');
+  iconify(navEl);
 
   function currentRoute(): string {
     const hash = window.location.hash.replace('#', '');
@@ -161,7 +188,26 @@ export async function initPanel(opts: PanelOptions) {
     } catch (err: any) {
       content.innerHTML = `<div class="card"><p class="empty">Failed to load: ${esc(err?.message || 'error')}</p></div>`;
     }
+    iconify(content);
+    animateIn(content);
+    // Keep the active nav item in view on small screens.
+    try {
+      (navEl.querySelector('a.active') as HTMLElement | null)?.scrollIntoView({ block: 'nearest', inline: 'center' });
+    } catch {
+      /* ignore */
+    }
   }
+
+  const tourKey = `panel:${opts.title}`;
+  const launchTour = () => {
+    document.getElementById('helpBtn')?.classList.remove('pulse');
+    startTour({
+      key: tourKey,
+      title: opts.title,
+      intro: opts.tourIntro,
+      items: visible.map((n) => ({ id: n.id, label: n.label }))
+    });
+  };
 
   window.addEventListener('hashchange', () => run(currentRoute()));
   document.getElementById('logoutBtn')?.addEventListener('click', async () => {
@@ -170,18 +216,24 @@ export async function initPanel(opts: PanelOptions) {
     window.location.href = import.meta.env.BASE_URL;
   });
   document.getElementById('notifBtn')?.addEventListener('click', openNotifications);
+  document.getElementById('helpBtn')?.addEventListener('click', launchTour);
   document.getElementById('themeToggle')?.addEventListener('click', () => {
     const dark = document.documentElement.getAttribute('data-theme') === 'dark';
     const next = dark ? 'light' : 'dark';
-    document.documentElement.setAttribute('data-theme', next);
-    localStorage.setItem('netmark_theme', next);
+    applyTheme(next);
   });
 
   const savedTheme = localStorage.getItem('netmark_theme');
-  if (savedTheme) document.documentElement.setAttribute('data-theme', savedTheme);
+  if (savedTheme) applyTheme(savedTheme);
 
   await refreshBadge();
   await run(currentRoute());
+
+  // First-time guided tour for this panel.
+  if (!hasSeenTour(tourKey)) {
+    document.getElementById('helpBtn')?.classList.add('pulse');
+    setTimeout(launchTour, 700);
+  }
 }
 
 export { toast };

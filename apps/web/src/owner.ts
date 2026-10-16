@@ -2,7 +2,9 @@ import { apiRequest } from './api';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { crudView } from './crud';
-import { openModal, confirmDialog, toast, money, titleCase, statCards, Field } from './ui';
+import { openModal, confirmDialog, toast, money, titleCase, emptyState, Field } from './ui';
+import { icon } from './icons';
+import { overviewStats, renderOverviewCharts } from './dashboard';
 
 const ROLE_OPTIONS = ['storeOwner', 'driver', 'customer'].map((r) => ({
   value: r,
@@ -12,8 +14,27 @@ const ROLE_OPTIONS = ['storeOwner', 'driver', 'customer'].map((r) => ({
 function opts(values: string[]) {
   return values.map((v) => ({ value: v, label: titleCase(v) }));
 }
+const ACT_ICON: Record<string, string> = {
+  edit: 'pencil',
+  toggle: 'power',
+  remove: 'trash-2',
+  status: 'refresh-cw',
+  pay: 'credit-card',
+  cancel: 'ban',
+  approve: 'check',
+  reject: 'x',
+  assign: 'truck',
+  view: 'eye',
+  payout: 'wallet',
+  copy: 'external-link',
+  activate: 'power',
+  suspend: 'ban',
+  reset: 'refresh-cw'
+};
 function act(a: string, id: string, label: string, cls = '') {
-  return `<button data-act="${a}" data-id="${esc(id)}" class="${cls}">${esc(label)}</button>`;
+  return `<button data-act="${a}" data-id="${esc(id)}" class="${cls}">${icon(ACT_ICON[a] || 'circle-dot')}<span>${esc(
+    label
+  )}</span></button>`;
 }
 function wire(root: HTMLElement, handlers: Record<string, (id: string) => void>) {
   root.querySelectorAll('[data-act]').forEach((btn) => {
@@ -23,24 +44,26 @@ function wire(root: HTMLElement, handlers: Record<string, (id: string) => void>)
 }
 
 const nav: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'users', label: 'Team' },
-  { id: 'stores', label: 'Stores' },
-  { id: 'products', label: 'Products' },
-  { id: 'listings', label: 'Store Listings', capability: 'products.read' },
-  { id: 'purchases', label: 'Purchase Orders', capability: 'orders.read' },
-  { id: 'orders', label: 'Orders' },
-  { id: 'drivers', label: 'Drivers' },
-  { id: 'appointments', label: 'Appointments' },
-  { id: 'codes', label: 'Codes' },
-  { id: 'payouts', label: 'Payouts', capability: 'payouts.read' },
-  { id: 'reports', label: 'Reports' },
-  { id: 'settings', label: 'Settings' }
+  { id: 'dashboard', label: 'Dashboard', icon: 'layout-dashboard' },
+  { id: 'users', label: 'Team', icon: 'users' },
+  { id: 'stores', label: 'Stores', icon: 'store' },
+  { id: 'products', label: 'Products', icon: 'package' },
+  { id: 'listings', label: 'Store Listings', capability: 'products.read', icon: 'boxes' },
+  { id: 'purchases', label: 'Purchase Orders', capability: 'orders.read', icon: 'shopping-bag' },
+  { id: 'orders', label: 'Orders', icon: 'receipt' },
+  { id: 'drivers', label: 'Drivers', icon: 'truck' },
+  { id: 'appointments', label: 'Appointments', icon: 'calendar-clock' },
+  { id: 'codes', label: 'Codes', icon: 'ticket-percent' },
+  { id: 'payouts', label: 'Payouts', capability: 'payouts.read', icon: 'wallet' },
+  { id: 'reports', label: 'Reports', icon: 'bar-chart-3' },
+  { id: 'settings', label: 'Settings', icon: 'settings' }
 ];
 
 initPanel({
   title: 'Company Admin',
   nav,
+  tourIntro:
+    'Your company control room. Manage your team, stores, products, drivers, codes that unlock your catalog for store owners, and payouts.',
   render: async (route, ctx) => {
     ctx.titleEl.textContent = nav.find((n) => n.id === route)?.label || 'Company Admin';
     const c = ctx.container;
@@ -63,22 +86,23 @@ initPanel({
 async function dashboard(c: HTMLElement) {
   const [companyRes, reportRes] = await Promise.all([apiRequest('/companies'), apiRequest('/reports/overview')]);
   const company = companyRes.data?.[0];
-  const t = reportRes.success ? reportRes.data.totals : { revenue: 0, orders: 0, paidOrders: 0 };
+  if (!reportRes.success) {
+    c.innerHTML = emptyState(reportRes.message || 'Unable to load your dashboard.', 'alert-triangle');
+    return;
+  }
+  const d = reportRes.data;
   c.innerHTML = `
     ${company ? `<div class="card"><h2>${esc(company.name)}</h2><p>Company dashboard — manage your team, stores, products and orders.</p></div>` : ''}
-    ${statCards([
-      { label: 'Revenue', value: money(t.revenue), accent: true },
-      { label: 'Orders', value: t.orders },
-      { label: 'Paid orders', value: t.paidOrders }
-    ])}
-    <div class="card"><h3>Top products</h3>${tableSimple(
+    ${overviewStats(d)}
+    ${renderOverviewCharts(d)}
+    <div class="card"><h3>${icon('package')} Top products</h3>${tableSimple(
       ['Product', 'Qty', 'Revenue'],
-      (reportRes.data?.topProducts || []).map((p: any) => [esc(p.name), String(p.qty), money(p.revenue)])
+      (d.topProducts || []).map((p: any) => [esc(p.name), String(p.qty), money(p.revenue)])
     )}</div>`;
 }
 
 function tableSimple(headers: string[], rows: string[][]) {
-  if (!rows.length) return '<p class="empty">No records.</p>';
+  if (!rows.length) return emptyState('No records.', 'inbox');
   return `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows
     .map((r) => `<tr>${r.map((cell) => `<td>${cell}</td>`).join('')}</tr>`)
     .join('')}</tbody></table></div>`;
@@ -101,7 +125,7 @@ function users(c: HTMLElement) {
       { key: 'status', label: 'Status', render: (r) => statusBadge(r.status || 'active') },
       { key: 'lastLogin', label: 'Last login', render: (r) => formatDate(r.lastLogin) }
     ],
-    toolbar: () => `<button class="btn btn-sm" data-new>+ Add team member</button>`,
+    toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>Add team member</span></button>`,
     actions: (r) => act('edit', r.id, 'Edit') + act('delete', r.id, 'Remove', 'danger'),
     bind: (root, reload) => {
       (root.querySelector('[data-new]') as HTMLElement).onclick = () => userModal(null, reload);
@@ -152,7 +176,7 @@ function stores(c: HTMLElement) {
       { key: 'address', label: 'Address' },
       { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') }
     ],
-    toolbar: () => `<button class="btn btn-sm" data-new>+ New store</button>`,
+    toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>New store</span></button>`,
     actions: (r) => act('edit', r.id, 'Edit') + act('toggle', r.id, r.isActive ? 'Deactivate' : 'Activate') + act('delete', r.id, 'Delete', 'danger'),
     bind: (root, reload) => {
       (root.querySelector('[data-new]') as HTMLElement).onclick = () => storeModal(null, reload);
@@ -204,7 +228,7 @@ function products(c: HTMLElement) {
       { key: 'stock', label: 'Stock', render: (r) => badge(String(r.stock ?? 0), Number(r.stock) <= 5 ? 'warning' : 'neutral') },
       { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') }
     ],
-    toolbar: () => `<button class="btn btn-sm" data-new>+ New product</button>`,
+    toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>New product</span></button>`,
     actions: (r) => act('edit', r.id, 'Edit') + act('stock', r.id, 'Stock') + act('delete', r.id, 'Delete', 'danger'),
     bind: (root, reload) => {
       (root.querySelector('[data-new]') as HTMLElement).onclick = () => productModal(null, reload);
@@ -429,7 +453,7 @@ function codes(c: HTMLElement) {
       { key: 'uses', label: 'Uses', render: (r) => `${r.uses || 0}${r.maxUses ? ' / ' + r.maxUses : ''}` },
       { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') }
     ],
-    toolbar: () => `<button class="btn btn-sm" data-new>+ New code</button>`,
+    toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>New code</span></button>`,
     actions: (r) => act('toggle', r.id, r.isActive ? 'Disable' : 'Enable') + act('delete', r.id, 'Delete', 'danger'),
     bind: (root, reload) => {
       (root.querySelector('[data-new]') as HTMLElement).onclick = () =>
@@ -472,7 +496,7 @@ function payouts(c: HTMLElement) {
       { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
       { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) }
     ],
-    toolbar: () => `<button class="btn btn-sm" data-new>+ New payout</button>`,
+    toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>New payout</span></button>`,
     actions: (r) => (r.status === 'paid' ? '' : act('process', r.id, 'Mark paid')),
     bind: (root, reload) => {
       (root.querySelector('[data-new]') as HTMLElement).onclick = async () => {
@@ -512,18 +536,19 @@ function payouts(c: HTMLElement) {
 
 async function reports(c: HTMLElement) {
   const res = await apiRequest('/reports/overview');
+  if (!res.success) {
+    c.innerHTML = emptyState(res.message || 'Unable to load reports.', 'alert-triangle');
+    return;
+  }
   const d = res.data;
   c.innerHTML = `
-    ${statCards([
-      { label: 'Revenue', value: money(d.totals.revenue), accent: true },
-      { label: 'Orders', value: d.totals.orders },
-      { label: 'Avg order', value: money(d.totals.averageOrderValue) }
-    ])}
-    <div class="card"><h3>Top products</h3>${tableSimple(
+    ${overviewStats(d)}
+    ${renderOverviewCharts(d)}
+    <div class="card"><h3>${icon('package')} Top products</h3>${tableSimple(
       ['Product', 'Qty', 'Revenue'],
       (d.topProducts || []).map((p: any) => [esc(p.name), String(p.qty), money(p.revenue)])
     )}</div>
-    <div class="card"><h3>Top stores</h3>${tableSimple(
+    <div class="card"><h3>${icon('store')} Top stores</h3>${tableSimple(
       ['Store', 'Orders', 'Revenue'],
       (d.topStores || []).map((s: any) => [esc(s.name), String(s.orders), money(s.revenue)])
     )}</div>`;
@@ -547,7 +572,7 @@ async function settings(c: HTMLElement) {
         (f) =>
           `<div class="form-group"><label>${esc(f.label)}</label><input name="${f.name}" type="${f.type || 'text'}" value="${esc(f.value ?? '')}" ${f.step ? `step="${f.step}"` : ''}></div>`
       )
-      .join('') + `<button class="btn btn-sm" type="submit">Save</button>`;
+      .join('') + `<button class="btn btn-sm" type="submit">${icon('check')}<span>Save</span></button>`;
   host.appendChild(form);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();

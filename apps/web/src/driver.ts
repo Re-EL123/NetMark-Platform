@@ -1,7 +1,9 @@
 import { apiRequest } from './api';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge } from './render';
-import { openModal, toast, money, statCards } from './ui';
+import { openModal, toast, money, statCards, emptyState } from './ui';
+import { icon } from './icons';
+import { chartCard, donutChart, barChart, ChartPoint } from './charts';
 
 function addressOf(value: any): string {
   if (!value) return '—';
@@ -10,18 +12,18 @@ function addressOf(value: any): string {
 }
 
 function tableSimple(headers: string[], rows: string[][]) {
-  if (!rows.length) return '<p class="empty">No records.</p>';
+  if (!rows.length) return emptyState('No records.', 'inbox');
   return `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows
     .map((r) => `<tr>${r.map((cell) => `<td>${cell}</td>`).join('')}</tr>`)
     .join('')}</tbody></table></div>`;
 }
 
 const nav: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'available', label: 'Available Jobs' },
-  { id: 'deliveries', label: 'My Deliveries' },
-  { id: 'earnings', label: 'Earnings' },
-  { id: 'profile', label: 'Profile' }
+  { id: 'dashboard', label: 'Dashboard', icon: 'gauge' },
+  { id: 'available', label: 'Available Jobs', icon: 'map-pin' },
+  { id: 'deliveries', label: 'My Deliveries', icon: 'truck' },
+  { id: 'earnings', label: 'Earnings', icon: 'banknote' },
+  { id: 'profile', label: 'Profile', icon: 'user' }
 ];
 
 let driver: any = null;
@@ -29,6 +31,8 @@ let driver: any = null;
 initPanel({
   title: 'Driver',
   nav,
+  tourIntro:
+    'Your delivery hub. Go online to receive jobs, accept deliveries, update their status and track your earnings.',
   render: async (route, ctx) => {
     ctx.titleEl.textContent = nav.find((n) => n.id === route)?.label || 'Driver';
     if (!driver) {
@@ -63,26 +67,42 @@ async function dashboard(c: HTMLElement, ctx: any) {
         </div>
         ${
           driver.status === 'approved'
-            ? `<button class="btn btn-sm" id="toggleAvail">${driver.isAvailable ? 'Go Offline' : 'Go Online'}</button>`
+            ? `<button class="btn btn-sm" id="toggleAvail">${icon('power')}<span>${driver.isAvailable ? 'Go Offline' : 'Go Online'}</span></button>`
             : ''
         }
       </div>
     </div>
     ${statCards([
-      { label: 'Total deliveries', value: stats.totalDeliveries || done.length },
-      { label: 'Active', value: active.length },
-      { label: 'Earnings', value: money(stats.totalEarnings || 0), accent: true }
+      { label: 'Total deliveries', value: Number(stats.totalDeliveries || done.length), format: 'number', icon: 'package-check', tone: 'info' },
+      { label: 'Active', value: active.length, format: 'number', icon: 'truck', tone: 'warning' },
+      { label: 'Earnings', value: Number(stats.totalEarnings || 0), format: 'money', accent: true, icon: 'banknote', tone: 'brand' }
     ])}
+    ${
+      all.length
+        ? `<div class="chart-grid">${chartCard(
+            'Delivery status',
+            donutChart(
+              [
+                { label: 'Active', value: active.length },
+                { label: 'Delivered', value: done.length },
+                { label: 'Failed', value: all.filter((o: any) => o.deliveryStatus === 'failed').length }
+              ],
+              { caption: 'orders' }
+            ),
+            { icon: 'pie-chart' }
+          )}</div>`
+        : ''
+    }
     ${driver.status === 'pending' ? '<div class="card"><p class="empty">Your driver account is pending administrator approval.</p></div>' : ''}
     ${driver.status === 'rejected' ? `<div class="card"><p class="empty">Your application was rejected. ${esc(driver.rejectionReason || '')}</p></div>` : ''}
     ${driver.status === 'suspended' ? '<div class="card"><p class="empty">Your account is suspended. Contact your administrator.</p></div>' : ''}
-    <div class="card"><h3>Active deliveries</h3>${tableSimple(
+    <div class="card"><h3>${icon('truck')} Active deliveries</h3>${tableSimple(
       ['Order', 'Status', 'Delivery', ''],
       active.map((o: any) => [
         esc(o.orderNumber || o.id.slice(0, 8)),
         statusBadge(o.orderStatus),
         statusBadge(o.deliveryStatus),
-        `<button class="btn btn-sm" data-open="${esc(o.id)}">Manage</button>`
+        `<button class="btn btn-sm" data-open="${esc(o.id)}">${icon('arrow-right')}<span>Manage</span></button>`
       ])
     )}</div>`;
   c.querySelectorAll('[data-open]').forEach((b) =>
@@ -115,7 +135,7 @@ async function available(c: HTMLElement) {
       esc(o.orderNumber || o.id.slice(0, 8)),
       money(o.deliveryFee || o.total),
       esc(addressOf(o.address)),
-      `<button class="btn btn-sm" data-accept="${esc(o.id)}">Accept</button>`
+      `<button class="btn btn-sm" data-accept="${esc(o.id)}">${icon('check')}<span>Accept</span></button>`
     ])
   )}</div>`;
   c.querySelectorAll('[data-accept]').forEach((b) =>
@@ -138,7 +158,7 @@ async function deliveries(c: HTMLElement, ctx: any) {
       statusBadge(o.orderStatus),
       statusBadge(o.deliveryStatus),
       money(o.deliveryFee || 0),
-      `<button class="btn btn-sm" data-open="${esc(o.id)}">Open</button>`
+      `<button class="btn btn-sm" data-open="${esc(o.id)}">${icon('arrow-right')}<span>Open</span></button>`
     ])
   )}</div>`;
   c.querySelectorAll('[data-open]').forEach((b) =>
@@ -171,10 +191,10 @@ async function manageDelivery(order: any, ctx: any) {
         </div>
         ${
           order.deliveryStatus === 'delivered'
-            ? '<p class="empty" style="margin-top:12px">Delivered ✓</p>'
+            ? '<p class="empty" style="margin-top:12px;display:flex;align-items:center;gap:6px">' + icon('check-circle-2') + 'Delivered</p>'
             : `<div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
-                ${nextStatus ? `<button class="btn btn-sm" id="advanceBtn">Mark ${esc(nextStatus.replace('_', ' '))}</button>` : ''}
-                <button class="btn btn-sm" id="completeBtn">Complete delivery</button>
+                ${nextStatus ? `<button class="btn btn-sm" id="advanceBtn">${icon('arrow-right')}<span>Mark ${esc(nextStatus.replace('_', ' '))}</span></button>` : ''}
+                <button class="btn btn-sm" id="completeBtn">${icon('check')}<span>Complete delivery</span></button>
               </div>`
         }
       </div>
@@ -214,13 +234,29 @@ async function earnings(c: HTMLElement) {
   const res = await apiRequest('/drivers/earnings');
   const list = res.success ? res.data.earnings : [];
   const summary = res.summary || { total: 0, pending: 0, count: 0 };
+
+  const byDate = new Map<string, number>();
+  for (const e of list) {
+    const day = e.createdAt ? String(e.createdAt).slice(0, 10) : '';
+    if (!day) continue;
+    byDate.set(day, (byDate.get(day) || 0) + Number(e.amount || 0));
+  }
+  const series: ChartPoint[] = [...byDate.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .slice(-10)
+    .map(([date, value]) => ({
+      label: new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+      value
+    }));
+
   c.innerHTML = `
     ${statCards([
-      { label: 'Total earned', value: money(summary.total), accent: true },
-      { label: 'Pending', value: money(summary.pending) },
-      { label: 'Deliveries paid', value: summary.count }
+      { label: 'Total earned', value: Number(summary.total || 0), format: 'money', accent: true, icon: 'wallet', tone: 'brand' },
+      { label: 'Pending', value: Number(summary.pending || 0), format: 'money', icon: 'clock', tone: 'warning' },
+      { label: 'Deliveries paid', value: Number(summary.count || 0), format: 'number', icon: 'check-circle-2', tone: 'success' }
     ])}
-    <div class="card"><h3>Earnings history</h3>${tableSimple(
+    ${series.length ? `<div class="chart-grid">${chartCard('Earnings by day', barChart(series), { icon: 'bar-chart-3', sub: 'Last 10 days' })}</div>` : ''}
+    <div class="card"><h3>${icon('receipt')} Earnings history</h3>${tableSimple(
       ['Order', 'Amount', 'Status', 'Date'],
       list.map((e: any) => [
         esc(e.orderId || '—'),
@@ -241,7 +277,7 @@ async function profile(c: HTMLElement) {
         <div><span class="detail-label">Model</span><span>${esc(driver.vehicleModel || '—')}</span></div>
         <div><span class="detail-label">Licence no.</span><span>${esc(driver.licenseNumber || '—')}</span></div>
       </div>
-      <button class="btn btn-sm" id="editVehicle" style="margin-top:16px">Edit vehicle details</button>
+      <button class="btn btn-sm" id="editVehicle" style="margin-top:16px">${icon('pencil')}<span>Edit vehicle details</span></button>
     </div>`;
   (document.getElementById('editVehicle') as HTMLElement).onclick = () =>
     openModal({

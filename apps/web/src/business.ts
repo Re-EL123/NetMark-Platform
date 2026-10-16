@@ -2,13 +2,28 @@ import { apiRequest } from './api';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { crudView } from './crud';
-import { openModal, confirmDialog, toast, money, titleCase, statCards } from './ui';
+import { openModal, confirmDialog, toast, money, titleCase, emptyState } from './ui';
+import { icon } from './icons';
+import { overviewStats, renderOverviewCharts } from './dashboard';
 
 function opts(values: string[]) {
   return values.map((v) => ({ value: v, label: titleCase(v) }));
 }
+const ACT_ICON: Record<string, string> = {
+  edit: 'pencil',
+  toggle: 'power',
+  remove: 'trash-2',
+  status: 'refresh-cw',
+  pay: 'credit-card',
+  cancel: 'ban',
+  renew: 'refresh-cw',
+  unlink: 'unlink',
+  accept: 'check'
+};
 function act(a: string, id: string, label: string, cls = '') {
-  return `<button data-act="${a}" data-id="${esc(id)}" class="${cls}">${esc(label)}</button>`;
+  return `<button data-act="${a}" data-id="${esc(id)}" class="${cls}">${icon(ACT_ICON[a] || 'circle-dot')}<span>${esc(
+    label
+  )}</span></button>`;
 }
 function wire(root: HTMLElement, handlers: Record<string, (id: string) => void>) {
   root.querySelectorAll('[data-act]').forEach((btn) => {
@@ -18,27 +33,29 @@ function wire(root: HTMLElement, handlers: Record<string, (id: string) => void>)
 }
 
 function tableSimple(headers: string[], rows: string[][]) {
-  if (!rows.length) return '<p class="empty">No records.</p>';
+  if (!rows.length) return emptyState('No records.', 'inbox');
   return `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows
     .map((r) => `<tr>${r.map((cell) => `<td>${cell}</td>`).join('')}</tr>`)
     .join('')}</tbody></table></div>`;
 }
 
 const nav: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'stores', label: 'My Stores', capability: 'stores.read' },
-  { id: 'companies', label: 'Companies', capability: 'companies.link' },
-  { id: 'catalog', label: 'Catalog', capability: 'products.read' },
-  { id: 'listings', label: 'My Store Products', capability: 'products.read' },
-  { id: 'purchases', label: 'Buy From Company', capability: 'orders.read' },
-  { id: 'orders', label: 'Orders', capability: 'orders.read' },
-  { id: 'appointments', label: 'Appointments', capability: 'appointments.read' },
-  { id: 'reports', label: 'Reports', capability: 'reports.read' }
+  { id: 'dashboard', label: 'Dashboard', icon: 'layout-dashboard' },
+  { id: 'stores', label: 'My Stores', capability: 'stores.read', icon: 'store' },
+  { id: 'companies', label: 'Companies', capability: 'companies.link', icon: 'building-2' },
+  { id: 'catalog', label: 'Catalog', capability: 'products.read', icon: 'package-search' },
+  { id: 'listings', label: 'My Store Products', capability: 'products.read', icon: 'boxes' },
+  { id: 'purchases', label: 'Buy From Company', capability: 'orders.read', icon: 'shopping-bag' },
+  { id: 'orders', label: 'Orders', capability: 'orders.read', icon: 'receipt' },
+  { id: 'appointments', label: 'Appointments', capability: 'appointments.read', icon: 'calendar-clock' },
+  { id: 'reports', label: 'Reports', capability: 'reports.read', icon: 'bar-chart-3' }
 ];
 
 initPanel({
   title: 'Business Portal',
   nav,
+  tourIntro:
+    'Manage your stores, link companies with a code, list their products at your own price, and fulfil orders. This tour shows you where everything lives.',
   render: async (route, ctx) => {
     const c = ctx.container;
     ctx.titleEl.textContent = nav.find((n) => n.id === route)?.label || 'Business';
@@ -61,13 +78,14 @@ async function myStores(): Promise<any[]> {
 
 async function dashboard(c: HTMLElement) {
   const res = await apiRequest('/reports/overview');
-  const t = res.success ? res.data.totals : { revenue: 0, orders: 0 };
+  if (!res.success) {
+    c.innerHTML = emptyState(res.message || 'Unable to load your dashboard.', 'alert-triangle');
+    return;
+  }
+  const d = res.data;
   c.innerHTML = `
-    ${statCards([
-      { label: 'Revenue', value: money(t.revenue), accent: true },
-      { label: 'Orders', value: t.orders },
-      { label: 'Paid orders', value: t.paidOrders || 0 }
-    ])}
+    ${overviewStats(d)}
+    ${renderOverviewCharts(d)}
     <div class="card"><p>Browse the company catalog, add products to your store with your own retail price, and manage orders.</p></div>`;
 }
 
@@ -81,7 +99,7 @@ function stores(c: HTMLElement) {
       { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') },
       { key: 'address', label: 'Address' }
     ],
-    toolbar: () => `<button class="btn btn-sm" data-new>+ New store</button>`,
+    toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>New store</span></button>`,
     actions: (r) => act('edit', r.id, 'Edit') + act('toggle', r.id, r.isActive ? 'Deactivate' : 'Activate'),
     bind: (root, reload) => {
       (root.querySelector('[data-new]') as HTMLElement).onclick = () =>
@@ -157,7 +175,7 @@ function companies(c: HTMLElement) {
     c.innerHTML = `
       <div class="card">
         <div class="row-actions" style="justify-content:flex-start">
-          <button class="btn btn-sm" id="linkCompany">+ Link a company</button>
+          <button class="btn btn-sm" id="linkCompany">${icon('plus')}<span>Link a company</span></button>
         </div>
         <p class="empty">Enter a company's code to unlock its catalog and buy stock at wholesale. If a code expires or the company disables it, your listings from that company stay here but are hidden from customers until you link a valid code again.</p>
       </div>
@@ -229,12 +247,14 @@ async function catalog(c: HTMLElement) {
       ${products
         .map(
           (p: any) => `<div class="product-card">
-        <div class="thumb">${p.image ? `<img src="${esc(p.image)}" alt="${esc(p.name)}">` : '🛍️'}</div>
+        <div class="thumb">${p.image ? `<img src="${esc(p.image)}" alt="${esc(p.name)}">` : icon('package-search')}</div>
         <div class="body">
           <div class="name">${esc(p.name)}</div>
           <div class="desc">${esc(p.description || p.category || '')}</div>
           <div class="price">Company price ${money(p.price)}</div>
-          <button class="btn btn-sm" data-add="${esc(p.id)}" ${storeOpts.length ? '' : 'disabled'}>Add to my store</button>
+          <button class="btn btn-sm" data-add="${esc(p.id)}" ${storeOpts.length ? '' : 'disabled'}>${icon(
+            'shopping-cart'
+          )}<span>Add to my store</span></button>
         </div>
       </div>`
         )
@@ -376,7 +396,7 @@ function purchases(c: HTMLElement) {
       <div class="table-wrap"><table><thead><tr><th>Product</th><th>Company price</th><th>Quantity</th></tr></thead><tbody id="buyRows"></tbody></table></div>
       <div class="form-group"><label for="buyNotes">Notes</label><input type="text" id="buyNotes" placeholder="Optional delivery notes" /></div>
       <div class="summary-row total"><span>Total</span><span id="buyTotal">${money(0)}</span></div>
-      <button class="btn" id="placeBuy">Place purchase order</button>
+      <button class="btn" id="placeBuy">${icon('shopping-bag')}<span>Place purchase order</span></button>
     </div>`;
   }
 
@@ -556,13 +576,15 @@ function appointments(c: HTMLElement) {
 
 async function reports(c: HTMLElement) {
   const res = await apiRequest('/reports/overview');
+  if (!res.success) {
+    c.innerHTML = emptyState(res.message || 'Unable to load reports.', 'alert-triangle');
+    return;
+  }
   const d = res.data;
   c.innerHTML = `
-    ${statCards([
-      { label: 'Revenue', value: money(d.totals.revenue), accent: true },
-      { label: 'Orders', value: d.totals.orders }
-    ])}
-    <div class="card"><h3>Top products</h3>${tableSimple(
+    ${overviewStats(d)}
+    ${renderOverviewCharts(d)}
+    <div class="card"><h3>${icon('package')} Top products</h3>${tableSimple(
       ['Product', 'Qty', 'Revenue'],
       (d.topProducts || []).map((p: any) => [esc(p.name), String(p.qty), money(p.revenue)])
     )}</div>`;

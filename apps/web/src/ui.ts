@@ -1,8 +1,16 @@
 import { esc } from './render';
+import { icon, iconify } from './icons';
+import { sparkline } from './charts';
 
 export type ToastType = 'info' | 'success' | 'error';
 
 /* ------------------------------- toasts -------------------------------- */
+const TOAST_ICON: Record<ToastType, string> = {
+  info: 'info',
+  success: 'check-circle-2',
+  error: 'alert-triangle'
+};
+
 let toastStack: HTMLElement | null = null;
 export function toast(message: string, type: ToastType = 'info', timeout = 3500) {
   if (!toastStack) {
@@ -12,8 +20,10 @@ export function toast(message: string, type: ToastType = 'info', timeout = 3500)
   }
   const el = document.createElement('div');
   el.className = `toast ${type === 'info' ? '' : type}`;
-  el.textContent = message;
+  el.innerHTML = `<span class="toast-icon">${icon(TOAST_ICON[type])}</span><span class="toast-msg">${esc(message)}</span>`;
   toastStack.appendChild(el);
+  iconify(el);
+  setTimeout(() => el.classList.add('leaving'), Math.max(0, timeout - 260));
   setTimeout(() => el.remove(), timeout);
 }
 
@@ -38,13 +48,17 @@ export function confirmDialog(message: string, opts: { title?: string; confirmLa
     overlay.innerHTML = `
       <div class="modal" style="max-width:420px">
         <div class="modal-header"><h3>${esc(opts.title || 'Please confirm')}</h3></div>
-        <div class="modal-body"><p>${esc(message)}</p></div>
+        <div class="modal-body confirm-body">
+          <span class="confirm-icon ${opts.danger ? 'danger' : 'info'}">${icon(opts.danger ? 'alert-triangle' : 'info')}</span>
+          <p>${esc(message)}</p>
+        </div>
         <div class="modal-footer">
           <button class="btn btn-ghost btn-sm" data-cancel>Cancel</button>
           <button class="btn btn-sm ${opts.danger ? 'btn-danger' : ''}" data-confirm>${esc(opts.confirmLabel || 'Confirm')}</button>
         </div>
       </div>`;
     document.body.appendChild(overlay);
+    iconify(overlay);
     const close = (val: boolean) => {
       overlay.remove();
       resolve(val);
@@ -136,6 +150,7 @@ export function openModal(opts: ModalOptions): Promise<void> {
         </form>
       </div>`;
     document.body.appendChild(overlay);
+    iconify(overlay);
 
     const close = () => {
       overlay.remove();
@@ -211,7 +226,7 @@ export function dataTable(
   rows: any[],
   opts: { actions?: (row: any) => string; empty?: string } = {}
 ): string {
-  if (!rows || !rows.length) return `<p class="empty">${esc(opts.empty || 'No records found.')}</p>`;
+  if (!rows || !rows.length) return emptyState(opts.empty || 'No records found.', 'inbox');
   const head = columns.map((c) => `<th>${esc(c.label)}</th>`).join('') + (opts.actions ? '<th></th>' : '');
   const body = rows
     .map((row) => {
@@ -223,16 +238,70 @@ export function dataTable(
   return `<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
-export function statCards(items: { label: string; value: string | number; sub?: string; accent?: boolean }[]): string {
+export type StatTone = 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'neutral';
+
+export interface StatItem {
+  label: string;
+  value: string | number | null;
+  sub?: string;
+  accent?: boolean;
+  icon?: string;
+  tone?: StatTone;
+  spark?: number[];
+  trend?: number;
+  /** How to render a numeric `value` (also enables count-up). */
+  format?: 'number' | 'money' | 'compact' | 'text';
+  symbol?: string;
+}
+
+function statValueHtml(i: StatItem): string {
+  const numeric = typeof i.value === 'number' && Number.isFinite(i.value);
+  const format = i.format || (numeric ? 'number' : 'text');
+  if (numeric && format !== 'text') {
+    const symbol = i.symbol || 'R';
+    const initial = format === 'money' ? `${symbol}0.00` : '0';
+    return `<div class="stat-value" data-count-to="${i.value}" data-count-kind="${format}" data-count-symbol="${esc(
+      symbol
+    )}">${initial}</div>`;
+  }
+  return `<div class="stat-value">${esc(i.value as any)}</div>`;
+}
+
+export function statCards(items: StatItem[]): string {
   return `<div class="stats">${items
-    .map(
-      (i) => `<div class="stat ${i.accent ? 'accent' : ''}">
-        <div class="stat-label">${esc(i.label)}</div>
-        <div class="stat-value">${esc(i.value)}</div>
-        ${i.sub ? `<div class="stat-sub">${esc(i.sub)}</div>` : ''}
-      </div>`
-    )
+    .map((i) => {
+      const tone = i.tone || (i.accent ? 'brand' : 'neutral');
+      const trend = typeof i.trend === 'number' ? i.trend : null;
+      const trendTone = trend === null ? '' : trend >= 0 ? 'up' : 'down';
+      return `<div class="stat reveal ${i.accent ? 'accent' : ''}">
+        <div class="stat-top">
+          ${i.icon ? `<span class="stat-icon tone-${tone}">${icon(i.icon)}</span>` : ''}
+          <span class="stat-label">${esc(i.label)}</span>
+          ${
+            trend !== null
+              ? `<span class="stat-trend ${trendTone}">${icon(trend >= 0 ? 'trending-up' : 'trending-down')}${Math.abs(
+                  trend
+                ).toFixed(0)}%</span>`
+              : ''
+          }
+        </div>
+        ${statValueHtml(i)}
+        ${
+          (i.spark && i.spark.length) || i.sub
+            ? `<div class="stat-foot">
+          ${i.spark && i.spark.length ? `<span class="stat-spark">${sparkline(i.spark, { width: 96, height: 30 })}</span>` : ''}
+          ${i.sub ? `<span class="stat-sub">${esc(i.sub)}</span>` : ''}
+        </div>`
+            : ''
+        }
+      </div>`;
+    })
     .join('')}</div>`;
+}
+
+/** A friendly empty-state block with an icon. */
+export function emptyState(message: string, iconName = 'inbox', action = ''): string {
+  return `<div class="empty-state"><span class="empty-state-icon">${icon(iconName)}</span><p>${esc(message)}</p>${action}</div>`;
 }
 
 /* ---------------------------- event delegation ------------------------- */
