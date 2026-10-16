@@ -72,7 +72,9 @@ export default authed(async (req, res, ctx) => {
     const lines: any[] = [];
     let subtotal = 0;
     let derivedStoreId: string | null = null;
-    let derivedCompanyId: string | null = null;
+    // Every order belongs to exactly one company so driver dispatch, earnings
+    // and company reporting stay correct.
+    const lineCompanyIds = new Set<string>();
     for (const item of items) {
       const productId = item.productId || item.id;
       const qty = Math.max(1, Number(item.quantity || 1));
@@ -100,27 +102,29 @@ export default authed(async (req, res, ctx) => {
           if (listing.price != null) price = Number(listing.price);
         }
       }
-      lines.push({ productId, name: product.name, price, quantity: qty, lineTotal: price * qty });
+      if (product.company_id) lineCompanyIds.add(product.company_id);
+      lines.push({ productId, name: product.name, companyId: product.company_id || null, price, quantity: qty, lineTotal: price * qty });
       subtotal += price * qty;
-      if (!derivedStoreId) {
-        derivedStoreId = product.store_id || null;
-        derivedCompanyId = product.company_id || null;
-      }
+      if (!derivedStoreId) derivedStoreId = product.store_id || null;
     }
+
+    // One company per order: reject a mixed basket so each order can be
+    // dispatched and attributed cleanly.
+    if (lineCompanyIds.size > 1) {
+      return fail(res, 'An order can only contain products from one company. Please check out separately for each company.', 409);
+    }
+    const productCompanyId = lineCompanyIds.size === 1 ? [...lineCompanyIds][0] : null;
 
     // Resolve the store: explicit selection wins, otherwise the first product's.
     let storeId = bodyStoreId || derivedStoreId;
-    let companyId = ctx.companyId;
-    if (storeId) {
-      if (!store) {
-        const { data } = await sb.from('stores').select('*').eq('id', storeId).maybeSingle();
-        if (!data) return fail(res, 'Store not found', 404);
-        store = data;
-      }
-      companyId = store.company_id;
-    } else {
-      companyId = derivedCompanyId || ctx.companyId;
+    if (storeId && !store) {
+      const { data } = await sb.from('stores').select('*').eq('id', storeId).maybeSingle();
+      if (!data) return fail(res, 'Store not found', 404);
+      store = data;
     }
+    // Attribute to the products' company; fall back to the store's company
+    // (legacy products without a company) then the buyer's company.
+    const companyId = productCompanyId || store?.company_id || ctx.companyId || null;
 
     // Distributor attribution: explicit override for staff, otherwise fall back
     // to the customer's referring distributor, then to the store's distributor.
@@ -212,8 +216,14 @@ export default authed(async (req, res, ctx) => {
     if (!canWrite) return fail(res, 'Forbidden', 403);
     const driverId = req.body?.driverId;
     if (!driverId) return fail(res, 'driverId is required');
+    const { data: order } = await scope(sb.from('orders').select('*').eq('id', id)).maybeSingle();
+    if (!order) return fail(res, 'Order not found', 404);
     const { data: driver } = await sb.from('drivers').select('*').eq('id', driverId).maybeSingle();
     if (!driver) return fail(res, 'Driver not found', 404);
+    // An order belongs to one company; only that company's drivers may take it.
+    if (!ctx.isPlatform && ctx.role === 'owner' && driver.company_id !== ctx.companyId) {
+      return fail(res, 'That driver belongs to another company', 403);
+    }
     const { data: after } = await sb
       .from('orders')
       .update({ assigned_driver_id: driverId, delivery_status: 'assigned' })

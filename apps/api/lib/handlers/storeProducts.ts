@@ -18,12 +18,15 @@ import { validCompanyIdsForOwner, validLinkKeysForOwners } from '../companyLinks
 async function decorate(sb: any, listings: any[]) {
   const productIds = [...new Set(listings.map((l) => l.product_id).filter(Boolean))];
   const storeIds = [...new Set(listings.map((l) => l.store_id).filter(Boolean))];
-  const [prodRes, storeRes] = await Promise.all([
+  const companyIds = [...new Set(listings.map((l) => l.company_id).filter(Boolean))];
+  const [prodRes, storeRes, compRes] = await Promise.all([
     productIds.length ? sb.from('products').select('*').in('id', productIds) : Promise.resolve({ data: [] }),
-    storeIds.length ? sb.from('stores').select('*').in('id', storeIds) : Promise.resolve({ data: [] })
+    storeIds.length ? sb.from('stores').select('*').in('id', storeIds) : Promise.resolve({ data: [] }),
+    companyIds.length ? sb.from('companies').select('id, name').in('id', companyIds) : Promise.resolve({ data: [] })
   ]);
   const prodMap = new Map((prodRes.data || []).map((p: any) => [p.id, p]));
   const storeMap = new Map((storeRes.data || []).map((s: any) => [s.id, s]));
+  const compMap = new Map<string, any>((compRes.data || []).map((c: any) => [c.id, c]));
 
   return listings.map((l) => {
     const p: any = prodMap.get(l.product_id) || {};
@@ -35,6 +38,7 @@ async function decorate(sb: any, listings: any[]) {
       storeId: l.store_id,
       productId: l.product_id,
       companyId: l.company_id,
+      companyName: compMap.get(l.company_id)?.name || null,
       price,
       basePrice,
       margin: Math.round((price - basePrice) * 100) / 100,

@@ -11,6 +11,7 @@ interface CartLine {
   quantity: number;
   storeId?: string;
   companyId?: string;
+  companyName?: string;
 }
 
 const CART_KEY = 'netmark_cart';
@@ -81,7 +82,7 @@ async function catalog(c: HTMLElement) {
           <div class="body">
             <div class="name">${esc(l.name)}</div>
             <div class="desc">${esc(l.description || l.category || '')}</div>
-            <div class="empty">${esc(l.storeName || '')}</div>
+            <div class="empty">${esc(l.storeName || '')}${l.companyName ? ` · ${esc(l.companyName)}` : ''}</div>
             <div class="price">${money(l.price, symbol)}</div>
             <button class="btn btn-sm" data-add="${esc(l.id)}" ${Number(l.stock) <= 0 ? 'disabled' : ''}>
               ${Number(l.stock) <= 0 ? 'Out of stock' : 'Add to cart'}
@@ -99,7 +100,7 @@ async function catalog(c: HTMLElement) {
         const cart = getCart();
         const existing = cart.find((l) => l.productId === listing.productId && l.storeId === listing.storeId);
         if (existing) existing.quantity += 1;
-        else cart.push({ productId: listing.productId, name: listing.name, price: Number(listing.price), quantity: 1, storeId: listing.storeId, companyId: listing.companyId });
+        else cart.push({ productId: listing.productId, name: listing.name, price: Number(listing.price), quantity: 1, storeId: listing.storeId, companyId: listing.companyId, companyName: listing.companyName });
         setCart(cart);
         toast(`${listing.name} added`, 'success');
       })
@@ -115,6 +116,26 @@ async function catalog(c: HTMLElement) {
 }
 
 /* --------------------------------- cart -------------------------------- */
+interface CartGroup {
+  key: string;
+  companyId?: string;
+  companyName?: string;
+  storeId?: string;
+  entries: { line: CartLine; index: number }[];
+}
+
+function groupCart(lines: CartLine[]): CartGroup[] {
+  const groups = new Map<string, CartGroup>();
+  lines.forEach((line, index) => {
+    const key = line.companyId || `${line.storeId || ''}:none`;
+    if (!groups.has(key)) {
+      groups.set(key, { key, companyId: line.companyId, companyName: line.companyName, storeId: line.storeId, entries: [] });
+    }
+    groups.get(key)!.entries.push({ line, index });
+  });
+  return [...groups.values()];
+}
+
 async function cart(c: HTMLElement, ctx: any) {
   const lines = getCart();
   if (!lines.length) {
@@ -124,8 +145,6 @@ async function cart(c: HTMLElement, ctx: any) {
   const settingsRes = await apiRequest('/settings');
   const symbol = settingsRes.data?.platform?.currencySymbol || 'R';
   const deliveryFee = Number(settingsRes.data?.platform?.deliveryFee ?? 0);
-  const subtotal = lines.reduce((s, l) => s + l.price * l.quantity, 0);
-  const total = subtotal + deliveryFee;
 
   // Fallback for listings whose company code has lapsed (or that the store no
   // longer sells): the shop hides them, so a stale cart line becomes
@@ -143,17 +162,20 @@ async function cart(c: HTMLElement, ctx: any) {
   }
   const hasUnavailable = unavailable.size > 0;
 
-  c.innerHTML = `
-    <div class="card">
-      <h3>Cart</h3>
-      ${
-        hasUnavailable
-          ? '<div class="card" style="border-color:var(--danger,#c0392b)"><p class="empty">Some items are no longer available from their store. Remove them to continue.</p></div>'
-          : ''
-      }
-      ${lines
-        .map(
-          (l, i) => `<div class="cart-line${unavailable.has(i) ? ' is-unavailable' : ''}" ${unavailable.has(i) ? 'style="opacity:.55"' : ''}>
+  // An order can only contain one company (and one store), so the cart is split
+  // into groups and each group is checked out separately.
+  const groups = groupCart(lines);
+  const multi = groups.length > 1;
+
+  const groupCards = groups
+    .map((g, gi) => {
+      const subtotal = g.entries.reduce((s, e) => s + e.line.price * e.line.quantity, 0);
+      const total = subtotal + deliveryFee;
+      const groupUnavailable = g.entries.some((e) => unavailable.has(e.index));
+      const rows = g.entries
+        .map((e) => {
+          const { line: l, index: i } = e;
+          return `<div class="cart-line" ${unavailable.has(i) ? 'style="opacity:.55"' : ''}>
         <div><div class="name">${esc(l.name)}${unavailable.has(i) ? ' <span class="empty">— currently unavailable from this store</span>' : ''}</div><div class="empty">${money(l.price, symbol)}</div></div>
         <div class="qty">
           <button class="link-btn" data-dec="${i}">−</button>
@@ -161,19 +183,37 @@ async function cart(c: HTMLElement, ctx: any) {
           <button class="link-btn" data-inc="${i}">+</button>
           <button class="link-btn danger" data-rm="${i}">Remove</button>
         </div>
-      </div>`
-        )
-        .join('')}
-      <div class="summary-row"><span>Subtotal</span><span>${money(subtotal, symbol)}</span></div>
-      <div class="summary-row"><span>Delivery</span><span>${money(deliveryFee, symbol)}</span></div>
-      <div class="summary-row total"><span>Total</span><span>${money(total, symbol)}</span></div>
-      <button class="btn btn-sm" id="checkoutBtn" style="margin-top:12px" ${hasUnavailable ? 'disabled title="Remove unavailable items to continue"' : ''}>Checkout</button>
-      ${
-        hasUnavailable
-          ? '<button class="link-btn danger" id="rmUnavailable" style="margin-top:8px">Remove unavailable items</button>'
-          : ''
-      }
-    </div>`;
+      </div>`;
+        })
+        .join('');
+      return `<div class="card">
+        <h3>${esc(g.companyName || 'Order')}${multi ? ' <span class="empty">(separate order)</span>' : ''}</h3>
+        ${rows}
+        <div class="summary-row"><span>Subtotal</span><span>${money(subtotal, symbol)}</span></div>
+        <div class="summary-row"><span>Delivery</span><span>${money(deliveryFee, symbol)}</span></div>
+        <div class="summary-row total"><span>Total</span><span>${money(total, symbol)}</span></div>
+        <button class="btn btn-sm" data-checkout="${gi}" style="margin-top:12px" ${groupUnavailable ? 'disabled title="Remove unavailable items to continue"' : ''}>Checkout${g.companyName ? ` ${esc(g.companyName)}` : ''}</button>
+      </div>`;
+    })
+    .join('');
+
+  c.innerHTML = `
+    ${
+      hasUnavailable
+        ? '<div class="card" style="border-color:var(--danger,#c0392b)"><p class="empty">Some items are no longer available from their store. Remove them to continue.</p></div>'
+        : ''
+    }
+    ${
+      multi
+        ? '<div class="card"><p class="empty">Your cart contains products from more than one company. Each company is a separate order and delivery.</p></div>'
+        : ''
+    }
+    ${groupCards}
+    ${
+      hasUnavailable
+        ? '<div class="card"><button class="link-btn danger" id="rmUnavailable">Remove unavailable items</button></div>'
+        : ''
+    }`;
 
   const redo = (fn: () => void) => {
     fn();
@@ -191,42 +231,53 @@ async function cart(c: HTMLElement, ctx: any) {
       cart(c, ctx);
     });
 
-  (document.getElementById('checkoutBtn') as HTMLElement).onclick = async () => {
-    await openModal({
-      title: 'Checkout',
-      fields: [
-        { name: 'address', label: 'Delivery address', type: 'textarea', required: true },
-        { name: 'notes', label: 'Notes', type: 'textarea' },
-        { name: 'orderType', label: 'Type', type: 'select', options: [{ value: 'delivery', label: 'Delivery' }, { value: 'pickup', label: 'Pickup' }], value: 'delivery' },
-        { name: 'payNow', label: 'Pay now with PayFast', type: 'checkbox', value: true }
-      ],
-      submitLabel: 'Place order',
-      onSubmit: async (v) => {
-        const storeIds = [...new Set(lines.map((l) => l.storeId).filter(Boolean))];
-        if (storeIds.length > 1) throw new Error('Please order from one store at a time');
-        const storeId = storeIds[0];
-        const res = await apiRequest('/orders', {
-          method: 'POST',
-          body: JSON.stringify({
-            storeId,
-            items: lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
-            address: v.address,
-            notes: v.notes,
-            orderType: v.orderType
-          })
-        });
-        if (!res.success) throw new Error(res.message || 'Could not place order');
-        setCart([]);
-        const order = res.data;
-        toast('Order placed', 'success');
-        if (v.payNow) {
-          await startPayFast(order.id);
-        } else {
-          ctx.navigate('orders');
-        }
+  c.querySelectorAll('[data-checkout]').forEach((b) =>
+    b.addEventListener('click', () => {
+      const group = groups[Number((b as HTMLElement).dataset.checkout)];
+      checkoutGroup(group.entries.map((e) => e.line), ctx);
+    })
+  );
+}
+
+async function checkoutGroup(groupLines: CartLine[], ctx: any) {
+  const storeIds = [...new Set(groupLines.map((l) => l.storeId).filter(Boolean))];
+  if (storeIds.length > 1) {
+    toast('Please order from one store at a time', 'error');
+    return;
+  }
+  const storeId = storeIds[0];
+  await openModal({
+    title: 'Checkout',
+    fields: [
+      { name: 'address', label: 'Delivery address', type: 'textarea', required: true },
+      { name: 'notes', label: 'Notes', type: 'textarea' },
+      { name: 'orderType', label: 'Type', type: 'select', options: [{ value: 'delivery', label: 'Delivery' }, { value: 'pickup', label: 'Pickup' }], value: 'delivery' },
+      { name: 'payNow', label: 'Pay now with PayFast', type: 'checkbox', value: true }
+    ],
+    submitLabel: 'Place order',
+    onSubmit: async (v) => {
+      const res = await apiRequest('/orders', {
+        method: 'POST',
+        body: JSON.stringify({
+          storeId,
+          items: groupLines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
+          address: v.address,
+          notes: v.notes,
+          orderType: v.orderType
+        })
+      });
+      if (!res.success) throw new Error(res.message || 'Could not place order');
+      const keyOf = (l: CartLine) => `${l.productId}|${l.storeId || ''}|${l.companyId || ''}`;
+      const rm = new Set(groupLines.map(keyOf));
+      setCart(getCart().filter((l) => !rm.has(keyOf(l))));
+      toast('Order placed', 'success');
+      if (v.payNow) {
+        await startPayFast(res.data.id);
+      } else {
+        ctx.navigate('orders');
       }
-    });
-  };
+    }
+  });
 }
 
 async function startPayFast(orderId: string) {
