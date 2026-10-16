@@ -1,7 +1,7 @@
 -- NetMark Platform — Supabase (Postgres) schema (COMPLETE)
 -- Run this in the Supabase SQL editor (Project → SQL Editor → New query).
 -- This single file builds the entire schema: the base tables plus migrations
--- 002 → 013 consolidated below. It is idempotent — safe to run repeatedly.
+-- 002 → 014 consolidated below. It is idempotent — safe to run repeatedly.
 -- (The same statements also live under supabase/migrations/ for reference.)
 -- The API talks to the database with the service_role key, so RLS is enabled
 -- with no policies (deny all) to keep the anon/authenticated keys locked out.
@@ -211,7 +211,7 @@ end;
 $$;
 
 -- ===========================================================================
--- Migrations 002 → 013 — consolidated below so this single file builds the
+-- Migrations 002 → 014 — consolidated below so this single file builds the
 -- complete schema. Every statement is idempotent and safe to re-run.
 -- ===========================================================================
 
@@ -747,6 +747,35 @@ create table if not exists public.commissions (
 create index if not exists commissions_user_idx on public.commissions(user_id);
 create index if not exists commissions_tenant_idx on public.commissions(tenant_id);
 create index if not exists commissions_status_idx on public.commissions(status);
+
+-- ---------------------------------------------------------------------------
+-- 014: commission engine v2 — 3-level retail override with a hold window,
+-- purchase attribution and idempotency.
+-- ---------------------------------------------------------------------------
+alter table public.commissions add column if not exists ref_id uuid;
+alter table public.commissions add column if not exists ref_type text;
+alter table public.commissions add column if not exists release_at timestamptz;
+alter table public.commissions add column if not exists released_at timestamptz;
+alter table public.commissions add column if not exists reversed_at timestamptz;
+alter table public.commissions add column if not exists description text;
+
+-- Commission holds get their own bucket: `pending_zar` already means "withdrawal
+-- in flight", so reusing it would let a release steal money earmarked for a payout.
+alter table public.wallets add column if not exists held_zar numeric not null default 0;
+
+create unique index if not exists commissions_ref_uk
+  on public.commissions (ref_type, ref_id, user_id, (coalesce(level, 0)))
+  where ref_id is not null;
+create index if not exists commissions_due_idx
+  on public.commissions (release_at)
+  where status = 'pending';
+create index if not exists commissions_user_status_idx
+  on public.commissions (user_id, status, created_at);
+
+update public.commissions
+  set release_at = coalesce(release_at, created_at + interval '7 days')
+  where status = 'pending' and release_at is null;
+
 
 create table if not exists public.payout_batches (
   id uuid primary key default gen_random_uuid(),

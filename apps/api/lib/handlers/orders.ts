@@ -5,7 +5,7 @@ import { recordAudit } from '../audit';
 import { notify } from '../notify';
 import { storeIdsForUser } from '../scope';
 import { validLinkKeysForOwners } from '../companyLinks';
-import { recordCommission } from '../commissionEngine';
+import { payOrderCommissions, reverseCommissions } from '../commissionEngine';
 import { dispatchWebhook } from '../webhooks';
 
 const ORDER_STATUSES = ['pending', 'confirmed', 'ready', 'completed', 'cancelled'];
@@ -220,27 +220,24 @@ export default authed(async (req, res, ctx) => {
     if (before.customer_id && status === 'confirmed') {
       await notify({ userId: before.customer_id, type: 'order', title: 'Order confirmed', body: `Order ${before.order_number} is confirmed.`, data: { orderId: id } });
     }
-    // distributor commission on completion (driver earnings are paid on delivery in drivers.ts)
+    // 3-level retail override on the net-of-VAT base (driver earnings are paid
+    // on delivery in drivers.ts). payOrderCommissions is idempotent, so a
+    // completed -> confirmed -> completed toggle can never double-pay.
     if (status === 'completed' && before.order_status !== 'completed') {
       try {
-        const { data: gs } = await sb.from('settings').select('value').eq('scope', 'platform').eq('key', 'general').maybeSingle();
-        const pct = Number(gs?.value?.commissionPercent ?? 10);
-        const amount = Number(before.total || 0);
-        if (before.distributor_id && pct > 0 && amount > 0) {
-          await recordCommission(sb, {
-            tenantId: ctx.tenantId,
-            userId: before.distributor_id,
-            companyId: before.company_id || null,
-            orderId: id,
-            amountZar: Math.round(amount * (pct / 100) * 100) / 100,
-            bonusType: 'retail',
-            source: 'order'
-          });
-        }
-      } catch {
-        /* commission failures should not block order status */
+        await payOrderCommissions(sb, before);
+      } catch (err: any) {
+        console.error('commission payout failed', id, err?.message || err);
       }
       void dispatchWebhook('order.completed', { orderId: id, orderNumber: before.order_number, total: before.total, status }, ctx.tenantId, before.company_id);
+    }
+    // Cancelling an order claws back what it earned (pending or released).
+    if (status === 'cancelled' && before.order_status !== 'cancelled') {
+      try {
+        await reverseCommissions(sb, 'order', id, `Order ${before.order_number || ''} cancelled`.trim());
+      } catch (err: any) {
+        console.error('commission reversal failed', id, err?.message || err);
+      }
     }
     return ok(res, { data: rowOut(after) });
   }
@@ -282,6 +279,7 @@ export default authed(async (req, res, ctx) => {
         if (!['pending', 'confirmed'].includes(before.order_status)) return fail(res, 'This order can no longer be cancelled');
         const { data: after } = await sb.from('orders').update({ order_status: 'cancelled' }).eq('id', id).select('*').single();
         await recordAudit(req, { action: 'order.cancel', entityType: 'order', entityId: id });
+        await reverseCommissions(sb, 'order', id, `Order ${before.order_number || ''} cancelled`.trim()).catch(() => {});
         return ok(res, { data: rowOut(after) });
       }
       return fail(res, 'Forbidden', 403);
@@ -295,6 +293,9 @@ export default authed(async (req, res, ctx) => {
     if (b.address !== undefined) patch.address = b.address;
     const { data: after } = await sb.from('orders').update(patch).eq('id', id).select('*').single();
     await recordAudit(req, { action: 'order.update', entityType: 'order', entityId: id, before: rowOut(before), after: rowOut(after) });
+    if (patch.order_status === 'cancelled' && before.order_status !== 'cancelled') {
+      await reverseCommissions(sb, 'order', id, `Order ${before.order_number || ''} cancelled`.trim()).catch(() => {});
+    }
     return ok(res, { data: rowOut(after) });
   }
 
@@ -310,6 +311,7 @@ export default authed(async (req, res, ctx) => {
       .select('*')
       .single();
     await recordAudit(req, { action: 'order.refund', entityType: 'order', entityId: id, after: { amount } });
+    await reverseCommissions(sb, 'order', id, `Order ${before.order_number || ''} refunded`.trim()).catch(() => {});
     if (before.customer_id) {
       await notify({ userId: before.customer_id, type: 'payment', title: 'Refund issued', body: `A refund of ${amount} was issued for order ${before.order_number}.`, data: { orderId: id } });
     }

@@ -2,6 +2,7 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import { slugOf, getSupabase } from '../http';
 import { notify } from '../notify';
 import { recordAudit } from '../audit';
+import { releaseDueCommissions } from '../commissionEngine';
 
 function orderNumber() {
   return 'NM-' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5).toUpperCase();
@@ -21,7 +22,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (slug[0] === 'autoship' && (req.method === 'GET' || req.method === 'POST')) {
     return runAutoship(req, res);
   }
+  if (slug[0] === 'commissions' && (req.method === 'GET' || req.method === 'POST')) {
+    return runCommissionRelease(res);
+  }
   return res.status(404).json({ success: false, message: 'Unknown cron job' });
+}
+
+/** Move commission credits whose hold window has elapsed into available balance. */
+async function runCommissionRelease(res: VercelResponse) {
+  const sb = getSupabase();
+  const released = await releaseDueCommissions(sb, 200);
+  return res.status(200).json({ success: true, data: { released } });
 }
 
 async function runAutoship(req: VercelRequest, res: VercelResponse) {

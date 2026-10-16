@@ -4,6 +4,7 @@ import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { openModal, confirmDialog, toast, money, titleCase, emptyState } from './ui';
 import { icon } from './icons';
+import { getMyReferralCode, shareLink, shareUrl } from './referral';
 
 interface CartLine {
   productId: string;
@@ -91,9 +92,12 @@ async function catalog(c: HTMLElement) {
             <div class="desc">${esc(l.description || l.category || '')}</div>
             <div class="empty">${esc(l.storeName || '')}${l.companyName ? ` · ${esc(l.companyName)}` : ''}</div>
             <div class="price">${money(l.price, symbol)}</div>
-            <button class="btn btn-sm" data-add="${esc(l.id)}" ${Number(l.stock) <= 0 ? 'disabled' : ''}>
-              ${Number(l.stock) <= 0 ? `${icon('ban')}<span>Out of stock</span>` : `${icon('shopping-cart')}<span>Add to cart</span>`}
-            </button>
+            <div class="row-actions">
+              <button class="btn btn-sm" data-add="${esc(l.id)}" ${Number(l.stock) <= 0 ? 'disabled' : ''}>
+                ${Number(l.stock) <= 0 ? `${icon('ban')}<span>Out of stock</span>` : `${icon('shopping-cart')}<span>Add to cart</span>`}
+              </button>
+              <button class="btn btn-sm" data-share="${esc(l.id)}">${icon('share-2')}<span>Share</span></button>
+            </div>
           </div>
         </div>`
           )
@@ -110,6 +114,14 @@ async function catalog(c: HTMLElement) {
         else cart.push({ productId: listing.productId, name: listing.name, price: Number(listing.price), quantity: 1, storeId: listing.storeId, companyId: listing.companyId, companyName: listing.companyName });
         setCart(cart);
         toast(`${listing.name} added`, 'success');
+      })
+    );
+
+    grid.querySelectorAll('[data-share]').forEach((b) =>
+      b.addEventListener('click', async () => {
+        const listing = listings.find((l: any) => l.id === (b as HTMLElement).dataset.share);
+        const code = await getMyReferralCode();
+        await shareLink(shareUrl('shop/', code), listing?.name || 'NetMark', `Check out ${listing?.name || 'this product'} on NetMark`);
       })
     );
     const cartInfo = document.getElementById('cartInfo')!;

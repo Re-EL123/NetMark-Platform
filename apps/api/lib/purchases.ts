@@ -1,5 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { notify } from './notify';
+import { payPurchaseReferral } from './commissionEngine';
 
 /**
  * Mark a code purchase as paid and hand the code to the buyer. Idempotent:
@@ -59,6 +60,17 @@ export async function completeCodePurchase(
       data: { code: p.code, companyId: code?.company_id || null }
     });
   }
+
+  // The buyer's referrer (often a store owner) earns on the sale.
+  await payPurchaseReferral(sb, {
+    purchaserId: p.purchaser_id,
+    priceZar: Number(p.price_zar || 0),
+    refType: 'code_purchase',
+    refId: p.id,
+    companyId: code?.company_id || null,
+    label: `code ${p.code}`
+  }).catch((err) => console.error('code purchase referral failed', err?.message || err));
+
   return true;
 }
 
@@ -71,6 +83,7 @@ export async function completeStorePurchase(
   const { data: p } = await sb.from('store_purchases').select('*').eq('id', id).maybeSingle();
   if (!p) return false;
   if (p.status === 'completed') return true;
+  const { data: store } = await sb.from('stores').select('id, name, company_id').eq('id', p.store_id).maybeSingle();
   await sb
     .from('stores')
     .update({
@@ -86,5 +99,26 @@ export async function completeStorePurchase(
     .from('store_purchases')
     .update({ status: 'completed', payment_status: 'paid', payment_ref: paymentRef || null })
     .eq('id', id);
+
+  if (p.purchaser_id) {
+    await notify({
+      userId: p.purchaser_id,
+      type: 'payment',
+      title: 'Store purchased',
+      body: `You now own ${store?.name || p.store_name || 'the store'}.`,
+      data: { storeId: p.store_id }
+    });
+  }
+
+  // The buyer's referrer (often a store owner) earns on the sale.
+  await payPurchaseReferral(sb, {
+    purchaserId: p.purchaser_id,
+    priceZar: Number(p.price_zar || 0),
+    refType: 'store_purchase',
+    refId: p.id,
+    companyId: store?.company_id || null,
+    label: `store ${store?.name || p.store_name || ''}`.trim()
+  }).catch((err) => console.error('store purchase referral failed', err?.message || err));
+
   return true;
 }

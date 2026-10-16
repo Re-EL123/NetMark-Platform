@@ -24,6 +24,47 @@ export default authed(async (req, res, ctx) => {
     return ok(res, { data: { code: data.code, distributorId: data.distributor_id, valid: true } });
   }
 
+  if (slug[0] === 'mine' && req.method === 'GET') {
+    // Every signed-in user gets a personal referral code on demand. Sharing it
+    // attributes new signups to them and pays them on the purchases those
+    // people make.
+    let { data: code } = await sb
+      .from('distributor_codes')
+      .select('*')
+      .eq('distributor_id', ctx.userId)
+      .eq('is_active', true)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (!code) {
+      const { data: created } = await sb
+        .from('distributor_codes')
+        .insert({
+          code: makeCode('REF'),
+          distributor_id: ctx.userId,
+          company_id: ctx.companyId || null,
+          tenant_id: ctx.tenantId,
+          is_active: true,
+          is_for_sale: false,
+          purchased: false,
+          price_zar: 0
+        })
+        .select('*')
+        .single();
+      code = created;
+    }
+
+    const { count: referred } = await sb
+      .from('users')
+      .select('id', { count: 'exact', head: true })
+      .eq('distributor_id', ctx.userId);
+
+    return ok(res, {
+      data: { id: code?.id || null, code: code?.code || null, referred: referred || 0 }
+    });
+  }
+
   if (slug.length === 0 && req.method === 'GET') {
     const list = parseListQuery(req);
     let q = sb.from('distributor_codes').select('*', { count: 'exact' });
@@ -31,7 +72,8 @@ export default authed(async (req, res, ctx) => {
       // Marketplace view: any authed user can browse unpurchased codes for sale.
       q = q.eq('is_for_sale', true).eq('purchased', false).eq('is_active', true);
     } else if (!ctx.isPlatform) {
-      q = q.eq('company_id', ctx.companyId);
+      if (ctx.companyId) q = q.eq('company_id', ctx.companyId);
+      else q = q.eq('distributor_id', ctx.userId);
     }
     if (req.query.isActive !== undefined) q = q.eq('is_active', String(req.query.isActive) === 'true');
     const result = await runList(q, list, { searchColumns: ['code'] });
@@ -41,8 +83,10 @@ export default authed(async (req, res, ctx) => {
   if (slug.length === 0 && req.method === 'POST') {
     if (!canWrite) return fail(res, 'Forbidden', 403);
     const { code, distributorId, maxUses, expiresAt, companyId } = req.body || {};
-    // Owner-issued codes attribute referrals to the owner (company rep).
-    const distributor = ctx.role === 'owner' ? ctx.userId : distributorId || null;
+    // A person's own codes attribute referrals to them (owners and store owners
+    // can both build a referral network). Platform-created codes may nominate a
+    // distributor explicitly.
+    const distributor = ['owner', 'storeOwner'].includes(ctx.role) ? ctx.userId : distributorId || null;
     const targetCompany = ctx.isPlatform ? companyId || null : ctx.companyId;
     const { data, error } = await sb
       .from('distributor_codes')

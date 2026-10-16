@@ -5,6 +5,9 @@ import { crudView } from './crud';
 import { openModal, confirmDialog, toast, money, titleCase, emptyState } from './ui';
 import { icon } from './icons';
 import { overviewStats, renderOverviewCharts } from './dashboard';
+import { renderReferrals } from './referralsView';
+import { renderWallet } from './walletView';
+import { getMyReferralCode, shareLink, shareUrl } from './referral';
 
 function opts(values: string[]) {
   return values.map((v) => ({ value: v, label: titleCase(v) }));
@@ -18,7 +21,8 @@ const ACT_ICON: Record<string, string> = {
   cancel: 'ban',
   renew: 'refresh-cw',
   unlink: 'unlink',
-  accept: 'check'
+  accept: 'check',
+  share: 'share-2'
 };
 function act(a: string, id: string, label: string, cls = '') {
   return `<button data-act="${a}" data-id="${esc(id)}" class="${cls}">${icon(ACT_ICON[a] || 'circle-dot')}<span>${esc(
@@ -50,6 +54,8 @@ const nav: NavItem[] = [
   { id: 'purchases', label: 'Buy From Company', capability: 'orders.read', icon: 'shopping-bag' },
   { id: 'orders', label: 'Orders', capability: 'orders.read', icon: 'receipt' },
   { id: 'appointments', label: 'Appointments', capability: 'appointments.read', icon: 'calendar-clock' },
+  { id: 'referrals', label: 'Referrals', capability: 'referrals.read', icon: 'share-2' },
+  { id: 'wallet', label: 'Wallet', icon: 'wallet' },
   { id: 'reports', label: 'Reports', capability: 'reports.read', icon: 'bar-chart-3' }
 ];
 
@@ -71,6 +77,8 @@ initPanel({
     if (route === 'purchases') return purchases(c);
     if (route === 'orders') return orders(c);
     if (route === 'appointments') return appointments(c);
+    if (route === 'referrals') return renderReferrals(c);
+    if (route === 'wallet') return renderWallet(c);
     if (route === 'reports') return reports(c);
   }
 });
@@ -197,6 +205,7 @@ function companies(c: HTMLElement) {
                   <td>${statusB(r.status)}</td>
                   <td>${r.expiresAt ? formatDate(r.expiresAt) : '<span class="empty">Never</span>'}</td>
                   <td><div class="row-actions">
+                    ${act('share', r.id, 'Share')}
                     ${act('renew', r.id, r.status === 'active' ? 'Renew' : 'Reactivate')}
                     ${act('toggle', r.id, r.isActive ? 'Pause' : 'Resume')}
                     ${act('unlink', r.id, 'Unlink', 'danger')}
@@ -211,6 +220,11 @@ function companies(c: HTMLElement) {
 
     (c.querySelector('#linkCompany') as HTMLElement).onclick = () => linkModal();
     wire(c, {
+      share: async (id) => {
+        const row = rows.find((r) => r.id === id);
+        const code = await getMyReferralCode();
+        await shareLink(shareUrl('shop/', code), row?.companyName || 'NetMark', `Shop ${row?.companyName || ''} on NetMark`.trim());
+      },
       toggle: async (id) => {
         const row = rows.find((r) => r.id === id);
         const res = await apiRequest(`/company-links/${id}`, { method: 'PUT', body: JSON.stringify({ isActive: !row?.isActive }) });
@@ -258,9 +272,12 @@ async function catalog(c: HTMLElement) {
           <div class="name">${esc(p.name)}</div>
           <div class="desc">${esc(p.description || p.category || '')}</div>
           <div class="price">Company price ${money(p.price)}</div>
-          <button class="btn btn-sm" data-add="${esc(p.id)}" ${storeOpts.length ? '' : 'disabled'}>${icon(
-            'shopping-cart'
-          )}<span>Add to my store</span></button>
+          <div class="row-actions">
+            <button class="btn btn-sm" data-add="${esc(p.id)}" ${storeOpts.length ? '' : 'disabled'}>${icon(
+              'shopping-cart'
+            )}<span>Add to my store</span></button>
+            <button class="btn btn-sm" data-share-p="${esc(p.id)}">${icon('share-2')}<span>Share</span></button>
+          </div>
         </div>
       </div>`
         )
@@ -270,6 +287,14 @@ async function catalog(c: HTMLElement) {
   if (!storeOpts.length) {
     c.querySelectorAll('[data-add]').forEach((b) => ((b as HTMLButtonElement).title = 'Create a store first'));
   }
+
+  c.querySelectorAll('[data-share-p]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      const product = products.find((p: any) => p.id === (b as HTMLElement).dataset.shareP);
+      const code = await getMyReferralCode();
+      await shareLink(shareUrl('shop/', code), product?.name || 'NetMark product', `Check out ${product?.name || 'this product'} on NetMark`);
+    })
+  );
 
   c.querySelectorAll('[data-add]').forEach((b) =>
     b.addEventListener('click', () => {

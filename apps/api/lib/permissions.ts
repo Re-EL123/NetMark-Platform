@@ -55,6 +55,9 @@ const STORE_OWNER_CAPS = [
   'orders.write',
   'appointments.read',
   'appointments.write',
+  'codes.read',
+  'codes.write',
+  'referrals.read',
   'reports.read',
   'notifications.read'
 ];

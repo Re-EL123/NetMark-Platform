@@ -1131,6 +1131,56 @@ async function renderSettings(c: HTMLElement) {
     if (r.success) toast('Settings saved', 'success');
     else toast(r.message || 'Failed', 'error');
   });
+
+  await renderPlatformCommission(c);
+}
+
+/* ------------------------- referral commission -------------------------- */
+async function renderPlatformCommission(c: HTMLElement) {
+  const res = await apiRequest('/settings/commission');
+  const s = res.success ? res.data.platform || {} : {};
+  const host = document.createElement('div');
+  host.className = 'card';
+  host.innerHTML = `<h3>${icon('hand-coins')} Referral commission</h3>
+    <p class="muted">Platform-wide defaults for the 3-level retail override. Companies may tune their own split, but the engine clamps every chain to the total and hard caps below.</p>
+    <div id="platformCommissionForm"></div>`;
+  c.appendChild(host);
+
+  const fields = [
+    { name: 'l1Percent', label: 'Level 1 (%)', value: s.l1Percent ?? 10 },
+    { name: 'l2Percent', label: 'Level 2 (%)', value: s.l2Percent ?? 4 },
+    { name: 'l3Percent', label: 'Level 3 (%)', value: s.l3Percent ?? 1 },
+    { name: 'maxTotalPercent', label: 'Max chain total (%)', value: s.maxTotalPercent ?? 15 },
+    { name: 'capPercent', label: 'Hard platform cap (%)', value: s.capPercent ?? 25 },
+    { name: 'purchaseReferralPercent', label: 'Code / store purchase referral (%)', value: s.purchaseReferralPercent ?? 10 },
+    { name: 'holdDays', label: 'Hold period (days)', value: s.holdDays ?? 7 }
+  ];
+
+  const form = document.createElement('form');
+  form.innerHTML =
+    fields
+      .map(
+        (f) =>
+          `<div class="form-group"><label>${esc(f.label)}</label><input name="${f.name}" type="number" step="0.5" value="${esc(
+            f.value
+          )}"></div>`
+      )
+      .join('') + `<button class="btn btn-sm" type="submit">${icon('check')}<span>Save commission</span></button>`;
+
+  (host.querySelector('#platformCommissionForm') as HTMLElement).appendChild(form);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const value: any = {};
+    for (const f of fields) {
+      value[f.name] = Number((form.querySelector(`[name="${f.name}"]`) as HTMLInputElement).value) || 0;
+    }
+    const r = await apiRequest('/settings/commission', {
+      method: 'PUT',
+      body: JSON.stringify({ scope: 'platform', key: 'commission', value })
+    });
+    if (r.success) toast('Commission saved', 'success');
+    else toast(r.message || 'Failed', 'error');
+  });
 }
 
 /* ------------------------------ plans ---------------------------------- */

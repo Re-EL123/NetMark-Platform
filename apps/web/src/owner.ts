@@ -6,6 +6,9 @@ import { openModal, confirmDialog, toast, money, titleCase, emptyState, statCard
 import { icon, iconify } from './icons';
 import { uploadFieldHtml, wireUploaders } from './upload';
 import { overviewStats, renderOverviewCharts } from './dashboard';
+import { getMyReferralCode, shareLink, shareUrl } from './referral';
+import { renderReferrals } from './referralsView';
+import { renderWallet } from './walletView';
 
 const ROLE_OPTIONS = ['storeOwner', 'driver', 'customer'].map((r) => ({
   value: r,
@@ -28,6 +31,7 @@ const ACT_ICON: Record<string, string> = {
   view: 'eye',
   payout: 'wallet',
   copy: 'external-link',
+  share: 'share-2',
   activate: 'power',
   suspend: 'ban',
   reset: 'refresh-cw'
@@ -55,6 +59,7 @@ const nav: NavItem[] = [
   { id: 'drivers', label: 'Drivers', icon: 'truck' },
   { id: 'appointments', label: 'Appointments', icon: 'calendar-clock' },
   { id: 'codes', label: 'Codes', icon: 'ticket-percent' },
+  { id: 'referrals', label: 'Referrals', capability: 'referrals.read', icon: 'share-2' },
   { id: 'billing', label: 'Billing', icon: 'credit-card' },
   { id: 'wallet', label: 'Wallet', icon: 'wallet' },
   { id: 'commissions', label: 'Commissions', icon: 'banknote' },
@@ -81,6 +86,7 @@ initPanel({
     if (route === 'drivers') return drivers(c);
     if (route === 'appointments') return appointments(c);
     if (route === 'codes') return codes(c);
+    if (route === 'referrals') return renderReferrals(c);
     if (route === 'billing') return billing(c);
     if (route === 'wallet') return wallet(c);
     if (route === 'commissions') return commissions(c);
@@ -185,10 +191,15 @@ function stores(c: HTMLElement) {
       { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') }
     ],
     toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>New store</span></button>`,
-    actions: (r) => act('edit', r.id, 'Edit') + act('toggle', r.id, r.isActive ? 'Deactivate' : 'Activate') + act('delete', r.id, 'Delete', 'danger'),
+    actions: (r) => act('share', r.id, 'Share') + act('edit', r.id, 'Edit') + act('toggle', r.id, r.isActive ? 'Deactivate' : 'Activate') + act('delete', r.id, 'Delete', 'danger'),
     bind: (root, reload) => {
       (root.querySelector('[data-new]') as HTMLElement).onclick = () => storeModal(null, reload);
       wire(root, {
+        share: async (id) => {
+          const row = rows.find((r) => r.id === id);
+          const code = await getMyReferralCode();
+          await shareLink(shareUrl('shop/', code), row?.name || 'NetMark store', `Shop ${row?.name || ''} on NetMark`.trim());
+        },
         edit: (id) => storeModal(rows.find((r) => r.id === id), reload),
         toggle: async (id) => {
           await apiRequest(`/stores/${id}/toggle`, { method: 'POST' });
@@ -238,10 +249,15 @@ function products(c: HTMLElement) {
       { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') }
     ],
     toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>New product</span></button>`,
-    actions: (r) => act('edit', r.id, 'Edit') + act('stock', r.id, 'Stock') + act('delete', r.id, 'Delete', 'danger'),
+    actions: (r) => act('share', r.id, 'Share') + act('edit', r.id, 'Edit') + act('stock', r.id, 'Stock') + act('delete', r.id, 'Delete', 'danger'),
     bind: (root, reload) => {
       (root.querySelector('[data-new]') as HTMLElement).onclick = () => productModal(null, reload);
       wire(root, {
+        share: async (id) => {
+          const row = rows.find((r) => r.id === id);
+          const code = await getMyReferralCode();
+          await shareLink(shareUrl('shop/', code), row?.name || 'NetMark product', `Check out ${row?.name || 'this product'} on NetMark`);
+        },
         edit: (id) => productModal(rows.find((r) => r.id === id), reload),
         stock: async (id) => {
           const row = rows.find((r) => r.id === id);
@@ -493,6 +509,7 @@ function codes(c: HTMLElement) {
     ],
     toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>New code</span></button>`,
     actions: (r) =>
+      act('share', r.id, 'Share') +
       act('edit', r.id, 'Edit') +
       act('toggle', r.id, r.isActive ? 'Disable' : 'Enable') +
       act('delete', r.id, 'Delete', 'danger'),
@@ -514,6 +531,11 @@ function codes(c: HTMLElement) {
           }
         });
       wire(root, {
+        share: async (id) => {
+          const row = rows.find((r) => r.id === id);
+          if (!row?.code) return;
+          await shareLink(shareUrl('register.html', row.code), 'Join NetMark', `Use code ${row.code} to join NetMark`);
+        },
         edit: (id) => {
           const row = rows.find((r) => r.id === id);
           if (!row) return;
@@ -690,6 +712,55 @@ async function settings(c: HTMLElement) {
     toast(r.success ? 'Submitted for approval' : r.message || 'Failed', r.success ? 'success' : 'error');
     if (r.success) settings(c);
   });
+
+  await commissionCard(c);
+}
+
+/* ----------------------------- commission ------------------------------ */
+async function commissionCard(c: HTMLElement) {
+  const res = await apiRequest('/settings/commission');
+  const comm = res.success ? { ...(res.data.platform || {}), ...(res.data.company || {}) } : {};
+  const host = document.createElement('div');
+  host.className = 'card';
+  host.innerHTML = `<h3>${icon('hand-coins')} Commission split</h3>
+    <p class="muted">How much of each product sale flows up your referral chain (level 1 → 3). The total is capped by the platform.</p>
+    <div id="commissionFields"></div>`;
+  c.appendChild(host);
+
+  const fields = [
+    { name: 'l1Percent', label: 'Level 1 (%)', value: comm.l1Percent ?? 10 },
+    { name: 'l2Percent', label: 'Level 2 (%)', value: comm.l2Percent ?? 4 },
+    { name: 'l3Percent', label: 'Level 3 (%)', value: comm.l3Percent ?? 1 },
+    { name: 'purchaseReferralPercent', label: 'Code / store purchase referral (%)', value: comm.purchaseReferralPercent ?? 10 },
+    { name: 'holdDays', label: 'Hold period (days)', value: comm.holdDays ?? 7 }
+  ];
+
+  const form = document.createElement('form');
+  form.innerHTML =
+    fields
+      .map(
+        (f) =>
+          `<div class="form-group"><label>${esc(f.label)}</label><input name="${f.name}" type="number" step="0.5" value="${esc(
+            f.value
+          )}"></div>`
+      )
+      .join('') +
+    `<p class="muted">Chain total capped at ${esc(comm.maxTotalPercent ?? 15)}% · platform hard cap ${esc(
+      comm.capPercent ?? 25
+    )}%</p>
+    <button class="btn btn-sm" type="submit">${icon('check')}<span>Save commission</span></button>`;
+
+  (host.querySelector('#commissionFields') as HTMLElement).appendChild(form);
+  iconify(form);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const value: any = {};
+    for (const f of fields) {
+      value[f.name] = Number((form.querySelector(`[name="${f.name}"]`) as HTMLInputElement).value) || 0;
+    }
+    const r = await apiRequest('/settings/commission', { method: 'PUT', body: JSON.stringify({ value }) });
+    toast(r.success ? 'Commission updated' : r.message || 'Failed', r.success ? 'success' : 'error');
+  });
 }
 
 /* -------------------------------- billing ------------------------------ */
@@ -734,54 +805,7 @@ async function billing(c: HTMLElement) {
 
 /* -------------------------------- wallet ------------------------------- */
 async function wallet(c: HTMLElement) {
-  c.innerHTML = '<p class="empty">Loading wallet…</p>';
-  const [w, ledger] = await Promise.all([
-    apiRequest('/wallets/me').catch(() => null),
-    apiRequest('/wallets/ledger').catch(() => null)
-  ]);
-  const wd: any = w?.success ? w.data : null;
-  const rows: any[] = ledger?.success ? ledger.data || [] : [];
-  c.innerHTML = `
-    <div class="card">
-      <h3>${icon('wallet')} Balance</h3>
-      ${statCards([
-        { label: 'Available (ZAR)', value: Number(wd?.balanceZar || 0), format: 'money', accent: true, tone: 'brand' },
-        { label: 'Pending withdrawal (ZAR)', value: Number(wd?.pendingZar || 0), format: 'money', tone: 'warning' }
-      ])}
-      <div class="toolbar" style="margin-top:12px">
-        <button class="btn btn-sm" id="withdraw">${icon('banknote')}<span>Withdraw</span></button>
-      </div>
-    </div>
-    <div class="card">
-      <h3>${icon('receipt')} Recent activity</h3>
-      ${rows.length
-        ? tableSimple(
-            ['Description', 'Type', 'Amount', 'Date'],
-            rows.map((r: any) => [
-              esc(r.description || '—'),
-              esc(r.type || '—'),
-              money(r.amountZar || 0),
-              formatDate(r.createdAt)
-            ])
-          )
-        : '<p class="empty">No wallet activity yet.</p>'}
-    </div>`;
-  iconify(c);
-  const btn = c.querySelector('#withdraw') as HTMLElement | null;
-  if (btn) {
-    btn.onclick = async () => {
-      await openModal({
-        title: 'Request withdrawal',
-        fields: [{ name: 'amountZar', label: 'Amount (ZAR)', type: 'number', step: '0.01', required: true }],
-        onSubmit: async (v) => {
-          const r = await apiRequest('/wallets/withdraw', { method: 'POST', body: JSON.stringify(v) });
-          if (!r.success) throw new Error(r.message);
-          toast('Withdrawal requested', 'success');
-          wallet(c);
-        }
-      });
-    };
-  }
+  return renderWallet(c);
 }
 
 /* ------------------------------ commissions ---------------------------- */

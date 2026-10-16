@@ -15,6 +15,22 @@ const DEFAULT_PLATFORM = {
   allowRegistrations: true
 };
 
+const DEFAULT_COMMISSION = {
+  holdDays: 7,
+  l1Percent: 10,
+  l2Percent: 4,
+  l3Percent: 1,
+  maxTotalPercent: 15,
+  purchaseReferralPercent: 10,
+  capPercent: 25,
+  autoApprove: false
+};
+
+const DEFAULTS: Record<string, any> = {
+  general: DEFAULT_PLATFORM,
+  commission: DEFAULT_COMMISSION
+};
+
 async function readSetting(scope: string, companyId: string | null, key: string) {
   const sb = getSupabase();
   let q = sb.from('settings').select('*').eq('scope', scope).eq('key', key);
@@ -48,7 +64,7 @@ export default authed(async (req, res, ctx) => {
   const key = slug[0] || 'general';
 
   if (req.method === 'GET') {
-    const platform = (await readSetting('platform', null, key))?.value || (key === 'general' ? DEFAULT_PLATFORM : {});
+    const platform = (await readSetting('platform', null, key))?.value || DEFAULTS[key] || {};
     let company: any = null;
     if (ctx.companyId) {
       company = (await readSetting('company', ctx.companyId, key))?.value || null;
@@ -59,22 +75,28 @@ export default authed(async (req, res, ctx) => {
   if (req.method === 'PUT' || req.method === 'POST') {
     const scope = String(req.body?.scope || (ctx.isPlatform ? 'platform' : 'company'));
     const value = req.body?.value ?? req.body?.values ?? {};
+    const settingKey = req.body?.key || key;
     if (scope === 'platform') {
       if (!ctx.isPlatform) return fail(res, 'Forbidden', 403);
-      const saved = await upsertSetting('platform', null, req.body?.key || key, value, ctx.userId);
-      await recordAudit(req, { action: 'settings.update', entityType: 'settings', entityId: req.body?.key || key, after: { scope, value } });
+      const saved = await upsertSetting('platform', null, settingKey, value, ctx.userId);
+      await recordAudit(req, { action: 'settings.update', entityType: 'settings', entityId: settingKey, after: { scope, value } });
       return ok(res, { data: rowOut(saved) });
     }
+    // A company owner may tune their own commission split (the engine clamps it
+    // to the platform cap); everything else still needs platform approval.
     if (!ctx.isPlatform) {
-      return fail(res, 'Company settings changes need platform approval. Submit a change request instead.', 403);
+      const selfCommission = settingKey === 'commission' && !!ctx.companyId;
+      if (!selfCommission) {
+        return fail(res, 'Company settings changes need platform approval. Submit a change request instead.', 403);
+      }
     }
     const targetCompany = ctx.isPlatform ? req.body?.companyId || ctx.companyId : ctx.companyId;
     if (!targetCompany) return fail(res, 'No company scope');
-    const saved = await upsertSetting('company', targetCompany, req.body?.key || key, value, ctx.userId);
+    const saved = await upsertSetting('company', targetCompany, settingKey, value, ctx.userId);
     await recordAudit(req, {
       action: 'settings.update',
       entityType: 'settings',
-      entityId: req.body?.key || key,
+      entityId: settingKey,
       companyId: targetCompany,
       after: { scope, value }
     });

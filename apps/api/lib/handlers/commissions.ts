@@ -1,6 +1,6 @@
 import { authed, ok, fail, slugOf, getSupabase, rowOut, rowsOut } from '../http';
 import { recordAudit } from '../audit';
-import { recordCommission } from '../commissionEngine';
+import { recordCommission, releaseDueCommissions } from '../commissionEngine';
 
 export default authed(async (req, res, ctx) => {
   const sb = getSupabase();
@@ -8,6 +8,9 @@ export default authed(async (req, res, ctx) => {
   const isPlatform = ctx.isPlatform;
 
   if (slug.length === 0 && req.method === 'GET') {
+    // Lazily matures any commission whose hold window has passed so users see
+    // an accurate available balance without waiting for the daily cron.
+    await releaseDueCommissions(sb, 100).catch(() => {});
     let q = sb.from('commissions').select('*').order('created_at', { ascending: false });
     if (!isPlatform && ctx.tenantId) q = q.eq('tenant_id', ctx.tenantId);
     if (!isPlatform) q = q.eq('user_id', ctx.userId);

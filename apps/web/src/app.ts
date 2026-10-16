@@ -7,6 +7,10 @@ import { initTooltips } from './tooltip';
 import { initMotion, animateIn } from './motion';
 import { startTour, hasSeenTour } from './tour';
 import { renderAdBanner, renderAdSections, renderAdPopup } from './ads';
+import { captureReferral } from './referralStore';
+
+// Remember a `?ref=` code from a share link so it reaches the signup form.
+captureReferral();
 
 export interface NavItem {
   id: string;
