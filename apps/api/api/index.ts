@@ -24,6 +24,11 @@ import ads from '../lib/handlers/ads';
 import plans from '../lib/handlers/plans';
 import codePurchases from '../lib/handlers/codePurchases';
 import storePurchases from '../lib/handlers/storePurchases';
+import consent from '../lib/handlers/consent';
+import dsar from '../lib/handlers/dsar';
+import wallets from '../lib/handlers/wallets';
+import commissions from '../lib/handlers/commissions';
+import payouts from '../lib/handlers/payouts';
 
 type Handler = (req: VercelRequest, res: VercelResponse) => unknown;
 
@@ -40,6 +45,11 @@ const handlers: Record<string, Handler> = {
   plans,
   'code-purchases': codePurchases,
   'store-purchases': storePurchases,
+  consent,
+  dsar,
+  wallets,
+  commissions,
+  payouts,
   orders,
   drivers,
   appointments,

@@ -36,7 +36,8 @@ export function authed(
             userId: user.id,
             role: user.role,
             companyId: user.company_id,
-            isPlatform: user.role === 'platformAdmin'
+            isPlatform: user.role === 'platformAdmin',
+            tenantId: (user as any).tenant_id || user.company_id || null
           });
         } catch (err: any) {
           console.error('handler error', err?.message || err);
@@ -52,6 +53,7 @@ export interface AuthenticatedContext {
   userId: string;
   role: string;
   companyId: string | null;
+  tenantId: string | null;
   isPlatform: boolean;
 }
 
