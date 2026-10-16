@@ -74,6 +74,7 @@ const nav: NavItem[] = [
   { id: 'webhooks', label: 'Webhooks', icon: 'webhook' },
   { id: 'feature-flags', label: 'Feature Flags', icon: 'flag' },
   { id: 'payouts', label: 'Payouts', icon: 'wallet' },
+  { id: 'payout-batches', label: 'Payout Batches', icon: 'banknote' },
   { id: 'payments', label: 'Payments', icon: 'credit-card' },
   { id: 'reports', label: 'Reports', icon: 'bar-chart-3' },
   { id: 'ads', label: 'Adverts', icon: 'megaphone' },
@@ -113,6 +114,7 @@ initPanel({
     if (route === 'webhooks') return renderWebhooks(c);
     if (route === 'feature-flags') return renderFeatureFlags(c);
     if (route === 'payouts') return renderPayouts(c);
+    if (route === 'payout-batches') return renderPayoutBatches(c);
     if (route === 'payments') return renderPayments(c);
     if (route === 'reports') return renderReports(c);
     if (route === 'ads') return renderAds(c);
@@ -1222,7 +1224,18 @@ function renderConsent(c: HTMLElement) {
       { key: 'granted', label: 'Granted', render: (r) => statusBadge(r.granted ? 'active' : 'inactive') },
       { key: 'grantedAt', label: 'Granted', render: (r) => formatDate(r.grantedAt) },
       { key: 'revokedAt', label: 'Revoked', render: (r) => formatDate(r.revokedAt) }
-    ]
+    ],
+    actions: (r) => (r.granted ? act('revoke', r.id, 'Revoke', 'danger') : ''),
+    bind: (root, reload) => {
+      wire(root, {
+        revoke: async (id) => {
+          if (await confirmDialog('Revoke this consent?', { danger: true, confirmLabel: 'Revoke' })) {
+            await apiRequest(`/consent/${id}/revoke`, { method: 'POST' });
+            reload();
+          }
+        }
+      });
+    }
   });
 }
 
@@ -1231,11 +1244,23 @@ function renderDSAR(c: HTMLElement) {
   crudView(c, {
     endpoint: '/dsar',
     columns: [
-      { key: 'type', label: 'Type' },
+      { key: 'type', label: 'Type', render: (r) => titleCase(r.type || 'access') },
       { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
       { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) },
       { key: 'dueAt', label: 'Due', render: (r) => formatDate(r.dueAt) }
-    ]
+    ],
+    actions: (r) => (r.status === 'completed' ? '' : act('process', r.id, 'Mark completed')),
+    bind: (root, reload) => {
+      wire(root, {
+        process: async (id) => {
+          if (await confirmDialog('Mark this request as completed?', { confirmLabel: 'Complete' })) {
+            await apiRequest(`/dsar/${id}`, { method: 'PUT', body: JSON.stringify({ status: 'completed', response: 'Completed by platform admin.' }) });
+            toast('Request completed', 'success');
+            reload();
+          }
+        }
+      });
+    }
   });
 }
 
@@ -1472,6 +1497,38 @@ function renderFeatureFlags(c: HTMLElement) {
           }
         }
       });
+    }
+  });
+}
+
+/* --------------------------- payout batches --------------------------- */
+function renderPayoutBatches(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/payouts',
+    columns: [
+      { key: 'companyId', label: 'Company', render: (r) => (r.companyId ? esc(String(r.companyId).slice(0, 8)) : 'All') },
+      { key: 'totalZar', label: 'Total (ZAR)', render: (r) => money(r.totalZar || 0) },
+      { key: 'currency', label: 'Currency' },
+      { key: 'bankFormat', label: 'Format', render: (r) => esc(r.bankFormat || 'EFT') },
+      { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
+      { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) }
+    ],
+    toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>New batch</span></button>`,
+    bind: (root, reload) => {
+      (root.querySelector('[data-new]') as HTMLElement).onclick = async () => {
+        await openModal({
+          title: 'New payout batch (EFT)',
+          fields: [
+            { name: 'totalZar', label: 'Total (ZAR)', type: 'number', step: '0.01', required: true }
+          ],
+          onSubmit: async (v) => {
+            const res = await apiRequest('/payouts', { method: 'POST', body: JSON.stringify(v) });
+            if (!res.success) throw new Error(res.message);
+            toast('Payout batch created', 'success');
+            reload();
+          }
+        });
+      };
     }
   });
 }

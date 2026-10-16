@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 import { apiRequest } from './api';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
-import { openModal, confirmDialog, toast, money, emptyState } from './ui';
+import { openModal, confirmDialog, toast, money, titleCase, emptyState } from './ui';
 import { icon } from './icons';
 
 interface CartLine {
@@ -32,6 +32,8 @@ const nav: NavItem[] = [
   { id: 'cart', label: 'Cart', icon: 'shopping-cart' },
   { id: 'orders', label: 'My Orders', icon: 'receipt' },
   { id: 'appointments', label: 'Appointments', icon: 'calendar-clock' },
+  { id: 'autoship', label: 'Autoship', icon: 'refresh-cw' },
+  { id: 'privacy', label: 'Data & Consent', icon: 'shield' },
   { id: 'profile', label: 'Profile', icon: 'user' }
 ];
 
@@ -47,6 +49,8 @@ initPanel({
     if (route === 'cart') return cart(c, ctx);
     if (route === 'orders') return orders(c, ctx);
     if (route === 'appointments') return appointments(c);
+    if (route === 'autoship') return autoship(c, ctx);
+    if (route === 'privacy') return privacy(c, ctx);
     if (route === 'profile') return profile(c, ctx);
   }
 });
@@ -465,4 +469,196 @@ function tableSimple(headers: string[], rows: string[][]) {
   return `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows
     .map((r) => `<tr>${r.map((cell) => `<td>${cell}</td>`).join('')}</tr>`)
     .join('')}</tbody></table></div>`;
+}
+
+/* ------------------------------- autoship ------------------------------ */
+async function autoship(c: HTMLElement, ctx: any) {
+  c.innerHTML = '<p class="empty">Loading autoship…</p>';
+  const [subs, ordersRes] = await Promise.all([
+    apiRequest('/autoship').catch(() => null),
+    apiRequest('/orders/my/all?pageSize=100').catch(() => null)
+  ]);
+  const rows: any[] = subs?.success ? subs.data || [] : [];
+  const orders: any[] = ordersRes?.success ? ordersRes.data || [] : [];
+  const orderOpts = orders.map((o) => ({ value: o.id, label: `${o.orderNumber || o.id} — ${money(o.total)}` }));
+  c.innerHTML = `
+    <div class="card">
+      <h3>${icon('refresh-cw')} Scheduled repeat orders</h3>
+      <p class="empty">Reorder your last basket automatically at an interval that suits you.</p>
+      ${rows.length
+        ? tableSimple(
+            ['Order', 'Interval', 'Next run', 'Status', ''],
+            rows.map((r) => [
+              esc(r.orderId ? String(r.orderId).slice(0, 8) : '—'),
+              `every ${r.intervalDays} days`,
+              formatDate(r.nextRunAt),
+              statusBadge(r.status),
+              r.status === 'active'
+                ? `<button class="btn btn-sm" data-cancel="${esc(r.id)}">${icon('ban')}<span>Cancel</span></button>`
+                : ''
+            ])
+          )
+        : '<p class="empty">No autoship subscriptions yet.</p>'}
+      <div class="toolbar" style="margin-top:12px">
+        <button class="btn btn-sm" id="addAutoship">${icon('plus')}<span>New autoship</span></button>
+      </div>
+    </div>`;
+  const add = c.querySelector('#addAutoship') as HTMLElement | null;
+  if (add) {
+    add.onclick = async () => {
+      if (!orderOpts.length) return toast('Place an order first', 'error');
+      await openModal({
+        title: 'New autoship',
+        fields: [
+          { name: 'orderId', label: 'Order to repeat', type: 'select', options: orderOpts, required: true },
+          { name: 'intervalDays', label: 'Repeat every (days)', type: 'number', value: '30', min: 1 }
+        ],
+        onSubmit: async (v) => {
+          const r = await apiRequest('/autoship', { method: 'POST', body: JSON.stringify({ orderId: v.orderId, intervalDays: v.intervalDays, items: [] }) });
+          if (!r.success) throw new Error(r.message);
+          toast('Autoship scheduled', 'success');
+          autoship(c, ctx);
+        }
+      });
+    };
+  }
+  c.querySelectorAll('[data-cancel]').forEach((b) => {
+    (b as HTMLElement).onclick = async () => {
+      if (!(await confirmDialog('Cancel this autoship?', { danger: true, confirmLabel: 'Cancel autoship' }))) return;
+      const id = (b as HTMLElement).dataset.cancel!;
+      const r = await apiRequest(`/autoship/${id}/cancel`, { method: 'POST' });
+      if (!r.success) return toast(r.message || 'Could not cancel', 'error');
+      toast('Autoship cancelled', 'success');
+      autoship(c, ctx);
+    };
+  });
+}
+
+/* --------------------------- privacy / consent ------------------------- */
+async function privacy(c: HTMLElement, ctx: any) {
+  c.innerHTML = '<p class="empty">Loading your data…</p>';
+  const [consentRes, dsarRes] = await Promise.all([
+    apiRequest('/consent').catch(() => null),
+    apiRequest('/dsar').catch(() => null)
+  ]);
+  const consents: any[] = consentRes?.success ? consentRes.data || [] : [];
+  const dsars: any[] = dsarRes?.success ? dsarRes.data || [] : [];
+
+  const purposes = ['marketing', 'communications', 'data-processing', 'profiling'];
+  const wordings: Record<string, string> = {
+    marketing: 'I consent to NetMark contacting me with promotions and offers.',
+    communications: 'I consent to service communications about my orders and account.',
+    'data-processing': 'I consent to the processing of my personal information to provide the service.',
+    profiling: 'I consent to analysis of my activity to improve recommendations.'
+  };
+
+  c.innerHTML = `
+    <div class="card">
+      <h3>${icon('shield')} Privacy &amp; consent (POPIA)</h3>
+      <p class="empty">You can grant or withdraw consent at any time, and request a copy or deletion of your data (DSAR).</p>
+      <div class="toolbar">
+        <button class="btn btn-sm" id="grant">${icon('check')}<span>Grant consent</span></button>
+        <div class="spacer"></div>
+        <button class="btn btn-sm" id="dsarBtn">${icon('file-text')}<span>New data request</span></button>
+      </div>
+      <div class="table-wrap" style="margin-top:12px">
+        <table><thead><tr><th>Purpose</th><th>Status</th><th>Granted</th><th>Revoked</th><th></th></tr></thead>
+        <tbody>${consents.length
+          ? consents
+              .map(
+                (r) =>
+                  `<tr><td>${esc(r.purpose || '—')}</td><td>${statusBadge(r.granted ? 'active' : 'inactive')}</td><td>${formatDate(
+                    r.grantedAt
+                  )}</td><td>${formatDate(r.revokedAt)}</td><td>${
+                    r.granted ? `<button class="btn btn-sm" data-revoke="${esc(r.id)}">${icon('ban')}<span>Withdraw</span></button>` : ''
+                  }</td></tr>`
+              )
+              .join('')
+          : '<tr><td colspan="5" class="empty">No consent records yet.</td></tr>'}</tbody></table>
+      </div>
+    </div>
+    <div class="card">
+      <h3>${icon('file-text')} Data requests (DSAR)</h3>
+      ${dsars.length
+        ? tableSimple(
+            ['Type', 'Status', 'Submitted', 'Due'],
+            dsars.map((r) => [titleCase(r.type || 'access'), statusBadge(r.status), formatDate(r.createdAt), formatDate(r.dueAt)])
+          )
+        : '<p class="empty">No data requests yet.</p>'}
+    </div>`;
+
+  const grant = c.querySelector('#grant') as HTMLElement | null;
+  if (grant) {
+    grant.onclick = async () => {
+      await openModal({
+        title: 'Grant consent',
+        fields: [
+          {
+            name: 'purpose',
+            label: 'Purpose',
+            type: 'select',
+            options: purposes.map((p) => ({ value: p, label: titleCase(p) })),
+            required: true
+          },
+          { name: 'wording', label: 'Consent wording', type: 'textarea', rows: 3, help: 'Edit if your data subject wording differs.' },
+          { name: 'granted', label: 'Granted', type: 'select', options: [{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }] }
+        ],
+        onSubmit: async (v) => {
+          const purpose = String(v.purpose);
+          const r = await apiRequest('/consent', {
+            method: 'POST',
+            body: JSON.stringify({
+              purpose,
+              wording: v.wording || wordings[purpose] || 'I consent to the processing of my personal information.',
+              mechanism: 'checkbox',
+              granted: v.granted !== 'false'
+            })
+          });
+          if (!r.success) throw new Error(r.message);
+          toast('Consent recorded', 'success');
+          privacy(c, ctx);
+        }
+      });
+    };
+  }
+
+  const dsarBtn = c.querySelector('#dsarBtn') as HTMLElement | null;
+  if (dsarBtn) {
+    dsarBtn.onclick = async () => {
+      await openModal({
+        title: 'New data request',
+        fields: [
+          {
+            name: 'type',
+            label: 'Request type',
+            type: 'select',
+            options: [
+              { value: 'access', label: 'Access my data' },
+              { value: 'correct', label: 'Correct my data' },
+              { value: 'delete', label: 'Delete my data' }
+            ],
+            required: true
+          },
+          { name: 'details', label: 'Details', type: 'textarea', rows: 3 }
+        ],
+        onSubmit: async (v) => {
+          const r = await apiRequest('/dsar', { method: 'POST', body: JSON.stringify({ type: v.type, details: { note: v.details || '' } }) });
+          if (!r.success) throw new Error(r.message);
+          toast('Request submitted — response within 30 days', 'success');
+          privacy(c, ctx);
+        }
+      });
+    };
+  }
+
+  c.querySelectorAll('[data-revoke]').forEach((b) => {
+    (b as HTMLElement).onclick = async () => {
+      if (!(await confirmDialog('Withdraw this consent?', { danger: true, confirmLabel: 'Withdraw' }))) return;
+      const id = (b as HTMLElement).dataset.revoke!;
+      const r = await apiRequest(`/consent/${id}/revoke`, { method: 'POST' });
+      if (!r.success) return toast(r.message || 'Could not withdraw', 'error');
+      toast('Consent withdrawn', 'success');
+      privacy(c, ctx);
+    };
+  });
 }

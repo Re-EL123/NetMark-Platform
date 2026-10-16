@@ -6,6 +6,13 @@ export default authed(async (req, res, ctx) => {
   const slug = slugOf(req);
   const isPlatform = ctx.isPlatform;
 
+  if (slug.length === 0 && req.method === 'GET') {
+    if (!isPlatform) return fail(res, 'Forbidden', 403);
+    let q = sb.from('wallets').select('*').order('balance_zar', { ascending: false }).limit(200);
+    const { data } = await q;
+    return ok(res, { data: rowsOut(data) });
+  }
+
   if (slug[0] === 'me' && req.method === 'GET') {
     const { data } = await sb.from('wallets').select('*').eq('user_id', ctx.userId).maybeSingle();
     if (!data) {

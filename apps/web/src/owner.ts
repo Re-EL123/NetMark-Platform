@@ -2,7 +2,7 @@ import { apiRequest } from './api';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { crudView } from './crud';
-import { openModal, confirmDialog, toast, money, titleCase, emptyState, Field } from './ui';
+import { openModal, confirmDialog, toast, money, titleCase, emptyState, statCards, Field } from './ui';
 import { icon, iconify } from './icons';
 import { uploadFieldHtml, wireUploaders } from './upload';
 import { overviewStats, renderOverviewCharts } from './dashboard';
@@ -55,6 +55,10 @@ const nav: NavItem[] = [
   { id: 'drivers', label: 'Drivers', icon: 'truck' },
   { id: 'appointments', label: 'Appointments', icon: 'calendar-clock' },
   { id: 'codes', label: 'Codes', icon: 'ticket-percent' },
+  { id: 'code-market', label: 'Buy Codes', icon: 'shopping-cart' },
+  { id: 'billing', label: 'Billing', icon: 'credit-card' },
+  { id: 'wallet', label: 'Wallet', icon: 'wallet' },
+  { id: 'commissions', label: 'Commissions', icon: 'banknote' },
   { id: 'payouts', label: 'Payouts', capability: 'payouts.read', icon: 'wallet' },
   { id: 'reports', label: 'Reports', icon: 'bar-chart-3' },
   { id: 'settings', label: 'Settings', icon: 'settings' }
@@ -78,6 +82,10 @@ initPanel({
     if (route === 'drivers') return drivers(c);
     if (route === 'appointments') return appointments(c);
     if (route === 'codes') return codes(c);
+    if (route === 'code-market') return codeMarket(c);
+    if (route === 'billing') return billing(c);
+    if (route === 'wallet') return wallet(c);
+    if (route === 'commissions') return commissions(c);
     if (route === 'payouts') return payouts(c);
     if (route === 'reports') return reports(c);
     if (route === 'settings') return settings(c);
@@ -637,5 +645,152 @@ async function settings(c: HTMLElement) {
     });
     toast(r.success ? 'Submitted for approval' : r.message || 'Failed', r.success ? 'success' : 'error');
     if (r.success) settings(c);
+  });
+}
+
+/* --------------------------- code marketplace -------------------------- */
+async function codeMarket(c: HTMLElement) {
+  c.innerHTML = '<p class="empty">Loading codes for sale…</p>';
+  const res = await apiRequest('/codes?forSale=true&pageSize=50');
+  if (!res.success) {
+    c.innerHTML = `<div class="card"><p class="empty">${esc(res.message)}</p></div>`;
+    return;
+  }
+  const rows: any[] = res.data || [];
+  if (!rows.length) {
+    c.innerHTML = emptyState('No codes are currently for sale.', 'ticket-percent');
+    return;
+  }
+  c.innerHTML = `
+    <p class="empty" style="margin-bottom:12px">Codes from other companies that unlock their catalog for your store owners.</p>
+    <div class="card">
+      ${tableSimple(
+        ['Code', 'Company', 'Price', 'Uses', ''],
+        rows.map((r) => [
+          badge(r.code, 'info'),
+          esc((r.companyId || '').slice(0, 8) || '—'),
+          money(r.priceZar || 0),
+          `${r.uses || 0}${r.maxUses ? ' / ' + r.maxUses : ''}`,
+          `<button class="btn btn-sm" data-buy="${esc(r.id)}">${icon('shopping-cart')}<span>Buy</span></button>`
+        ])
+      )}
+    </div>`;
+  iconify(c);
+  c.querySelectorAll('[data-buy]').forEach((b) => {
+    (b as HTMLElement).onclick = async () => {
+      const id = (b as HTMLElement).dataset.buy!;
+      if (!(await confirmDialog('Purchase this code?', { confirmLabel: 'Purchase' }))) return;
+      const r = await apiRequest('/code-purchases', { method: 'POST', body: JSON.stringify({ codeId: id }) });
+      if (!r.success) return toast(r.message || 'Could not purchase', 'error');
+      toast('Code purchased — awaiting payment confirmation', 'success');
+    };
+  });
+}
+
+/* -------------------------------- billing ------------------------------ */
+async function billing(c: HTMLElement) {
+  c.innerHTML = '<p class="empty">Loading plan…</p>';
+  const [mine, catalog] = await Promise.all([
+    apiRequest('/plans/my').catch(() => null),
+    apiRequest('/plans').catch(() => null)
+  ]);
+  const my: any = mine?.success ? mine.data : null;
+  const plans: any[] = catalog?.success ? catalog.data || [] : [];
+  c.innerHTML = `
+    <div class="card">
+      <h3>${icon('credit-card')} Your current plan</h3>
+      ${
+        my
+          ? `${statCards([
+              { label: 'Plan', value: my.plan?.name || my.name || '—', format: 'text' },
+              { label: 'Base fee (ZAR)', value: Number(my.plan?.baseFeeZar ?? my.baseFeeZar ?? 0), format: 'money' },
+              { label: 'Per active distributor', value: Number(my.plan?.perActiveDistributorZar ?? my.perActiveDistributorZar ?? 0), format: 'money' },
+              { label: 'Price (ZAR)', value: Number(my.plan?.priceZar ?? my.priceZar ?? 0), format: 'money' }
+            ])}`
+          : '<p class="empty">No plan assigned yet. Contact the platform admin.</p>'
+      }
+    </div>
+    <div class="card">
+      <h3>${icon('layers')} Available plans</h3>
+      ${plans.length
+        ? tableSimple(
+            ['Plan', 'Tier', 'Base (ZAR)', 'Per distributor (ZAR)'],
+            plans.map((p: any) => [
+              esc(p.name),
+              esc(p.tier || '—'),
+              money(p.baseFeeZar || 0),
+              money(p.perActiveDistributorZar || 0)
+            ])
+          )
+        : '<p class="empty">No plans available.</p>'}
+    </div>`;
+  iconify(c);
+}
+
+/* -------------------------------- wallet ------------------------------- */
+async function wallet(c: HTMLElement) {
+  c.innerHTML = '<p class="empty">Loading wallet…</p>';
+  const [w, ledger] = await Promise.all([
+    apiRequest('/wallets/me').catch(() => null),
+    apiRequest('/wallets/ledger').catch(() => null)
+  ]);
+  const wd: any = w?.success ? w.data : null;
+  const rows: any[] = ledger?.success ? ledger.data || [] : [];
+  c.innerHTML = `
+    <div class="card">
+      <h3>${icon('wallet')} Balance</h3>
+      ${statCards([
+        { label: 'Available (ZAR)', value: Number(wd?.balanceZar || 0), format: 'money', accent: true, tone: 'brand' },
+        { label: 'Pending withdrawal (ZAR)', value: Number(wd?.pendingZar || 0), format: 'money', tone: 'warning' }
+      ])}
+      <div class="toolbar" style="margin-top:12px">
+        <button class="btn btn-sm" id="withdraw">${icon('banknote')}<span>Withdraw</span></button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>${icon('receipt')} Recent activity</h3>
+      ${rows.length
+        ? tableSimple(
+            ['Description', 'Type', 'Amount', 'Date'],
+            rows.map((r: any) => [
+              esc(r.description || '—'),
+              esc(r.type || '—'),
+              money(r.amountZar || 0),
+              formatDate(r.createdAt)
+            ])
+          )
+        : '<p class="empty">No wallet activity yet.</p>'}
+    </div>`;
+  iconify(c);
+  const btn = c.querySelector('#withdraw') as HTMLElement | null;
+  if (btn) {
+    btn.onclick = async () => {
+      await openModal({
+        title: 'Request withdrawal',
+        fields: [{ name: 'amountZar', label: 'Amount (ZAR)', type: 'number', step: '0.01', required: true }],
+        onSubmit: async (v) => {
+          const r = await apiRequest('/wallets/withdraw', { method: 'POST', body: JSON.stringify(v) });
+          if (!r.success) throw new Error(r.message);
+          toast('Withdrawal requested', 'success');
+          wallet(c);
+        }
+      });
+    };
+  }
+}
+
+/* ------------------------------ commissions ---------------------------- */
+function commissions(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/commissions',
+    searchPlaceholder: 'Search commissions…',
+    columns: [
+      { key: 'orderId', label: 'Order', render: (r) => (r.orderId ? esc(String(r.orderId).slice(0, 8)) : '—') },
+      { key: 'amountZar', label: 'Amount (ZAR)', render: (r) => money(r.amountZar || 0) },
+      { key: 'bonusType', label: 'Type', render: (r) => titleCase(r.bonusType || 'sale') },
+      { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
+      { key: 'createdAt', label: 'Earned', render: (r) => formatDate(r.createdAt) }
+    ],
+    empty: 'No commissions earned yet.'
   });
 }

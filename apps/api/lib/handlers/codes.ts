@@ -27,7 +27,12 @@ export default authed(async (req, res, ctx) => {
   if (slug.length === 0 && req.method === 'GET') {
     const list = parseListQuery(req);
     let q = sb.from('distributor_codes').select('*', { count: 'exact' });
-    if (!ctx.isPlatform) q = q.eq('company_id', ctx.companyId);
+    if (String(req.query.forSale) === 'true') {
+      // Marketplace view: any authed user can browse unpurchased codes for sale.
+      q = q.eq('is_for_sale', true).eq('purchased', false).eq('is_active', true);
+    } else if (!ctx.isPlatform) {
+      q = q.eq('company_id', ctx.companyId);
+    }
     if (req.query.isActive !== undefined) q = q.eq('is_active', String(req.query.isActive) === 'true');
     const result = await runList(q, list, { searchColumns: ['code'] });
     return ok(res, { data: rowsOut(result.data), meta: { count: result.count, page: result.page, pageSize: result.pageSize } });

@@ -42,6 +42,7 @@ function tableSimple(headers: string[], rows: string[][]) {
 const nav: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: 'layout-dashboard' },
   { id: 'stores', label: 'My Stores', capability: 'stores.read', icon: 'store' },
+  { id: 'store-market', label: 'Buy Store', icon: 'shopping-bag' },
   { id: 'companies', label: 'Companies', capability: 'companies.link', icon: 'building-2' },
   { id: 'catalog', label: 'Catalog', capability: 'products.read', icon: 'package-search' },
   { id: 'listings', label: 'My Store Products', capability: 'products.read', icon: 'boxes' },
@@ -61,6 +62,7 @@ initPanel({
     ctx.titleEl.textContent = nav.find((n) => n.id === route)?.label || 'Business';
     if (route === 'dashboard') return dashboard(c);
     if (route === 'stores') return stores(c);
+    if (route === 'store-market') return storeMarket(c);
     if (route === 'companies') return companies(c);
     if (route === 'catalog') return catalog(c);
     if (route === 'listings') return listings(c);
@@ -590,4 +592,41 @@ async function reports(c: HTMLElement) {
       ['Product', 'Qty', 'Revenue'],
       (d.topProducts || []).map((p: any) => [esc(p.name), String(p.qty), money(p.revenue)])
     )}</div>`;
+}
+
+/* ---------------------------- store marketplace ------------------------ */
+async function storeMarket(c: HTMLElement) {
+  c.innerHTML = '<p class="empty">Loading stores for sale…</p>';
+  const res = await apiRequest('/stores?forSale=true&pageSize=50');
+  if (!res.success) {
+    c.innerHTML = `<div class="card"><p class="empty">${esc(res.message)}</p></div>`;
+    return;
+  }
+  const rows: any[] = res.data || [];
+  if (!rows.length) {
+    c.innerHTML = emptyState('No stores are currently for sale.', 'store');
+    return;
+  }
+  c.innerHTML = `
+    <p class="empty" style="margin-bottom:12px">Stores you can purchase and take ownership of.</p>
+    <div class="card">
+      ${tableSimple(
+        ['Store', 'Company', 'Price', ''],
+        rows.map((r) => [
+          esc(r.name),
+          esc((r.companyId || '').slice(0, 8) || '—'),
+          money(r.priceZar || 0),
+          `<button class="btn btn-sm" data-buy="${esc(r.id)}">${icon('shopping-cart')}<span>Buy</span></button>`
+        ])
+      )}
+    </div>`;
+  c.querySelectorAll('[data-buy]').forEach((b) => {
+    (b as HTMLElement).onclick = async () => {
+      const id = (b as HTMLElement).dataset.buy!;
+      if (!(await confirmDialog('Purchase this store?', { confirmLabel: 'Purchase' }))) return;
+      const r = await apiRequest('/store-purchases', { method: 'POST', body: JSON.stringify({ storeId: id }) });
+      if (!r.success) return toast(r.message || 'Could not purchase', 'error');
+      toast('Store purchased — awaiting payment confirmation', 'success');
+    };
+  });
 }

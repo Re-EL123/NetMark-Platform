@@ -19,9 +19,15 @@ export default authed(async (req, res, ctx) => {
   if (slug.length === 0 && req.method === 'GET') {
     const list = parseListQuery(req);
     let q = sb.from('stores').select('*', { count: 'exact' });
-    q = scope(q);
-    if (req.query.isActive !== undefined) q = q.eq('is_active', String(req.query.isActive) === 'true');
-    if (req.query.companyId && ctx.isPlatform) q = q.eq('company_id', String(req.query.companyId));
+    const forSale = String(req.query.forSale) === 'true';
+    if (forSale) {
+      // Marketplace view: any authed user can browse unpurchased stores for sale.
+      q = q.eq('is_for_sale', true).eq('purchased', false).eq('is_active', true);
+    } else {
+      q = scope(q);
+      if (req.query.isActive !== undefined) q = q.eq('is_active', String(req.query.isActive) === 'true');
+      if (req.query.companyId && ctx.isPlatform) q = q.eq('company_id', String(req.query.companyId));
+    }
     const result = await runList(q, list, { searchColumns: ['name', 'slug', 'address'] });
     return ok(res, { data: rowsOut(result.data), meta: { count: result.count, page: result.page, pageSize: result.pageSize } });
   }
