@@ -18,8 +18,13 @@ export default authed(async (req, res, ctx) => {
   function scope(q: any) {
     if (ctx.isPlatform) return q;
     if (ctx.role === 'owner') return q.eq('company_id', ctx.companyId);
-    // store owners browse the whole marketplace catalog; customers only see
-    // active products.
+    // Store owners only ever see the catalog of the company they joined with a
+    // referral code. Unlinked store owners see nothing.
+    if (ctx.role === 'storeOwner') {
+      return ctx.companyId
+        ? q.eq('company_id', ctx.companyId)
+        : q.eq('id', '00000000-0000-0000-0000-000000000000');
+    }
     return q;
   }
 

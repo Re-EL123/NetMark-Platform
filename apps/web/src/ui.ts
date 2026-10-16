@@ -157,25 +157,43 @@ export function openModal(opts: ModalOptions): Promise<void> {
         else if (f.type === 'number') values[f.name] = el.value === '' ? null : Number(el.value);
         else values[f.name] = el.value;
       }
-      const submitBtn = overlay.querySelector('[data-submit]') as HTMLButtonElement;
-      const errBox = overlay.querySelector('.error-modal') as HTMLElement;
+      const submitBtn = overlay.querySelector('[data-submit]') as HTMLButtonElement | null;
+      // The error box is part of the template, but guard against a missing or
+      // detached node so a submit never throws on a null element.
+      let errBox = overlay.querySelector('.error-modal') as HTMLElement | null;
+      if (!errBox) {
+        errBox = document.createElement('div');
+        errBox.className = 'error-modal';
+        errBox.style.display = 'none';
+        const host = overlay.querySelector('.modal-body') || overlay.querySelector('form') || overlay;
+        host.prepend(errBox);
+      }
+      const showErr = (message: string) => {
+        errBox!.className = 'error';
+        errBox!.textContent = message;
+        errBox!.style.display = 'block';
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = opts.submitLabel || 'Save';
+        }
+      };
       errBox.style.display = 'none';
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Saving…';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Saving…';
+      }
       try {
         const result = await opts.onSubmit(values);
         if (result === false) {
-          submitBtn.disabled = false;
-          submitBtn.textContent = opts.submitLabel || 'Save';
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = opts.submitLabel || 'Save';
+          }
           return;
         }
         close();
       } catch (err: any) {
-        errBox.className = 'error';
-        errBox.textContent = err?.message || 'Something went wrong';
-        errBox.style.display = 'block';
-        submitBtn.disabled = false;
-        submitBtn.textContent = opts.submitLabel || 'Save';
+        showErr(err?.message || 'Something went wrong');
       }
     });
   });

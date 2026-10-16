@@ -232,6 +232,39 @@ async function handleItn(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    // Wholesale purchases (store owner buying stock from their company) share
+    // the same ITN channel — custom_str1 carries the purchase id for these.
+    if (status === 'COMPLETE' && body.custom_str1) {
+      const { data: purchase } = await sb.from('purchases').select('*').eq('id', body.custom_str1).maybeSingle();
+      if (purchase && purchase.payment_status !== 'paid') {
+        const amountGross = Number(body.amount_gross || 0);
+        const expected = Number(purchase.total || 0);
+        const amountOk = !amountGross || Math.abs(amountGross - expected) < 0.01;
+        if (amountOk) {
+          await sb
+            .from('purchases')
+            .update({
+              payment_status: 'paid',
+              payment_method: 'payfast',
+              payment_ref: body.pf_payment_id || null,
+              status: purchase.status === 'pending' ? 'confirmed' : purchase.status
+            })
+            .eq('id', purchase.id);
+          if (purchase.store_owner_id) {
+            await notify({
+              userId: purchase.store_owner_id,
+              type: 'payment',
+              title: 'Payment received',
+              body: `We received your payment for purchase ${purchase.reference || purchase.id}.`,
+              data: { purchaseId: purchase.id }
+            });
+          }
+        } else {
+          console.warn('PayFast ITN: purchase amount mismatch', { amountGross, expected });
+        }
+      }
+    }
+
     return res.status(200).send('OK');
   } catch (err) {
     console.error('PayFast ITN error', err);

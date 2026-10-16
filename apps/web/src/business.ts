@@ -29,6 +29,7 @@ const nav: NavItem[] = [
   { id: 'stores', label: 'My Stores', capability: 'stores.read' },
   { id: 'catalog', label: 'Catalog', capability: 'products.read' },
   { id: 'listings', label: 'My Store Products', capability: 'products.read' },
+  { id: 'purchases', label: 'Buy From Company', capability: 'orders.read' },
   { id: 'orders', label: 'Orders', capability: 'orders.read' },
   { id: 'appointments', label: 'Appointments', capability: 'appointments.read' },
   { id: 'reports', label: 'Reports', capability: 'reports.read' }
@@ -44,6 +45,7 @@ initPanel({
     if (route === 'stores') return stores(c);
     if (route === 'catalog') return catalog(c);
     if (route === 'listings') return listings(c);
+    if (route === 'purchases') return purchases(c);
     if (route === 'orders') return orders(c);
     if (route === 'appointments') return appointments(c);
     if (route === 'reports') return reports(c);
@@ -220,6 +222,158 @@ function listings(c: HTMLElement) {
       });
     }
   });
+}
+
+function purchases(c: HTMLElement) {
+  let stores: any[] = [];
+  let products: any[] = [];
+
+  const load = async () => {
+    const [pRes, sRes, prRes] = await Promise.all([
+      apiRequest('/purchases'),
+      myStores(),
+      apiRequest('/products?pageSize=200&isActive=true')
+    ]);
+    stores = sRes;
+    products = (prRes.success && prRes.data) || [];
+    render((pRes.success && pRes.data) || []);
+  };
+
+  function render(rows: any[]) {
+    const storeOpts = stores.map((s: any) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('');
+    const linked = products.length > 0;
+    const noStores = !stores.length;
+    c.innerHTML = `
+      ${noStores ? '<div class="card"><p class="empty">Create a store first on the My Stores tab.</p></div>' : ''}
+      ${
+        !noStores && !linked
+          ? '<div class="card"><p class="empty">You are not linked to a company yet. Register or update your account with the referral code provided by the company to buy their products.</p></div>'
+          : ''
+      }
+      ${!noStores && linked ? builderHtml(storeOpts) : ''}
+      <div class="card"><h3>Your purchase orders</h3>
+        ${rows.length ? purchaseTable(rows) : '<p class="empty">No purchases yet.</p>'}
+      </div>`;
+
+    wireBuilder();
+    wireRows(rows);
+  }
+
+  function builderHtml(storeOpts: string) {
+    return `
+    <div class="card" id="buyCard">
+      <h3>Buy from your company</h3>
+      <p class="empty">Pick a store, choose products at the company (wholesale) price, then place the order. You keep the margin when you resell them.</p>
+      <div class="form-group"><label for="buyStore">Store</label><select id="buyStore">${storeOpts}</select></div>
+      <div class="table-wrap"><table><thead><tr><th>Product</th><th>Company price</th><th>Quantity</th></tr></thead><tbody>
+        ${products
+          .map(
+            (p: any) => `<tr>
+          <td>${esc(p.name)}${p.category ? ` <span class="empty">${esc(p.category)}</span>` : ''}</td>
+          <td>${money(p.price)}</td>
+          <td><input type="number" min="0" step="1" value="0" data-buy-qty="${esc(p.id)}" style="width:90px" /></td>
+        </tr>`
+          )
+          .join('')}
+      </tbody></table></div>
+      <div class="form-group"><label for="buyNotes">Notes</label><input type="text" id="buyNotes" placeholder="Optional delivery notes" /></div>
+      <div class="summary-row total"><span>Total</span><span id="buyTotal">${money(0)}</span></div>
+      <button class="btn" id="placeBuy">Place purchase order</button>
+    </div>`;
+  }
+
+  function purchaseTable(rows: any[]) {
+    return `<div class="table-wrap"><table><thead><tr><th>Reference</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th><th>Created</th><th></th></tr></thead><tbody>
+      ${rows
+        .map(
+          (r) => `<tr>
+        <td>${badge(r.reference || String(r.id).slice(0, 8), 'info')}</td>
+        <td>${(r.items || []).length}</td>
+        <td>${money(r.total)}</td>
+        <td>${statusBadge(r.paymentStatus)}</td>
+        <td>${statusBadge(r.status)}</td>
+        <td>${formatDate(r.createdAt)}</td>
+        <td><div class="row-actions">${
+          r.paymentStatus !== 'paid' && r.status !== 'cancelled' ? act('pay', r.id, 'Pay') : ''
+        }${r.status === 'pending' ? act('cancel', r.id, 'Cancel', 'danger') : ''}</div></td>
+      </tr>`
+        )
+        .join('')}
+    </tbody></table></div>`;
+  }
+
+  function wireBuilder() {
+    const card = c.querySelector('#buyCard');
+    if (!card) return;
+    const updateTotal = () => {
+      let total = 0;
+      c.querySelectorAll<HTMLInputElement>('[data-buy-qty]').forEach((inp) => {
+        const id = (inp as HTMLElement).dataset.buyQty || '';
+        const p = products.find((x: any) => x.id === id);
+        total += Number(p?.price || 0) * Math.max(0, Number(inp.value || 0));
+      });
+      const el = c.querySelector('#buyTotal');
+      if (el) el.textContent = money(total);
+    };
+    c.querySelectorAll('[data-buy-qty]').forEach((inp) => inp.addEventListener('input', updateTotal));
+
+    const place = c.querySelector('#placeBuy') as HTMLButtonElement | null;
+    if (place) {
+      place.onclick = async () => {
+        const storeId = (c.querySelector('#buyStore') as HTMLSelectElement).value;
+        const items: any[] = [];
+        c.querySelectorAll<HTMLInputElement>('[data-buy-qty]').forEach((inp) => {
+          const id = (inp as HTMLElement).dataset.buyQty || '';
+          const qty = Number(inp.value || 0);
+          if (qty > 0) items.push({ productId: id, quantity: qty });
+        });
+        if (!items.length) return toast('Choose a product and quantity', 'error');
+        const notes = (c.querySelector('#buyNotes') as HTMLInputElement)?.value;
+        place.disabled = true;
+        const res = await apiRequest('/purchases', { method: 'POST', body: JSON.stringify({ storeId, items, notes }) });
+        place.disabled = false;
+        if (!res.success) return toast(res.message || 'Could not place order', 'error');
+        toast('Purchase order placed', 'success');
+        load();
+      };
+    }
+  }
+
+  function wireRows(rows: any[]) {
+    wire(c, {
+      pay: (id) => startPurchasePayFast(id),
+      cancel: async (id) => {
+        if (await confirmDialog('Cancel this purchase order?', { danger: true, confirmLabel: 'Cancel order' })) {
+          const res = await apiRequest(`/purchases/${id}/status`, { method: 'PUT', body: JSON.stringify({ status: 'cancelled' }) });
+          if (!res.success) return toast(res.message || 'Could not cancel', 'error');
+          toast('Purchase cancelled', 'success');
+          load();
+        }
+      }
+    });
+    void rows;
+  }
+
+  load();
+}
+
+async function startPurchasePayFast(purchaseId: string) {
+  const res = await apiRequest(`/purchases/${purchaseId}/payfast/initiate`, { method: 'POST' });
+  if (!res.success) return toast(res.message || 'PayFast unavailable', 'error');
+  const { processUrl, fields } = res.data;
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = processUrl;
+  for (const [k, val] of Object.entries(fields)) {
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = k;
+    input.value = String(val);
+    form.appendChild(input);
+  }
+  document.body.appendChild(form);
+  toast('Redirecting to PayFast…', 'info');
+  form.submit();
 }
 
 function orders(c: HTMLElement) {

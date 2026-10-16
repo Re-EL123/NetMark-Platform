@@ -28,6 +28,7 @@ const nav: NavItem[] = [
   { id: 'stores', label: 'Stores' },
   { id: 'products', label: 'Products' },
   { id: 'listings', label: 'Store Listings', capability: 'products.read' },
+  { id: 'purchases', label: 'Purchase Orders', capability: 'orders.read' },
   { id: 'orders', label: 'Orders' },
   { id: 'drivers', label: 'Drivers' },
   { id: 'appointments', label: 'Appointments' },
@@ -48,6 +49,7 @@ initPanel({
     if (route === 'stores') return stores(c);
     if (route === 'products') return products(c);
     if (route === 'listings') return listings(c);
+    if (route === 'purchases') return purchases(c);
     if (route === 'orders') return orders(c);
     if (route === 'drivers') return drivers(c);
     if (route === 'appointments') return appointments(c);
@@ -268,6 +270,46 @@ function listings(c: HTMLElement) {
       { key: 'margin', label: 'Store margin', render: (r) => money(r.margin) },
       { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') }
     ]
+  });
+}
+
+function purchases(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/purchases',
+    searchPlaceholder: 'Search purchase orders…',
+    columns: [
+      { key: 'reference', label: 'Reference', render: (r) => badge(r.reference || String(r.id).slice(0, 8), 'info') },
+      { key: 'items', label: 'Items', render: (r) => String((r.items || []).length) },
+      { key: 'total', label: 'Total', render: (r) => money(r.total) },
+      { key: 'paymentStatus', label: 'Payment', render: (r) => statusBadge(r.paymentStatus) },
+      { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
+      { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) }
+    ],
+    actions: (r) => {
+      let html = '';
+      if (r.status === 'pending') html += act('confirm', r.id, 'Confirm');
+      if (r.status === 'confirmed') html += act('ready', r.id, 'Mark ready');
+      if (r.status === 'ready') html += act('complete', r.id, 'Complete');
+      if (r.paymentStatus !== 'paid' && r.status !== 'cancelled') html += act('paid', r.id, 'Mark paid');
+      return html;
+    },
+    bind: (root, reload) => {
+      const setStatus = async (id: string, status: string) => {
+        const res = await apiRequest(`/purchases/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
+        if (!res.success) return toast(res.message || 'Failed', 'error');
+        reload();
+      };
+      wire(root, {
+        confirm: (id) => setStatus(id, 'confirmed'),
+        ready: (id) => setStatus(id, 'ready'),
+        complete: (id) => setStatus(id, 'completed'),
+        paid: async (id) => {
+          const res = await apiRequest(`/purchases/${id}/payment-status`, { method: 'PUT', body: JSON.stringify({ paymentStatus: 'paid' }) });
+          if (!res.success) return toast(res.message || 'Failed', 'error');
+          reload();
+        }
+      });
+    }
   });
 }
 

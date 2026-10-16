@@ -5,6 +5,7 @@ import companies from '../lib/handlers/companies';
 import stores from '../lib/handlers/stores';
 import products from '../lib/handlers/products';
 import storeProducts from '../lib/handlers/storeProducts';
+import purchases from '../lib/handlers/purchases';
 import orders from '../lib/handlers/orders';
 import drivers from '../lib/handlers/drivers';
 import appointments from '../lib/handlers/appointments';

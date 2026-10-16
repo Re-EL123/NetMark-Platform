@@ -121,6 +121,18 @@ export default authed(async (req, res, ctx) => {
     if (!product) return fail(res, 'Product not found', 404);
     if (product.is_active === false) return fail(res, 'That product is not available');
 
+    // A store owner may only list products from the company they joined.
+    if (ctx.role === 'storeOwner') {
+      if (!ctx.companyId) return fail(res, 'Join a company with a referral code before adding products', 403);
+      if (product.company_id && product.company_id !== ctx.companyId) {
+        return fail(res, 'That product belongs to another company', 403);
+      }
+      const { data: store } = await sb.from('stores').select('company_id').eq('id', storeId).maybeSingle();
+      if (store?.company_id && product.company_id && store.company_id !== product.company_id) {
+        return fail(res, 'That store is linked to a different company', 403);
+      }
+    }
+
     const retail = price != null && price !== '' ? Number(price) : Number(product.price || 0);
     const { data: existing } = await sb
       .from('store_products')
