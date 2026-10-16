@@ -127,13 +127,34 @@ async function cart(c: HTMLElement, ctx: any) {
   const subtotal = lines.reduce((s, l) => s + l.price * l.quantity, 0);
   const total = subtotal + deliveryFee;
 
+  // Fallback for listings whose company code has lapsed (or that the store no
+  // longer sells): the shop hides them, so a stale cart line becomes
+  // "unavailable from this store" rather than silently disappearing.
+  const cartStoreIds = [...new Set(lines.map((l) => l.storeId).filter(Boolean))];
+  const unavailable = new Set<number>();
+  if (cartStoreIds.length) {
+    const lr = await apiRequest('/store-products?pageSize=200');
+    const current = (lr.success && lr.data) || [];
+    lines.forEach((l, i) => {
+      if (!l.storeId) return;
+      const match = current.find((x: any) => x.productId === l.productId && x.storeId === l.storeId);
+      if (!match) unavailable.add(i);
+    });
+  }
+  const hasUnavailable = unavailable.size > 0;
+
   c.innerHTML = `
     <div class="card">
       <h3>Cart</h3>
+      ${
+        hasUnavailable
+          ? '<div class="card" style="border-color:var(--danger,#c0392b)"><p class="empty">Some items are no longer available from their store. Remove them to continue.</p></div>'
+          : ''
+      }
       ${lines
         .map(
-          (l, i) => `<div class="cart-line">
-        <div><div class="name">${esc(l.name)}</div><div class="empty">${money(l.price, symbol)}</div></div>
+          (l, i) => `<div class="cart-line${unavailable.has(i) ? ' is-unavailable' : ''}" ${unavailable.has(i) ? 'style="opacity:.55"' : ''}>
+        <div><div class="name">${esc(l.name)}${unavailable.has(i) ? ' <span class="empty">— currently unavailable from this store</span>' : ''}</div><div class="empty">${money(l.price, symbol)}</div></div>
         <div class="qty">
           <button class="link-btn" data-dec="${i}">−</button>
           <span>${l.quantity}</span>
@@ -146,7 +167,12 @@ async function cart(c: HTMLElement, ctx: any) {
       <div class="summary-row"><span>Subtotal</span><span>${money(subtotal, symbol)}</span></div>
       <div class="summary-row"><span>Delivery</span><span>${money(deliveryFee, symbol)}</span></div>
       <div class="summary-row total"><span>Total</span><span>${money(total, symbol)}</span></div>
-      <button class="btn btn-sm" id="checkoutBtn" style="margin-top:12px">Checkout</button>
+      <button class="btn btn-sm" id="checkoutBtn" style="margin-top:12px" ${hasUnavailable ? 'disabled title="Remove unavailable items to continue"' : ''}>Checkout</button>
+      ${
+        hasUnavailable
+          ? '<button class="link-btn danger" id="rmUnavailable" style="margin-top:8px">Remove unavailable items</button>'
+          : ''
+      }
     </div>`;
 
   const redo = (fn: () => void) => {
@@ -156,6 +182,14 @@ async function cart(c: HTMLElement, ctx: any) {
   c.querySelectorAll('[data-inc]').forEach((b) => b.addEventListener('click', () => redo(() => { const l = lines[Number((b as HTMLElement).dataset.inc)]; l.quantity++; setCart(lines); })));
   c.querySelectorAll('[data-dec]').forEach((b) => b.addEventListener('click', () => redo(() => { const i = Number((b as HTMLElement).dataset.dec); lines[i].quantity = Math.max(1, lines[i].quantity - 1); setCart(lines); })));
   c.querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => redo(() => { lines.splice(Number((b as HTMLElement).dataset.rm), 1); setCart(lines); })));
+
+  const rmUnavailableBtn = document.getElementById('rmUnavailable');
+  if (rmUnavailableBtn)
+    rmUnavailableBtn.addEventListener('click', () => {
+      const kept = lines.filter((_l, i) => !unavailable.has(i));
+      setCart(kept);
+      cart(c, ctx);
+    });
 
   (document.getElementById('checkoutBtn') as HTMLElement).onclick = async () => {
     await openModal({

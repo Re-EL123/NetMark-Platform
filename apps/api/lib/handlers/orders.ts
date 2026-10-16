@@ -4,6 +4,7 @@ import { hasPermission } from '../permissions';
 import { recordAudit } from '../audit';
 import { notify } from '../notify';
 import { storeIdsForUser } from '../scope';
+import { validLinkKeysForOwners } from '../companyLinks';
 
 const ORDER_STATUSES = ['pending', 'confirmed', 'ready', 'completed', 'cancelled'];
 
@@ -56,6 +57,18 @@ export default authed(async (req, res, ctx) => {
     const { storeId: bodyStoreId, items, address, notes, orderType, distributorId } = req.body || {};
     if (!Array.isArray(items) || !items.length) return fail(res, 'Order must contain at least one item');
 
+    // Resolve the chosen store up front so we can verify each listed product is
+    // still sellable (its store owner's company link may have lapsed).
+    let store: any = null;
+    if (bodyStoreId) {
+      const { data } = await sb.from('stores').select('*').eq('id', bodyStoreId).maybeSingle();
+      if (!data) return fail(res, 'Store not found', 404);
+      store = data;
+    }
+    const ownerLinkKeys = store?.store_owner_id
+      ? await validLinkKeysForOwners(sb, [store.store_owner_id])
+      : new Set<string>();
+
     const lines: any[] = [];
     let subtotal = 0;
     let derivedStoreId: string | null = null;
@@ -77,7 +90,15 @@ export default authed(async (req, res, ctx) => {
           .eq('store_id', bodyStoreId)
           .eq('product_id', productId)
           .maybeSingle();
-        if (listing && listing.is_active !== false && listing.price != null) price = Number(listing.price);
+        if (listing) {
+          // Only sellable while the store owner holds a valid link to the
+          // company that owns the product. A lapsed code makes it unavailable.
+          const linkOk = !product.company_id || ownerLinkKeys.has(`${store.store_owner_id}:${product.company_id}`);
+          if (listing.is_active === false || !linkOk) {
+            return fail(res, `${product.name} is not available from this store right now`, 409);
+          }
+          if (listing.price != null) price = Number(listing.price);
+        }
       }
       lines.push({ productId, name: product.name, price, quantity: qty, lineTotal: price * qty });
       subtotal += price * qty;
@@ -88,13 +109,14 @@ export default authed(async (req, res, ctx) => {
     }
 
     // Resolve the store: explicit selection wins, otherwise the first product's.
-    let store: any = null;
     let storeId = bodyStoreId || derivedStoreId;
     let companyId = ctx.companyId;
     if (storeId) {
-      const { data } = await sb.from('stores').select('*').eq('id', storeId).maybeSingle();
-      if (!data) return fail(res, 'Store not found', 404);
-      store = data;
+      if (!store) {
+        const { data } = await sb.from('stores').select('*').eq('id', storeId).maybeSingle();
+        if (!data) return fail(res, 'Store not found', 404);
+        store = data;
+      }
       companyId = store.company_id;
     } else {
       companyId = derivedCompanyId || ctx.companyId;
