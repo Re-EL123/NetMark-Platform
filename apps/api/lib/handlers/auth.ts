@@ -69,7 +69,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         phone,
         password,
         role = 'customer',
-        companyId,
         distributorCode,
         driverInfo
       } = req.body || {};
@@ -148,9 +147,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const uid = created.user.id;
 
-      // Owners without an existing company get a fresh company of their own.
-      let resolvedCompanyId = companyId || null;
-      if (role === 'owner' && !resolvedCompanyId) {
+      // Only an owner is bound to a company (their own, created here). Every
+      // other account is independent: company membership is an invite granted
+      // by an owner/platform admin creating the user, never by self-signup. A
+      // referral code only records the referrer (and, for store owners, seeds a
+      // company link so they can browse that company's catalog).
+      let resolvedCompanyId: string | null = null;
+      if (role === 'owner') {
         const baseSlug =
           String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') ||
           `company-${Date.now().toString(36)}`;
@@ -161,9 +164,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .select('*')
           .single();
         if (newCompany) resolvedCompanyId = newCompany.id;
-      } else if (role !== 'owner' && !resolvedCompanyId && codeRow?.company_id) {
-        // Referred customers/store owners join the referring company.
-        resolvedCompanyId = codeRow.company_id;
       }
 
       const { data: user, error: userErr } = await sb
@@ -214,14 +214,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (role === 'driver') {
         const { error: driverErr } = await sb.from('drivers').insert({
           user_id: uid,
-          company_id: companyId || null,
+          company_id: null,
           status: 'pending',
           is_available: false,
           vehicle_type: driverInfo?.vehicleType || null,
           vehicle_number: driverInfo?.vehicleNumber || null,
           vehicle_model: driverInfo?.vehicleModel || null,
           license_number: driverInfo?.licenseNumber || null,
-          license_expiry: driverInfo?.licenseExpiry
+          license_expiry: driverInfo?.driverExpiry
+            ? new Date(driverInfo.driverExpiry).toISOString().slice(0, 10)
+            : driverInfo?.licenseExpiry
             ? new Date(driverInfo.licenseExpiry).toISOString().slice(0, 10)
             : null
         });
