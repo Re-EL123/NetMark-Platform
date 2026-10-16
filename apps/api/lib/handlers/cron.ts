@@ -120,7 +120,18 @@ async function runAutoship(req: VercelRequest, res: VercelResponse) {
 
 async function advance(sb: any, s: any, note: string | null) {
   const next = new Date(Date.now() + (Number(s.interval_days) || 30) * 86400000).toISOString();
-  const patch: any = { next_run_at: next, last_run_at: new Date().toISOString(), last_error: note };
+  const base = { next_run_at: next, last_run_at: new Date().toISOString() };
+  const patch: any = { ...base, last_error: note };
   if (note) patch.failed_count = Number(s.failed_count || 0) + 1;
-  await sb.from('autoship_subscriptions').update(patch).eq('id', s.id);
+
+  // `last_error` is added by migration 013, which may not be applied yet. Never
+  // let that block advancing next_run_at — if the update fails, the subscription
+  // stays "due" and the cron would create a duplicate order on every run.
+  let { error } = await sb.from('autoship_subscriptions').update(patch).eq('id', s.id);
+  if (error) {
+    delete patch.last_error;
+    ({ error } = await sb.from('autoship_subscriptions').update(patch).eq('id', s.id));
+  }
+  if (error) ({ error } = await sb.from('autoship_subscriptions').update(base).eq('id', s.id));
+  if (error) console.error('autoship advance failed', s.id, error.message);
 }
