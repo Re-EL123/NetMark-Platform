@@ -61,7 +61,14 @@ const nav: NavItem[] = [
   { id: 'orders', label: 'Orders', icon: 'receipt' },
   { id: 'drivers', label: 'Drivers', icon: 'truck' },
   { id: 'appointments', label: 'Appointments', icon: 'calendar-clock' },
+  { id: 'plans', label: 'Plans', icon: 'layers' },
   { id: 'codes', label: 'Distributor Codes', icon: 'ticket-percent' },
+  { id: 'code-purchases', label: 'Code Purchases', icon: 'shopping-cart' },
+  { id: 'store-purchases', label: 'Store Purchases', icon: 'shopping-bag' },
+  { id: 'consent', label: 'Consent', icon: 'shield' },
+  { id: 'dsar', label: 'DSAR', icon: 'file-text' },
+  { id: 'wallets', label: 'Wallets', icon: 'wallet' },
+  { id: 'commissions', label: 'Commissions', icon: 'banknote' },
   { id: 'payouts', label: 'Payouts', icon: 'wallet' },
   { id: 'payments', label: 'Payments', icon: 'credit-card' },
   { id: 'reports', label: 'Reports', icon: 'bar-chart-3' },
@@ -90,6 +97,13 @@ initPanel({
     if (route === 'drivers') return renderDrivers(c);
     if (route === 'appointments') return renderAppointments(c);
     if (route === 'codes') return renderCodes(c);
+    if (route === 'plans') return renderPlans(c);
+    if (route === 'code-purchases') return renderCodePurchases(c);
+    if (route === 'store-purchases') return renderStorePurchases(c);
+    if (route === 'consent') return renderConsent(c);
+    if (route === 'dsar') return renderDSAR(c);
+    if (route === 'wallets') return renderWallets(c);
+    if (route === 'commissions') return renderCommissions(c);
     if (route === 'payouts') return renderPayouts(c);
     if (route === 'payments') return renderPayments(c);
     if (route === 'reports') return renderReports(c);
@@ -1085,5 +1099,140 @@ async function renderSettings(c: HTMLElement) {
     const r = await apiRequest('/settings', { method: 'PUT', body: JSON.stringify({ scope: 'platform', key: 'general', value }) });
     if (r.success) toast('Settings saved', 'success');
     else toast(r.message || 'Failed', 'error');
+  });
+}
+
+/* ------------------------------ plans ---------------------------------- */
+function renderPlans(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/plans',
+    columns: [
+      { key: 'name', label: 'Name' },
+      { key: 'slug', label: 'Slug' },
+      { key: 'tier', label: 'Tier' },
+      { key: 'baseFeeZar', label: 'Base (ZAR)', render: (r) => money(r.baseFeeZar || 0) },
+      { key: 'perActiveDistributorZar', label: 'Per dist (ZAR)', render: (r) => money(r.perActiveDistributorZar || 0) },
+      { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') }
+    ],
+    toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>New plan</span></button>`,
+    actions: (r) => act('edit', r.id, 'Edit'),
+    bind: (root, reload) => {
+      (root.querySelector('[data-new]') as HTMLElement).onclick = async () => {
+        await openModal({
+          title: 'New plan',
+          fields: [
+            { name: 'name', label: 'Name', required: true },
+            { name: 'slug', label: 'Slug' },
+            { name: 'baseFeeZar', label: 'Base fee (ZAR)', type: 'number', step: '0.01' },
+            { name: 'perActiveDistributorZar', label: 'Per active distributor (ZAR)', type: 'number', step: '0.01' }
+          ],
+          onSubmit: async (v) => {
+            const res = await apiRequest('/plans', { method: 'POST', body: JSON.stringify(v) });
+            if (!res.success) throw new Error(res.message);
+            toast('Plan created', 'success');
+            reload();
+          }
+        });
+      };
+    }
+  });
+}
+
+/* ------------------------- code purchases ----------------------------- */
+function renderCodePurchases(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/code-purchases',
+    columns: [
+      { key: 'code', label: 'Code' },
+      { key: 'priceZar', label: 'Price (ZAR)', render: (r) => money(r.priceZar || 0) },
+      { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
+      { key: 'paymentStatus', label: 'Payment', render: (r) => statusBadge(r.paymentStatus) },
+      { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) }
+    ],
+    actions: (r) => (r.status === 'pending' ? act('complete', r.id, 'Complete') : ''),
+    bind: (root, reload) => {
+      wire(root, {
+        complete: async (id) => {
+          await apiRequest(`/code-purchases/${id}/complete`, { method: 'POST' });
+          reload();
+        }
+      });
+    }
+  });
+}
+
+/* ----------------------- store purchases ----------------------------- */
+function renderStorePurchases(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/store-purchases',
+    columns: [
+      { key: 'storeName', label: 'Store' },
+      { key: 'priceZar', label: 'Price (ZAR)', render: (r) => money(r.priceZar || 0) },
+      { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
+      { key: 'paymentStatus', label: 'Payment', render: (r) => statusBadge(r.paymentStatus) },
+      { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) }
+    ],
+    actions: (r) => (r.status === 'pending' ? act('complete', r.id, 'Complete') : ''),
+    bind: (root, reload) => {
+      wire(root, {
+        complete: async (id) => {
+          await apiRequest(`/store-purchases/${id}/complete`, { method: 'POST' });
+          reload();
+        }
+      });
+    }
+  });
+}
+
+/* ------------------------------ consent ------------------------------- */
+function renderConsent(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/consent',
+    columns: [
+      { key: 'purpose', label: 'Purpose' },
+      { key: 'granted', label: 'Granted', render: (r) => statusBadge(r.granted ? 'active' : 'inactive') },
+      { key: 'grantedAt', label: 'Granted', render: (r) => formatDate(r.grantedAt) },
+      { key: 'revokedAt', label: 'Revoked', render: (r) => formatDate(r.revokedAt) }
+    ]
+  });
+}
+
+/* ------------------------------- dsar --------------------------------- */
+function renderDSAR(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/dsar',
+    columns: [
+      { key: 'type', label: 'Type' },
+      { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
+      { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) },
+      { key: 'dueAt', label: 'Due', render: (r) => formatDate(r.dueAt) }
+    ]
+  });
+}
+
+/* ------------------------------ wallets ------------------------------ */
+function renderWallets(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/wallets',
+    columns: [
+      { key: 'balanceZar', label: 'Balance (ZAR)', render: (r) => money(r.balanceZar || 0) },
+      { key: 'pendingZar', label: 'Pending (ZAR)', render: (r) => money(r.pendingZar || 0) },
+      { key: 'currency', label: 'Currency' },
+      { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) }
+    ]
+  });
+}
+
+/* ---------------------------- commissions ---------------------------- */
+function renderCommissions(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/commissions',
+    columns: [
+      { key: 'userId', label: 'User', render: (r) => esc((r.userId || '').slice(0, 8)) },
+      { key: 'amountZar', label: 'Amount (ZAR)', render: (r) => money(r.amountZar || 0) },
+      { key: 'bonusType', label: 'Bonus' },
+      { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
+      { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) }
+    ]
   });
 }
