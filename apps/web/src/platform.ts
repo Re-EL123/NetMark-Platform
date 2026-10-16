@@ -130,6 +130,12 @@ async function renderDashboard(c: HTMLElement) {
     return;
   }
   const d = res.data;
+  const [an, rt] = await Promise.all([
+    apiRequest('/analytics/overview').catch(() => null),
+    apiRequest('/analytics/retail').catch(() => null)
+  ]);
+  const o = an?.success ? an.data : null;
+  const r = rt?.success ? rt.data : null;
   const roleItems = Object.entries(d.roleCounts || {}).map(([role, count]) => ({ label: titleCase(role), value: Number(count) }));
   const recentItems = (d.recentOrders || []).slice(0, 6).map((o: any) => ({ label: o.orderNumber || String(o.id).slice(0, 8), value: Number(o.total || 0) }));
   c.innerHTML = `
@@ -143,6 +149,21 @@ async function renderDashboard(c: HTMLElement) {
       { label: 'Pending drivers', value: d.drivers.pending, format: 'number', icon: 'truck', tone: 'warning' },
       { label: 'Active drivers', value: d.drivers.active, format: 'number', icon: 'truck', tone: 'success' }
     ])}
+    ${
+      o
+        ? `<div class="card">
+            <h3>${icon('trending-up')} Business model</h3>
+            ${statCards([
+              { label: 'GMV (completed)', value: Number(o.gmvZar || 0), format: 'money', icon: 'dollar-sign', tone: 'brand' },
+              { label: 'GMV this month', value: Number(o.gmvMonthZar || 0), format: 'money', icon: 'activity', tone: 'info' },
+              { label: 'Avg order', value: Number(o.avgOrderZar || 0), format: 'money', icon: 'receipt' },
+              { label: 'Distributor sales', value: (r?.distributorPct ?? 0) + '%', icon: 'ticket-percent' },
+              { label: 'Distributor GMV', value: Number(r?.distributorGmvZar || 0), format: 'money', icon: 'hand-coins' },
+              { label: 'Active users', value: Number(o.users?.active || 0), format: 'number', icon: 'users' }
+            ])}
+          </div>`
+        : ''
+    }
     <div class="chart-grid">
       ${chartCard('Users by role', donutChart(roleItems, { caption: 'users' }), { icon: 'users' })}
       ${chartCard('Recent order values', barList(recentItems, { prefix: 'R' }), { icon: 'receipt' })}
