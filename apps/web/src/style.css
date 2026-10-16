@@ -362,6 +362,38 @@ header h1 {
   line-height: 1.5;
 }
 
+.muted {
+  color: var(--text-secondary);
+}
+
+.callout {
+  border-left: 4px solid var(--border);
+}
+
+.callout h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.callout-body {
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.callout-warning {
+  border-left-color: var(--warning);
+}
+
+.callout-success {
+  border-left-color: var(--success);
+}
+
+.callout-danger {
+  border-left-color: var(--danger);
+}
+
 button.secondary,
 .btn-secondary {
   background: var(--surface);

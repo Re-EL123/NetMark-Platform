@@ -7,6 +7,7 @@ import products from '../lib/handlers/products';
 import storeProducts from '../lib/handlers/storeProducts';
 import purchases from '../lib/handlers/purchases';
 import companyLinks from '../lib/handlers/companyLinks';
+import companyChanges from '../lib/handlers/companyChanges';
 import orders from '../lib/handlers/orders';
 import drivers from '../lib/handlers/drivers';
 import appointments from '../lib/handlers/appointments';
@@ -32,6 +33,7 @@ const handlers: Record<string, Handler> = {
   'store-products': storeProducts,
   purchases,
   'company-links': companyLinks,
+  'company-changes': companyChanges,
   orders,
   drivers,
   appointments,

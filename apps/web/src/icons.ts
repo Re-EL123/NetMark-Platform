@@ -56,6 +56,9 @@ import {
   CreditCard,
   Ban,
   CheckCircle2,
+  CheckCircle,
+  XCircle,
+  Send,
   AlertTriangle,
   Info,
   Download,
@@ -76,7 +79,9 @@ import {
   EyeOff,
   MoreVertical,
   Inbox,
-  Minus
+  Minus,
+  Megaphone,
+  RotateCcw
 } from 'lucide';
 
 /**
@@ -141,6 +146,9 @@ const REGISTRY: Record<string, any> = {
   CreditCard,
   Ban,
   CheckCircle2,
+  CheckCircle,
+  XCircle,
+  Send,
   AlertTriangle,
   Info,
   Download,
@@ -161,7 +169,9 @@ const REGISTRY: Record<string, any> = {
   EyeOff,
   MoreVertical,
   Inbox,
-  Minus
+  Minus,
+  Megaphone,
+  RotateCcw
 };
 
 /**

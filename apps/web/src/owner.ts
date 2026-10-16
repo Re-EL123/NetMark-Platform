@@ -559,11 +559,50 @@ async function reports(c: HTMLElement) {
 }
 
 async function settings(c: HTMLElement) {
-  const [res, coRes] = await Promise.all([apiRequest('/settings'), apiRequest('/companies')]);
+  const [res, coRes, crRes] = await Promise.all([
+    apiRequest('/settings'),
+    apiRequest('/companies'),
+    apiRequest('/company-changes')
+  ]);
   const s = res.success ? res.data.company || {} : {};
   const company = coRes.success ? (coRes.data || [])[0] : null;
-  c.innerHTML = `<div class="card"><h3>Company settings</h3><div id="settingsForm"></div></div>`;
+  const requests: any[] = crRes.success ? crRes.data || [] : [];
+  const pending = requests.find((r) => r.status === 'pending');
+  const lastReview = pending ? null : requests[0];
+
+  const changeLines = (changes: any) => {
+    const out: string[] = [];
+    if (changes?.name !== undefined) out.push(`Name: <strong>${esc(changes.name)}</strong>`);
+    if (changes?.logo) out.push('Logo: updated');
+    const st = changes?.settings || {};
+    if (st.address !== undefined) out.push(`Address: <strong>${esc(st.address || '')}</strong>`);
+    if (st.phone !== undefined) out.push(`Phone: <strong>${esc(st.phone || '')}</strong>`);
+    if (st.deliveryFee !== undefined) out.push(`Delivery fee: <strong>${money(st.deliveryFee)}</strong>`);
+    if (st.deliveryRadiusKm !== undefined) out.push(`Delivery radius: <strong>${esc(st.deliveryRadiusKm)} km</strong>`);
+    return out.length ? out.join('<br>') : '<span class="muted">No field changes</span>';
+  };
+
+  let statusCard = '';
+  if (pending) {
+    statusCard = `<div class="card callout callout-warning"><h3>${icon('clock')} Awaiting approval</h3>
+      <p class="muted">Submitted ${esc(formatDate(pending.createdAt))}. These changes take effect once a platform admin approves them.</p>
+      <div class="callout-body">${changeLines(pending.changes)}</div></div>`;
+  } else if (lastReview) {
+    const okReview = lastReview.status === 'approved';
+    statusCard = `<div class="card callout ${okReview ? 'callout-success' : 'callout-danger'}"><h3>${icon(
+      okReview ? 'check-circle' : 'x-circle'
+    )} Last request ${okReview ? 'approved' : 'rejected'}</h3>
+      <p class="muted">${esc(formatDate(lastReview.reviewedAt || lastReview.createdAt))}${
+        lastReview.reviewNote ? ` — ${esc(lastReview.reviewNote)}` : ''
+      }</p></div>`;
+  }
+
+  c.innerHTML = `${statusCard}<div class="card"><h3>Company details</h3>
+    <p class="muted">Changes are submitted for platform approval before they go live.</p>
+    <div id="settingsForm"></div></div>`;
+
   const fields: Field[] = [
+    { name: 'name', label: 'Company name', value: company?.name },
     { name: 'address', label: 'Business address', value: s.address },
     { name: 'phone', label: 'Contact phone', value: s.phone },
     { name: 'deliveryFee', label: 'Delivery fee', type: 'number', step: '0.01', value: s.deliveryFee ?? '' },
@@ -578,20 +617,25 @@ async function settings(c: HTMLElement) {
         (f) =>
           `<div class="form-group"><label>${esc(f.label)}</label><input name="${f.name}" type="${f.type || 'text'}" value="${esc(f.value ?? '')}" ${f.step ? `step="${f.step}"` : ''}></div>`
       )
-      .join('') + `<button class="btn btn-sm" type="submit">${icon('check')}<span>Save</span></button>`;
+      .join('') + `<button class="btn btn-sm" type="submit">${icon('send')}<span>Submit for approval</span></button>`;
   host.appendChild(form);
   iconify(form);
   wireUploaders(form);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const value: any = {};
+    const settingsValue: any = {};
     for (const f of fields) {
+      if (f.name === 'name') continue;
       const el = form.querySelector(`[name="${f.name}"]`) as HTMLInputElement;
-      value[f.name] = f.type === 'number' ? (el.value === '' ? null : Number(el.value)) : el.value;
+      settingsValue[f.name] = f.type === 'number' ? (el.value === '' ? null : Number(el.value)) : el.value;
     }
+    const name = (form.querySelector('[name="name"]') as HTMLInputElement)?.value || '';
     const logo = (form.querySelector('[name="logo"]') as HTMLInputElement)?.value || '';
-    const r = await apiRequest('/settings', { method: 'PUT', body: JSON.stringify({ scope: 'company', value }) });
-    if (company?.id) await apiRequest(`/companies/${company.id}`, { method: 'PUT', body: JSON.stringify({ logo }) });
-    toast(r.success ? 'Settings saved' : r.message || 'Failed', r.success ? 'success' : 'error');
+    const r = await apiRequest('/company-changes', {
+      method: 'POST',
+      body: JSON.stringify({ changes: { name, logo, settings: settingsValue } })
+    });
+    toast(r.success ? 'Submitted for approval' : r.message || 'Failed', r.success ? 'success' : 'error');
+    if (r.success) settings(c);
   });
 }

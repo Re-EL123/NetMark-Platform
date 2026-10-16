@@ -1,12 +1,10 @@
 import { authed, ok, fail, slugOf, getSupabase, rowOut, rowsOut } from '../http';
 import { parseListQuery, runList } from '../paginate';
-import { hasPermission } from '../permissions';
 import { recordAudit } from '../audit';
 
 export default authed(async (req, res, ctx) => {
   const sb = getSupabase();
   const slug = slugOf(req);
-  const canWrite = ctx.isPlatform || hasPermission(ctx.role, 'settings.write');
 
   if (slug.length === 0 && req.method === 'GET') {
     const list = parseListQuery(req);
@@ -52,8 +50,11 @@ export default authed(async (req, res, ctx) => {
   }
 
   if (id && req.method === 'PUT') {
-    if (!canWrite) return fail(res, 'Forbidden', 403);
-    if (!ctx.isPlatform && ctx.companyId !== id) return fail(res, 'Forbidden', 403);
+    // Company owners may not edit their company directly - changes are proposed
+    // through /company-changes and applied once a platform admin approves.
+    if (!ctx.isPlatform) {
+      return fail(res, 'Company changes need platform approval. Submit a change request instead.', 403);
+    }
     const { data: before } = await sb.from('companies').select('*').eq('id', id).maybeSingle();
     if (!before) return fail(res, 'Not found', 404);
     const b = req.body || {};

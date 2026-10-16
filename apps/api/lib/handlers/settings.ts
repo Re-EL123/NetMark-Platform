@@ -1,5 +1,4 @@
 import { authed, ok, fail, slugOf, getSupabase, rowOut } from '../http';
-import { hasPermission } from '../permissions';
 import { recordAudit } from '../audit';
 
 const DEFAULT_PLATFORM = {
@@ -66,8 +65,8 @@ export default authed(async (req, res, ctx) => {
       await recordAudit(req, { action: 'settings.update', entityType: 'settings', entityId: req.body?.key || key, after: { scope, value } });
       return ok(res, { data: rowOut(saved) });
     }
-    if (!hasPermission(ctx.role, 'settings.write') && !ctx.isPlatform) {
-      return fail(res, 'Forbidden', 403);
+    if (!ctx.isPlatform) {
+      return fail(res, 'Company settings changes need platform approval. Submit a change request instead.', 403);
     }
     const targetCompany = ctx.isPlatform ? req.body?.companyId || ctx.companyId : ctx.companyId;
     if (!targetCompany) return fail(res, 'No company scope');

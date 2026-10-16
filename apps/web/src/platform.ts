@@ -55,6 +55,7 @@ const nav: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: 'layout-dashboard' },
   { id: 'users', label: 'Users', icon: 'users' },
   { id: 'companies', label: 'Companies', icon: 'building-2' },
+  { id: 'company-changes', label: 'Company Changes', icon: 'clipboard-check' },
   { id: 'stores', label: 'Stores', icon: 'store' },
   { id: 'products', label: 'Products', icon: 'package' },
   { id: 'orders', label: 'Orders', icon: 'receipt' },
@@ -82,6 +83,7 @@ initPanel({
     if (route === 'dashboard') return renderDashboard(c);
     if (route === 'users') return renderUsers(c);
     if (route === 'companies') return renderCompanies(c);
+    if (route === 'company-changes') return renderCompanyChanges(c);
     if (route === 'stores') return renderStores(c);
     if (route === 'products') return renderProducts(c);
     if (route === 'orders') return renderOrders(c);
@@ -303,6 +305,91 @@ async function companyModal(row: any, reload: () => void) {
         : await apiRequest('/companies', { method: 'POST', body: JSON.stringify(v) });
       if (!res.success) throw new Error(res.message || 'Failed');
       toast(row ? 'Company updated' : 'Company created', 'success');
+      reload();
+    }
+  });
+}
+
+/* -------------------------- company changes ---------------------------- */
+function changeDiff(changes: any): string {
+  const out: string[] = [];
+  if (changes?.name !== undefined) out.push(`<div><span class="detail-label">Name</span> ${esc(changes.name)}</div>`);
+  if (changes?.logo) out.push(`<div><span class="detail-label">Logo</span> <img class="cell-media" src="${esc(changes.logo)}" alt="" /></div>`);
+  const st = changes?.settings || {};
+  if (st.address !== undefined) out.push(`<div><span class="detail-label">Address</span> ${esc(st.address || '')}</div>`);
+  if (st.phone !== undefined) out.push(`<div><span class="detail-label">Phone</span> ${esc(st.phone || '')}</div>`);
+  if (st.deliveryFee !== undefined) out.push(`<div><span class="detail-label">Delivery fee</span> ${money(st.deliveryFee)}</div>`);
+  if (st.deliveryRadiusKm !== undefined)
+    out.push(`<div><span class="detail-label">Delivery radius</span> ${esc(st.deliveryRadiusKm)} km</div>`);
+  return out.join('') || '<span class="muted">No field changes</span>';
+}
+
+function changeCard(r: any): string {
+  return `<div class="card">
+    <div class="toolbar" style="margin-bottom:4px">
+      <h3 style="margin:0">${icon('building-2')} ${esc(r.company?.name || 'Company')}</h3>
+      <div class="spacer"></div>
+      ${statusBadge(r.status)}
+    </div>
+    <p class="muted">Requested by ${esc(r.requestedByEmail || 'owner')} · ${esc(formatDate(r.createdAt))}</p>
+    <div class="detail-grid">${changeDiff(r.changes)}</div>
+    ${
+      r.status === 'pending'
+        ? `<div class="row-actions" style="margin-top:12px">
+            <button class="btn btn-sm" data-approve="${esc(r.id)}">${icon('check')}<span>Approve</span></button>
+            <button class="btn btn-sm btn-danger" data-reject="${esc(r.id)}">${icon('x')}<span>Reject</span></button>
+          </div>`
+        : r.reviewNote
+        ? `<p class="muted">Note: ${esc(r.reviewNote)}</p>`
+        : ''
+    }
+  </div>`;
+}
+
+async function renderCompanyChanges(c: HTMLElement) {
+  let filter = 'pending';
+  async function draw() {
+    c.innerHTML = '<p class="empty">Loading…</p>';
+    const res = await apiRequest(`/company-changes${filter === 'pending' ? '?status=pending' : ''}`);
+    const rows: any[] = res.success ? res.data || [] : [];
+    const tabs = (['pending', 'all'] as const)
+      .map((f) => `<button class="${filter === f ? 'active' : ''}" data-filter="${f}">${f === 'pending' ? 'Pending' : 'All'}</button>`)
+      .join('');
+    const list = rows.length
+      ? rows.map(changeCard).join('')
+      : `<div class="card">${emptyState('No requests to review', 'clipboard-check')}</div>`;
+    c.innerHTML = `<div class="toolbar"><div class="tabs">${tabs}</div><div class="spacer"></div></div>${list}`;
+    c.querySelectorAll('[data-filter]').forEach((b) =>
+      b.addEventListener('click', () => {
+        filter = (b as HTMLElement).dataset.filter!;
+        draw();
+      })
+    );
+    c.querySelectorAll('[data-approve]').forEach((b) =>
+      b.addEventListener('click', async () => {
+        const id = (b as HTMLElement).dataset.approve;
+        if (await confirmDialog('Approve and apply these company changes?', { confirmLabel: 'Approve' })) {
+          const r = await apiRequest(`/company-changes/${id}/approve`, { method: 'POST' });
+          toast(r.success ? 'Changes approved' : r.message || 'Failed', r.success ? 'success' : 'error');
+          draw();
+        }
+      })
+    );
+    c.querySelectorAll('[data-reject]').forEach((b) =>
+      b.addEventListener('click', () => rejectChangeModal((b as HTMLElement).dataset.reject!, draw))
+    );
+  }
+  draw();
+}
+
+function rejectChangeModal(id: string, reload: () => void) {
+  return openModal({
+    title: 'Reject company changes',
+    fields: [{ name: 'note', label: 'Reason (optional)', type: 'textarea' }],
+    onSubmit: async (v) => {
+      const r = await apiRequest(`/company-changes/${id}/reject`, { method: 'POST', body: JSON.stringify({ note: v.note }) });
+      if (!r.success) throw new Error(r.message || 'Failed');
+      toast('Request rejected', 'success');
       reload();
     }
   });
