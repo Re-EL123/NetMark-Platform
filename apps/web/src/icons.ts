@@ -81,7 +81,13 @@ import {
   Inbox,
   Minus,
   Megaphone,
-  RotateCcw
+  RotateCcw,
+  Layers,
+  Shield,
+  FileText,
+  KeyRound,
+  Webhook,
+  Flag
 } from 'lucide';
 
 /**
@@ -171,9 +177,14 @@ const REGISTRY: Record<string, any> = {
   Inbox,
   Minus,
   Megaphone,
-  RotateCcw
+  RotateCcw,
+  Layers,
+  Shield,
+  FileText,
+  KeyRound,
+  Webhook,
+  Flag
 };
-
 /**
  * Produce a placeholder element. `iconify()` later swaps it for the real SVG.
  * `name` is the kebab-case Lucide name, e.g. `shopping-cart`.

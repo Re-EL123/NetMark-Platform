@@ -2,7 +2,7 @@ import { apiRequest } from './api';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { crudView } from './crud';
-import { openModal, confirmDialog, toast, money, titleCase, emptyState, statCards, Field } from './ui';
+import { openModal, confirmDialog, toast, money, titleCase, emptyState, statCards, dataTable, Field } from './ui';
 import { icon } from './icons';
 import { overviewStats, renderOverviewCharts } from './dashboard';
 import { donutChart, barList, chartCard } from './charts';
@@ -69,6 +69,10 @@ const nav: NavItem[] = [
   { id: 'dsar', label: 'DSAR', icon: 'file-text' },
   { id: 'wallets', label: 'Wallets', icon: 'wallet' },
   { id: 'commissions', label: 'Commissions', icon: 'banknote' },
+  { id: 'analytics', label: 'Analytics', icon: 'trending-up' },
+  { id: 'api-keys', label: 'API Keys', icon: 'key-round' },
+  { id: 'webhooks', label: 'Webhooks', icon: 'webhook' },
+  { id: 'feature-flags', label: 'Feature Flags', icon: 'flag' },
   { id: 'payouts', label: 'Payouts', icon: 'wallet' },
   { id: 'payments', label: 'Payments', icon: 'credit-card' },
   { id: 'reports', label: 'Reports', icon: 'bar-chart-3' },
@@ -104,6 +108,10 @@ initPanel({
     if (route === 'dsar') return renderDSAR(c);
     if (route === 'wallets') return renderWallets(c);
     if (route === 'commissions') return renderCommissions(c);
+    if (route === 'analytics') return renderAnalytics(c);
+    if (route === 'api-keys') return renderApiKeys(c);
+    if (route === 'webhooks') return renderWebhooks(c);
+    if (route === 'feature-flags') return renderFeatureFlags(c);
     if (route === 'payouts') return renderPayouts(c);
     if (route === 'payments') return renderPayments(c);
     if (route === 'reports') return renderReports(c);
@@ -1234,5 +1242,215 @@ function renderCommissions(c: HTMLElement) {
       { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
       { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) }
     ]
+  });
+}
+
+/* ----------------------------- analytics ------------------------------ */
+async function renderAnalytics(c: HTMLElement) {
+  c.innerHTML = '<p class="empty">Loading…</p>';
+  const [overview, retail, ltv] = await Promise.all([
+    apiRequest('/analytics/overview').catch(() => null),
+    apiRequest('/analytics/retail').catch(() => null),
+    apiRequest('/analytics/ltv').catch(() => null)
+  ]);
+  const o = overview?.data || {};
+  const r = retail?.data || {};
+  const top = (ltv?.data || []) as any[];
+  c.innerHTML = `
+    ${statCards([
+      { label: 'GMV (ZAR)', value: o.gmvZar || 0, format: 'money' },
+      { label: 'GMV this month', value: o.gmvMonthZar || 0, format: 'money' },
+      { label: 'Orders', value: o.orders?.total ?? 0 },
+      { label: 'Completed', value: o.orders?.completed ?? 0 },
+      { label: 'Avg order', value: o.avgOrderZar || 0, format: 'money' },
+      { label: 'Active users', value: o.users?.active ?? 0 },
+      { label: 'Distributor sales %', value: (r.distributorPct ?? 0) + '%' },
+      { label: 'Distributor GMV', value: r.distributorGmvZar || 0, format: 'money' }
+    ])}
+    <div class="card">
+      <h3>Top customers by lifetime value</h3>
+      ${dataTable(
+        [
+          { key: 'userId', label: 'Customer', render: (x: any) => esc((x.userId || '').slice(0, 8)) },
+          { key: 'orders', label: 'Orders', render: (x: any) => String(x.orders ?? '') },
+          { key: 'ltvZar', label: 'LTV (ZAR)', render: (x: any) => money(x.ltvZar || 0) },
+          { key: 'lastOrderAt', label: 'Last order', render: (x: any) => formatDate(x.lastOrderAt) }
+        ],
+        top,
+        { empty: 'No data yet.' }
+      )}
+    </div>`;
+}
+
+/* ----------------------------- API keys ------------------------------- */
+function renderApiKeys(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/api-keys',
+    columns: [
+      { key: 'name', label: 'Name' },
+      { key: 'prefix', label: 'Prefix', render: (r) => esc(r.prefix + '…') },
+      { key: 'scopes', label: 'Scopes', render: (r) => esc((r.scopes || []).join(', ')) },
+      { key: 'lastUsedAt', label: 'Last used', render: (r) => formatDate(r.lastUsedAt) },
+      { key: 'revokedAt', label: 'Status', render: (r) => statusBadge(r.revokedAt ? 'revoked' : 'active') },
+      { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) }
+    ],
+    toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>New key</span></button>`,
+    actions: (r) => (r.revokedAt ? act('delete', r.id, 'Delete', 'danger') : act('revoke', r.id, 'Revoke', 'danger')),
+    bind: (root, reload) => {
+      (root.querySelector('[data-new]') as HTMLElement).onclick = async () => {
+        await openModal({
+          title: 'New API key',
+          fields: [
+            { name: 'name', label: 'Name', required: true },
+            { name: 'scopes', label: 'Scopes', value: 'read', help: 'Comma-separated, e.g. read,write,orders' }
+          ],
+          onSubmit: async (v: any) => {
+            const scopes = String(v.scopes || 'read')
+              .split(',')
+              .map((x: string) => x.trim())
+              .filter(Boolean);
+            const res = await apiRequest('/api-keys', {
+              method: 'POST',
+              body: JSON.stringify({ name: v.name, scopes: scopes.length ? scopes : ['read'] })
+            });
+            if (!res.success) throw new Error(res.message);
+            await openModal({
+              title: 'Copy your API key',
+              html: `<p class="empty">This key is shown once. Store it securely.</p><pre class="code-block" style="user-select:all">${esc(res.data.key)}</pre>`,
+              submitLabel: 'Done',
+              onSubmit: async () => {}
+            });
+            reload();
+          }
+        });
+      };
+      wire(root, {
+        revoke: async (id) => {
+          if (await confirmDialog('Revoke this API key?', { danger: true, confirmLabel: 'Revoke' })) {
+            await apiRequest(`/api-keys/${id}/revoke`, { method: 'POST' });
+            toast('Key revoked', 'success');
+            reload();
+          }
+        },
+        delete: async (id) => {
+          if (await confirmDialog('Delete this key?', { danger: true, confirmLabel: 'Delete' })) {
+            await apiRequest(`/api-keys/${id}`, { method: 'DELETE' });
+            reload();
+          }
+        }
+      });
+    }
+  });
+}
+
+/* ----------------------------- webhooks ------------------------------- */
+function renderWebhooks(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/webhooks',
+    columns: [
+      { key: 'url', label: 'URL' },
+      { key: 'events', label: 'Events', render: (r) => esc((r.events || []).join(', ')) },
+      { key: 'active', label: 'Active', render: (r) => statusBadge(r.active ? 'active' : 'inactive') },
+      { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) }
+    ],
+    toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>New webhook</span></button>`,
+    actions: (r) => `${act('toggle', r.id, r.active ? 'Disable' : 'Enable')}${act('delete', r.id, 'Delete', 'danger')}`,
+    bind: (root, reload) => {
+      (root.querySelector('[data-new]') as HTMLElement).onclick = async () => {
+        await openModal({
+          title: 'New webhook',
+          fields: [
+            { name: 'url', label: 'HTTPS URL', required: true },
+            { name: 'events', label: 'Events', value: '*', help: 'Comma-separated, e.g. order.created,order.completed or *' }
+          ],
+          onSubmit: async (v: any) => {
+            const events = String(v.events || '*')
+              .split(',')
+              .map((x: string) => x.trim())
+              .filter(Boolean);
+            const res = await apiRequest('/webhooks', {
+              method: 'POST',
+              body: JSON.stringify({ url: v.url, events: events.length ? events : ['*'] })
+            });
+            if (!res.success) throw new Error(res.message);
+            await openModal({
+              title: 'Signing secret',
+              html: `<p class="empty">Use this secret to verify the X-NetMark-Signature header.</p><pre class="code-block" style="user-select:all">${esc(res.data.secret)}</pre>`,
+              submitLabel: 'Done',
+              onSubmit: async () => {}
+            });
+            reload();
+          }
+        });
+      };
+      wire(root, {
+        toggle: async (id) => {
+          await apiRequest(`/webhooks/${id}/toggle`, { method: 'POST' });
+          reload();
+        },
+        delete: async (id) => {
+          if (await confirmDialog('Delete this webhook?', { danger: true, confirmLabel: 'Delete' })) {
+            await apiRequest(`/webhooks/${id}`, { method: 'DELETE' });
+            reload();
+          }
+        }
+      });
+    }
+  });
+}
+
+/* -------------------------- feature flags ----------------------------- */
+function renderFeatureFlags(c: HTMLElement) {
+  let rows: any[] = [];
+  crudView(c, {
+    endpoint: '/feature-flags',
+    columns: [
+      { key: 'key', label: 'Key' },
+      { key: 'enabled', label: 'Enabled', render: (r) => statusBadge(r.enabled ? 'active' : 'inactive') },
+      { key: 'rolloutPercent', label: 'Rollout %' },
+      { key: 'description', label: 'Description' },
+      { key: 'tenantId', label: 'Tenant', render: (r) => (r.tenantId ? esc(String(r.tenantId).slice(0, 8)) : 'global') }
+    ],
+    toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>New flag</span></button>`,
+    actions: (r) => `${act('toggle', r.id, r.enabled ? 'Disable' : 'Enable')}${act('delete', r.id, 'Delete', 'danger')}`,
+    onData: (r) => {
+      rows = r;
+    },
+    bind: (root, reload) => {
+      (root.querySelector('[data-new]') as HTMLElement).onclick = async () => {
+        await openModal({
+          title: 'New feature flag',
+          fields: [
+            { name: 'key', label: 'Key', required: true },
+            { name: 'description', label: 'Description' },
+            { name: 'rolloutPercent', label: 'Rollout %', type: 'number', value: '100' }
+          ],
+          onSubmit: async (v) => {
+            const res = await apiRequest('/feature-flags', {
+              method: 'POST',
+              body: JSON.stringify({ ...v, enabled: false })
+            });
+            if (!res.success) throw new Error(res.message);
+            reload();
+          }
+        });
+      };
+      wire(root, {
+        toggle: async (id) => {
+          const row = rows.find((r) => r.id === id);
+          await apiRequest(`/feature-flags/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ enabled: !row?.enabled })
+          });
+          reload();
+        },
+        delete: async (id) => {
+          if (await confirmDialog('Delete this flag?', { danger: true, confirmLabel: 'Delete' })) {
+            await apiRequest(`/feature-flags/${id}`, { method: 'DELETE' });
+            reload();
+          }
+        }
+      });
+    }
   });
 }

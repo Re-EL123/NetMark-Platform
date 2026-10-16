@@ -6,6 +6,7 @@ import { notify } from '../notify';
 import { storeIdsForUser } from '../scope';
 import { validLinkKeysForOwners } from '../companyLinks';
 import { recordCommission } from '../commissionEngine';
+import { dispatchWebhook } from '../webhooks';
 
 const ORDER_STATUSES = ['pending', 'confirmed', 'ready', 'completed', 'cancelled'];
 
@@ -179,6 +180,7 @@ export default authed(async (req, res, ctx) => {
     if (distributor) {
       await notify({ userId: distributor, type: 'order', title: 'New referred order', body: `Order ${order.order_number} was placed by a customer you referred.`, data: { orderId: order.id } });
     }
+    void dispatchWebhook('order.created', { orderId: order.id, orderNumber: order.order_number, total, customerId: ctx.userId, companyId: companyId || null }, ctx.tenantId, companyId);
     return ok(res, { data: rowOut(order) }, 201);
   }
 
@@ -230,6 +232,7 @@ export default authed(async (req, res, ctx) => {
       } catch {
         /* commission failures should not block order status */
       }
+      void dispatchWebhook('order.completed', { orderId: id, orderNumber: before.order_number, total: before.total, status }, ctx.tenantId, before.company_id);
     }
     return ok(res, { data: rowOut(after) });
   }

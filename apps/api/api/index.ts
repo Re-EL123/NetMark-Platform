@@ -30,6 +30,10 @@ import wallets from '../lib/handlers/wallets';
 import commissions from '../lib/handlers/commissions';
 import payouts from '../lib/handlers/payouts';
 import autoship from '../lib/handlers/autoship';
+import analytics from '../lib/handlers/analytics';
+import apiKeys from '../lib/handlers/apiKeys';
+import webhooks from '../lib/handlers/webhooks';
+import featureFlags from '../lib/handlers/featureFlags';
 
 type Handler = (req: VercelRequest, res: VercelResponse) => unknown;
 
@@ -51,6 +55,11 @@ const handlers: Record<string, Handler> = {
   wallets,
   commissions,
   payouts,
+  autoship,
+  analytics,
+  'api-keys': apiKeys,
+  webhooks,
+  'feature-flags': featureFlags,
   orders,
   drivers,
   appointments,
