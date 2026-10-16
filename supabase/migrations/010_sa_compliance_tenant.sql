@@ -17,7 +17,7 @@ update public.users u set tenant_id = coalesce(u.tenant_id, c.tenant_id) from pu
 update public.stores s set tenant_id = coalesce(s.tenant_id, c.tenant_id) from public.companies c where s.company_id=c.id;
 update public.products p set tenant_id = coalesce(p.tenant_id, c.tenant_id) from public.companies c where p.company_id=c.id;
 update public.orders o set tenant_id = coalesce(o.tenant_id, c.tenant_id) from public.companies c where o.company_id=c.id;
-update public.ads a set tenant_id = coalesce(a.tenant_id, c.tenant_id) from public.companies c where a.company_id=c.id;
+-- ads.tenant_id set only if company_id exists; skipped
 update public.distributor_codes d set tenant_id = coalesce(d.tenant_id, c.tenant_id) from public.companies c where d.company_id=c.id;
 alter table public.users alter column tenant_id set not null;
 alter table public.companies alter column tenant_id set not null;
