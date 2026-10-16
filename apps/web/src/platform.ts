@@ -889,7 +889,8 @@ function renderPayments(c: HTMLElement) {
     endpoint: '/payments',
     columns: [
       { key: 'id', label: 'Payment', render: (r) => esc(r.id.slice(0, 8)) },
-      { key: 'orderId', label: 'Order', render: (r) => esc((r.orderId || '').slice(0, 8)) },
+      { key: 'kind', label: 'Type', render: (r) => badge(titleCase((r.kind || 'order').replace('_', ' ')), 'info') },
+      { key: 'orderId', label: 'Order', render: (r) => esc((r.orderId || (r.relatedId || '')).slice(0, 8)) },
       { key: 'amount', label: 'Amount', render: (r) => money(r.amount) },
       { key: 'provider', label: 'Provider', render: (r) => badge(r.provider || 'payfast', 'info') },
       { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },

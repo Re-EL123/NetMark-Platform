@@ -1,4 +1,4 @@
-import { apiRequest } from './api';
+import { apiRequest, submitPayFast } from './api';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { crudView } from './crud';
@@ -775,16 +775,20 @@ async function billing(c: HTMLElement) {
   const ent = my?.entitlements || {};
   const usage = my?.usage || {};
   const planName = my?.planName || my?.plan?.name || 'Free';
+  const status = my?.billingStatus || (planName === 'Free' ? 'free' : 'active');
+  const currentPlanId = my?.plan?.id || my?.planId || null;
+  const renews = my?.nextBillingAt ? formatDate(my.nextBillingAt) : status === 'free' ? 'Free forever' : '—';
 
   c.innerHTML = `
     <div class="card">
       <h3>${icon('credit-card')} Your current plan</h3>
       ${statCards([
         { label: 'Plan', value: planName, format: 'text', accent: true, tone: 'brand' },
+        { label: 'Status', value: status === 'past_due' ? 'Payment due' : status === 'free' ? 'Free' : 'Active', format: 'text' },
         { label: 'Monthly price', value: Number(my?.plan?.baseFeeZar ?? my?.baseFeeZar ?? 0), format: 'money' },
-        { label: 'Commission depth', value: Number(ent.commissionLevels || 1) >= 3 ? '3 levels' : 'Level 1', format: 'text' },
-        { label: 'Payouts', value: ent.payouts ? 'Enabled' : 'Disabled', format: 'text' }
+        { label: 'Renews', value: renews, format: 'text' }
       ])}
+      ${status === 'past_due' ? '<p class="empty" style="margin-top:8px;color:var(--warning)">Your plan has lapsed — choose a plan below to restore your features.</p>' : ''}
     </div>
     <div class="card">
       <h3>${icon('gauge')} Usage</h3>
@@ -809,17 +813,39 @@ async function billing(c: HTMLElement) {
       <h3>${icon('tag')} Available plans</h3>
       ${plans.length
         ? tableSimple(
-            ['Plan', 'Price / month', 'Highlights'],
-            plans.map((p: any) => [
-              `${esc(p.name)}${p.isDefault ? ' <span class="badge">default</span>' : ''}`,
-              money(p.baseFeeZar || 0),
-              esc(planHighlights(p.features || {}))
-            ])
+            ['Plan', 'Price / month', 'Highlights', ''],
+            plans.map((p: any) => {
+              const isCurrent = currentPlanId === p.id && status === 'active';
+              const label = isCurrent ? 'Current' : status === 'past_due' && currentPlanId === p.id ? 'Renew' : 'Choose';
+              const btn = isCurrent
+                ? '<span class="badge">current</span>'
+                : `<button class="btn btn-sm" data-sub="${esc(p.id)}">${esc(label)}</button>`;
+              return [
+                `${esc(p.name)}${p.isDefault ? ' <span class="badge">default</span>' : ''}`,
+                money(p.baseFeeZar || 0),
+                esc(planHighlights(p.features || {})),
+                btn
+              ];
+            })
           )
         : '<p class="empty">No plans available.</p>'}
-      <p class="empty">Contact the platform admin to change your plan.</p>
     </div>`;
   iconify(c);
+
+  c.querySelectorAll('[data-sub]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      const planId = (b as HTMLElement).dataset.sub!;
+      const res = await apiRequest('/plans/subscribe', { method: 'POST', body: JSON.stringify({ planId }) });
+      if (!res.success) return toast(res.message || 'Could not change plan', 'error');
+      if (res.data?.free) {
+        toast(`You are now on the ${res.data.planName || 'selected'} plan`, 'success');
+        billing(c);
+        return;
+      }
+      toast('Redirecting to PayFast…', 'info');
+      submitPayFast(res.data.processUrl, res.data.fields);
+    })
+  );
 }
 
 function entValue(max: unknown): string {

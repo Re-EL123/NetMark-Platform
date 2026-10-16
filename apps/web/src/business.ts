@@ -534,19 +534,8 @@ async function startPurchasePayFast(purchaseId: string) {
   const res = await apiRequest(`/purchases/${purchaseId}/payfast/initiate`, { method: 'POST' });
   if (!res.success) return toast(res.message || 'PayFast unavailable', 'error');
   const { processUrl, fields } = res.data;
-  const form = document.createElement('form');
-  form.method = 'POST';
-  form.action = processUrl;
-  for (const [k, val] of Object.entries(fields)) {
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = k;
-    input.value = String(val);
-    form.appendChild(input);
-  }
-  document.body.appendChild(form);
   toast('Redirecting to PayFast…', 'info');
-  form.submit();
+  submitPayFast(processUrl, fields);
 }
 
 function orders(c: HTMLElement) {

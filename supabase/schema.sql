@@ -1,7 +1,7 @@
 -- NetMark Platform — Supabase (Postgres) schema (COMPLETE)
 -- Run this in the Supabase SQL editor (Project → SQL Editor → New query).
 -- This single file builds the entire schema: the base tables plus migrations
--- 002 → 015 consolidated below. It is idempotent — safe to run repeatedly.
+-- 002 → 016 consolidated below. It is idempotent — safe to run repeatedly.
 -- (The same statements also live under supabase/migrations/ for reference.)
 -- The API talks to the database with the service_role key, so RLS is enabled
 -- with no policies (deny all) to keep the anon/authenticated keys locked out.
@@ -211,7 +211,7 @@ end;
 $$;
 
 -- ===========================================================================
--- Migrations 002 → 015 — consolidated below so this single file builds the
+-- Migrations 002 → 016 — consolidated below so this single file builds the
 -- complete schema. Every statement is idempotent and safe to re-run.
 -- ===========================================================================
 
@@ -266,6 +266,10 @@ alter table public.payments add column if not exists status text not null defaul
 alter table public.payments add column if not exists provider text not null default 'payfast';
 alter table public.payments add column if not exists provider_ref text;
 alter table public.payments add column if not exists raw jsonb;
+alter table public.payments add column if not exists kind text not null default 'order';
+alter table public.payments add column if not exists related_id uuid;
+
+create index if not exists payments_company_kind_idx on public.payments (company_id, kind);
 
 alter table public.appointments add column if not exists user_id uuid;
 alter table public.appointments add column if not exists store_id uuid;

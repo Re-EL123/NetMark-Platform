@@ -36,6 +36,12 @@ export default authed(async (req, res, ctx) => {
     }).select('*').single();
     if (error) return fail(res, error.message);
     await recordAudit(req, { action: 'code.purchase.create', entityType: 'code_purchase', entityId: p.id, after: rowOut(p) });
+    // A free code needs no payment — deliver it immediately.
+    if (price <= 0) {
+      await completeCodePurchase(sb, p.id);
+      const { data: done } = await sb.from('code_purchases').select('*').eq('id', p.id).maybeSingle();
+      return ok(res, { data: rowOut(done || p) }, 201);
+    }
     return ok(res, { data: rowOut(p) }, 201);
   }
 

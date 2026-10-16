@@ -1,7 +1,8 @@
 import { authed, ok, fail, slugOf, getSupabase, rowOut, rowsOut } from '../http';
 import { parseListQuery, runList } from '../paginate';
 import { recordAudit } from '../audit';
-import { getCompanyEntitlements } from '../planLimits';
+import { getCompanyEntitlements, activatePlanSubscription, BILLING_TERM_DAYS } from '../planLimits';
+import { payfastConfig, buildPaymentFields } from '../payfast';
 
 export default authed(async (req, res, ctx) => {
   const sb = getSupabase();
@@ -20,7 +21,7 @@ export default authed(async (req, res, ctx) => {
   if (slug[0] === 'my' && req.method === 'GET') {
     if (!ctx.companyId) return ok(res, { data: null });
 
-    const { entitlements, planName, planId } = await getCompanyEntitlements(sb, ctx.companyId);
+    const { entitlements, planName, planId, billingStatus, nextBillingAt } = await getCompanyEntitlements(sb, ctx.companyId);
 
     const count = async (table: string) => {
       const { count: c } = await sb
@@ -41,7 +42,63 @@ export default authed(async (req, res, ctx) => {
     if (cp?.plan) (data as any).plan = rowOut((cp as any).plan);
     data.planName = planName;
     data.planId = planId;
+    data.billingStatus = billingStatus;
+    data.nextBillingAt = nextBillingAt;
     return ok(res, { data: { ...data, entitlements, usage: { products, stores, teamMembers, codes } } });
+  }
+
+  // Self-serve plan change for a company owner. Free plans switch immediately;
+  // paid plans return PayFast form fields and settle via the ITN webhook.
+  if (slug[0] === 'subscribe' && req.method === 'POST') {
+    if (!ctx.companyId) return fail(res, 'Only company owners can subscribe to a plan', 403);
+    if (ctx.role !== 'owner' && !isPlatform) return fail(res, 'Forbidden', 403);
+
+    const { planId } = req.body || {};
+    if (!planId) return fail(res, 'planId required');
+    const { data: plan } = await sb.from('plans').select('*').eq('id', planId).maybeSingle();
+    if (!plan || plan.is_active === false) return fail(res, 'That plan is not available', 404);
+
+    const amount = Number(plan.base_fee_zar || 0);
+    if (amount <= 0) {
+      const activated = await activatePlanSubscription(sb, ctx.companyId, plan.id, { termDays: null });
+      await recordAudit(req, { action: 'plan.subscribe', entityType: 'company', entityId: ctx.companyId, after: { planId: plan.id, free: true } });
+      return ok(res, { data: { free: true, planId: plan.id, planName: activated?.planName || plan.name } });
+    }
+
+    const cfg = payfastConfig();
+    if (!cfg.configured) return fail(res, 'PayFast is not configured on the server.', 503);
+
+    const { data: payment, error } = await sb
+      .from('payments')
+      .insert({
+        company_id: ctx.companyId,
+        user_id: ctx.userId,
+        amount,
+        status: 'pending',
+        provider: 'payfast',
+        kind: 'plan_subscription',
+        related_id: plan.id
+      })
+      .select('*')
+      .single();
+    if (error || !payment) return fail(res, 'Could not create payment');
+
+    const [first, ...rest] = String(ctx.user?.name || 'NetMark').split(' ');
+    const fields = buildPaymentFields({
+      amount,
+      itemName: `NetMark plan ${plan.name}`,
+      itemDescription: `${plan.name} subscription (${BILLING_TERM_DAYS} days)`,
+      paymentId: payment.id,
+      relatedId: payment.id,
+      kind: 'plan_subscription',
+      nameFirst: first,
+      nameLast: rest.join(' '),
+      email: ctx.user?.email,
+      cellNumber: ctx.user?.phone || undefined,
+      custom: { custom_str3: plan.id, custom_str4: ctx.companyId }
+    });
+    await recordAudit(req, { action: 'plan.subscribe', entityType: 'company', entityId: ctx.companyId, after: { planId: plan.id, paymentId: payment.id, amount } });
+    return ok(res, { data: { paymentId: payment.id, sandbox: cfg.sandbox, processUrl: cfg.processUrl, fields } });
   }
 
 

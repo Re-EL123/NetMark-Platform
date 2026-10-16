@@ -13,6 +13,7 @@ import {
 import { recordAudit } from '../audit';
 import { notify } from '../notify';
 import { completeCodePurchase, completeStorePurchase } from '../purchases';
+import { activatePlanSubscription } from '../planLimits';
 import {
   payfastConfig,
   buildPaymentFields,
@@ -89,6 +90,7 @@ const authedHandler = authed(async (req, res, ctx) => {
 
     const { data: order } = await sb.from('orders').select('*').eq('id', orderId).maybeSingle();
     if (!order) return fail(res, 'Order not found', 404);
+    if (order.payment_status === 'paid') return fail(res, 'This order is already paid');
     if (!ctx.isPlatform && order.customer_id && order.customer_id !== ctx.userId && !['owner', 'storeOwner'].includes(ctx.role)) {
       return fail(res, 'Forbidden', 403);
     }
@@ -121,10 +123,12 @@ const authedHandler = authed(async (req, res, ctx) => {
       nameFirst: first,
       nameLast: rest.join(' '),
       email: ctx.user.email,
-      cellNumber: ctx.user.phone || undefined
+      cellNumber: ctx.user.phone || undefined,
+      custom: {
+        ...(returnUrl ? { return_url: String(returnUrl) } : {}),
+        ...(cancelUrl ? { cancel_url: String(cancelUrl) } : {})
+      }
     });
-    if (returnUrl) fields.return_url = returnUrl;
-    if (cancelUrl) fields.cancel_url = cancelUrl;
 
     await recordAudit(req, {
       action: 'payment.initiate',
@@ -186,6 +190,7 @@ async function handleItn(req: VercelRequest, res: VercelResponse) {
     const sb = getSupabase();
     const paymentId = body.m_payment_id;
     const status = String(body.payment_status || '').toUpperCase();
+    const isComplete = status === 'COMPLETE';
 
     const { data: payment } = await sb.from('payments').select('*').eq('id', paymentId).maybeSingle();
 
@@ -193,14 +198,14 @@ async function handleItn(req: VercelRequest, res: VercelResponse) {
       await sb
         .from('payments')
         .update({
-          status: payment.status === 'paid' ? 'paid' : payment.status,
+          status: isComplete ? 'paid' : payment.status,
           provider_ref: body.pf_payment_id || payment.provider_ref,
           raw: body
         })
         .eq('id', payment.id);
     }
 
-    if (status === 'COMPLETE') {
+    if (isComplete) {
       const kind = String(body.custom_str2 || '');
       const relatedId = body.custom_str1 || payment?.order_id;
       const amountGross = Number(body.amount_gross || payment?.amount || 0);
@@ -218,6 +223,47 @@ async function handleItn(req: VercelRequest, res: VercelResponse) {
           await completeStorePurchase(sb, relatedId, body.pf_payment_id || null);
         } else if (sp) {
           console.warn('PayFast ITN: store purchase amount mismatch', { amountGross, expected: sp.price_zar });
+        }
+      } else if (kind === 'plan_subscription' && relatedId) {
+        const { data: pay } = await sb.from('payments').select('*').eq('id', relatedId).maybeSingle();
+        const planId = body.custom_str3 || (pay as any)?.related_id;
+        const companyId = body.custom_str4 || (pay as any)?.company_id;
+        // Guard against duplicate ITNs extending the term twice.
+        if (pay && pay.status !== 'paid' && planId && companyId) {
+          const { data: plan } = await sb.from('plans').select('*').eq('id', planId).maybeSingle();
+          const expected = Number(pay.amount || plan?.base_fee_zar || 0);
+          const amountOk = !amountGross || Math.abs(amountGross - expected) < 0.01;
+          if (plan && amountOk) {
+            const activated = await activatePlanSubscription(sb, companyId, plan.id, {
+              paymentRef: body.pf_payment_id || null
+            });
+            await sb
+              .from('payments')
+              .update({ status: 'paid', provider_ref: body.pf_payment_id || null, raw: body })
+              .eq('id', pay.id);
+            const { data: owners } = await sb
+              .from('users')
+              .select('id')
+              .eq('company_id', companyId)
+              .eq('role', 'owner');
+            for (const o of owners || []) {
+              await notify({
+                userId: o.id,
+                type: 'payment',
+                title: 'Subscription active',
+                body: `Your ${activated?.planName || plan.name} plan is active.`,
+                data: { planId: plan.id, companyId }
+              });
+            }
+            await recordAudit(req, {
+              action: 'plan.subscribe.paid',
+              entityType: 'company',
+              entityId: companyId,
+              after: { planId: plan.id, planName: activated?.planName, nextBillingAt: activated?.nextBillingAt }
+            });
+          } else if (plan) {
+            console.warn('PayFast ITN: plan subscription amount mismatch', { amountGross, expected });
+          }
         }
       } else {
         const orderIdToUse = body.custom_str1 || payment?.order_id;
@@ -272,7 +318,7 @@ async function handleItn(req: VercelRequest, res: VercelResponse) {
                   userId: purchase.store_owner_id,
                   type: 'payment',
                   title: 'Payment received',
-                  body: `We received your payment for purchase ${purchase.reference || purchase.id}.`,
+                  body: `We received your payment for purchase ${purchase.reference}.`,
                   data: { purchaseId: purchase.id }
                 });
               }

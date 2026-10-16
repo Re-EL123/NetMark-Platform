@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { apiRequest } from './api';
+import { apiRequest, submitPayFast } from './api';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { openModal, confirmDialog, toast, money, titleCase, emptyState } from './ui';
@@ -313,19 +313,8 @@ async function startPayFast(orderId: string) {
     return;
   }
   const { processUrl, fields } = res.data;
-  const form = document.createElement('form');
-  form.method = 'POST';
-  form.action = processUrl;
-  for (const [k, val] of Object.entries(fields)) {
-    const input = document.createElement('input');
-    input.type = 'hidden';
-    input.name = k;
-    input.value = String(val);
-    form.appendChild(input);
-  }
-  document.body.appendChild(form);
   toast('Redirecting to PayFast…', 'info');
-  form.submit();
+  submitPayFast(processUrl, fields);
 }
 
 /* -------------------------------- orders ------------------------------- */

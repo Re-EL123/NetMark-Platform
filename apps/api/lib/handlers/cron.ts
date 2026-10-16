@@ -25,6 +25,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (slug[0] === 'commissions' && (req.method === 'GET' || req.method === 'POST')) {
     return runCommissionRelease(res);
   }
+  if (slug[0] === 'plans' && (req.method === 'GET' || req.method === 'POST')) {
+    return runPlanBilling(res);
+  }
   return res.status(404).json({ success: false, message: 'Unknown cron job' });
 }
 
@@ -33,6 +36,45 @@ async function runCommissionRelease(res: VercelResponse) {
   const sb = getSupabase();
   const released = await releaseDueCommissions(sb, 200);
   return res.status(200).json({ success: true, data: { released } });
+}
+
+/** Expire paid plan terms and prompt company owners to renew. */
+async function runPlanBilling(res: VercelResponse) {
+  const sb = getSupabase();
+  const today = new Date().toISOString().slice(0, 10);
+  const { data: due } = await sb
+    .from('companies_plans')
+    .select('id, company_id, next_billing_at, plans(name)')
+    .eq('billing_status', 'active')
+    .not('next_billing_at', 'is', null)
+    .lte('next_billing_at', today)
+    .limit(200);
+
+  let expired = 0;
+  for (const cp of due || []) {
+    const { error } = await sb
+      .from('companies_plans')
+      .update({ billing_status: 'past_due' })
+      .eq('id', cp.id)
+      .eq('billing_status', 'active');
+    if (error) {
+      console.error('plan billing expire failed', cp.id, error.message);
+      continue;
+    }
+    expired += 1;
+    const { data: owners } = await sb.from('users').select('id').eq('company_id', cp.company_id).eq('role', 'owner');
+    for (const o of owners || []) {
+      await notify({
+        userId: o.id,
+        type: 'payment',
+        title: 'Plan renewal due',
+        body: `Your ${(cp as any).plans?.name || 'subscription'} plan has lapsed. Renew to restore your full features.`,
+        data: { companyId: cp.company_id }
+      });
+    }
+  }
+
+  return res.status(200).json({ success: true, data: { expired } });
 }
 
 async function runAutoship(req: VercelRequest, res: VercelResponse) {
