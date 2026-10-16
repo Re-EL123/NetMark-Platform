@@ -129,6 +129,7 @@ export default authed(async (req, res, ctx) => {
       body: `${ctx.user?.name || 'A company owner'} submitted changes for approval.`,
       data: { requestId: saved?.id, companyId: ctx.companyId }
     });
+    try { await notify({ role: 'platformAdmin', type: 'system', title: 'New company change request', body: 'Company change request submitted.', data: { href: '#/platform/company-changes' } }); } catch (e) {}
     return ok(res, { data: rowOut(saved) }, 201);
   }
 

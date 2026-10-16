@@ -21,13 +21,39 @@ function placementMatch(ad: any, placement?: string): boolean {
   return list.includes(placement);
 }
 
+function isSafeUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+    const h = u.hostname.toLowerCase();
+    if (['localhost', '127.0.0.1', '::1'].includes(h)) return false;
+    if (h.startsWith('10.') || h.startsWith('192.168.') || h.startsWith('172.')) {
+      const parts = h.split('.');
+      const p = parseInt(parts[1] || '0', 10);
+      if (p >= 16 && p <= 31) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+
 function pick(b: any): any {
   const patch: any = {};
   if (b.title !== undefined) patch.title = b.title;
   if (b.body !== undefined) patch.body = b.body;
   if (b.mediaType !== undefined) patch.media_type = MEDIA_TYPES.includes(b.mediaType) ? b.mediaType : 'image';
-  if (b.mediaUrl !== undefined) patch.media_url = b.mediaUrl || null;
-  if (b.linkUrl !== undefined) patch.link_url = b.linkUrl || null;
+  if (b.mediaUrl !== undefined) {
+    const v = String(b.mediaUrl || '').trim();
+    if (v && !isSafeUrl(v)) return null as any;
+    patch.media_url = v || null;
+  }
+  if (b.linkUrl !== undefined) {
+    const v = String(b.linkUrl || '').trim();
+    if (v && !isSafeUrl(v)) return null as any;
+    patch.link_url = v || null;
+  }
   if (b.ctaLabel !== undefined) patch.cta_label = b.ctaLabel || null;
   if (b.placements !== undefined) {
     const list: string[] = Array.isArray(b.placements) ? b.placements : [b.placements];
@@ -69,6 +95,7 @@ export default authed(async (req, res, ctx) => {
 
   if (!id && req.method === 'POST') {
     const patch = pick(req.body || {});
+    if (!patch) return fail(res, 'Invalid URL provided');
     if (!patch.title) return fail(res, 'Title is required');
     const { data, error } = await sb
       .from('ads')
@@ -81,9 +108,10 @@ export default authed(async (req, res, ctx) => {
   }
 
   if (id && req.method === 'PUT') {
-    const patch = pick(req.body || {});
     const { data: before } = await sb.from('ads').select('*').eq('id', id).maybeSingle();
     if (!before) return fail(res, 'Not found', 404);
+    const patch = pick(req.body || {});
+    if (!patch) return fail(res, 'Invalid URL provided');
     const { data, error } = await sb.from('ads').update(patch).eq('id', id).select('*').single();
     if (error || !data) return fail(res, error?.message || 'Could not update ad');
     await recordAudit(req, { action: 'ad.update', entityType: 'ad', entityId: id, before: rowOut(before), after: rowOut(data) });

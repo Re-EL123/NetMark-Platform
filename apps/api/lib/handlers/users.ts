@@ -3,6 +3,7 @@ import { authed, ok, fail, slugOf, getSupabase, rowOut, rowsOut } from '../http'
 import { parseListQuery, runList } from '../paginate';
 import { hasPermission, ROLES } from '../permissions';
 import { recordAudit } from '../audit';
+import { rateLimit, rateLimitFail } from '../rateLimit';
 
 function tempPassword() {
   return 'Nm-' + crypto.randomBytes(6).toString('base64url') + '!9';
@@ -30,6 +31,7 @@ export default authed(async (req, res, ctx) => {
     q = scope(q);
     if (req.query.role) q = q.eq('role', String(req.query.role));
     if (req.query.status) q = q.eq('status', String(req.query.status));
+    else q = q.neq('status', 'deleted');
     const result = await runList(q, list, { searchColumns: ['name', 'email', 'phone'] });
     return ok(res, { data: rowsOut(result.data), meta: { count: result.count, page: result.page, pageSize: result.pageSize } });
   }
@@ -113,6 +115,8 @@ export default authed(async (req, res, ctx) => {
   }
 
   if (id && slug[1] === 'reset-password' && req.method === 'POST') {
+    const rk = `users:reset:${(req.headers['x-forwarded-for'] as string) || (req.headers['x-real-ip'] as string) || (req.socket as any)?.remoteAddress || id}`;
+    if (!rateLimit(rk, { windowMs: 300000, max: 5 })) return rateLimitFail(res);
     if (!canWrite && id !== ctx.userId) return fail(res, 'Forbidden', 403);
     const pw = tempPassword();
     const { error } = await sb.auth.admin.updateUserById(id, { password: pw });
@@ -123,10 +127,30 @@ export default authed(async (req, res, ctx) => {
 
   if (id && req.method === 'DELETE') {
     if (!ctx.isPlatform && !canWrite) return fail(res, 'Forbidden', 403);
+    if (id === ctx.userId) return fail(res, 'Cannot delete your own account', 403);
     const { data: before } = await scope(sb.from('users').select('*').eq('id', id)).maybeSingle();
     if (!before) return fail(res, 'Not found', 404);
+    // Prevent deleting the last owner of a company
+    if (before.role === 'owner' && before.company_id) {
+      const { count: ownerCount } = await sb
+        .from('users')
+        .select('id', { count: 'exact', head: true })
+        .eq('company_id', before.company_id)
+        .eq('role', 'owner')
+        .neq('status', 'deleted');
+      if ((ownerCount || 0) <= 1) {
+        return fail(res, 'Cannot delete the last owner of this company', 403);
+      }
+    }
+    if (before.role === 'platformAdmin' && !ctx.isPlatform) {
+      return fail(res, 'Only platform admins may delete platform admins', 403);
+    }
+    // Soft delete to preserve history
+    await sb
+      .from('users')
+      .update({ status: 'deleted', deleted_at: new Date().toISOString() })
+      .eq('id', id);
     await sb.auth.admin.deleteUser(id).catch(() => {});
-    await sb.from('users').delete().eq('id', id);
     await recordAudit(req, { action: 'user.delete', entityType: 'user', entityId: id, before: rowOut(before) });
     return ok(res, { message: 'Deleted' });
   }

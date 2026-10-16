@@ -15,6 +15,7 @@ const FOLDERS: Record<string, string[]> = {
   misc: ['platformAdmin', 'owner', 'storeOwner', 'customer', 'driver']
 };
 
+const MAX_SIZE = 50 * 1024 * 1024; // 50MB
 const SAFE_EXT = /\.(png|jpe?g|gif|webp|avif|svg|bmp|heic|mp4|webm|mov|m4v|ogg|pdf|docx?|xlsx?|pptx?|csv|txt)$/i;
 
 function safeName(name: string): string {
@@ -47,6 +48,8 @@ export default authed(async (req, res, ctx) => {
 
   const name = safeName(filename);
   if (!SAFE_EXT.test(name)) return fail(res, 'Unsupported file type', 400);
+  const size = Number(req.body?.size || 0);
+  if (size && size > MAX_SIZE) return fail(res, 'File too large', 400);
 
   const path = `${dir}/${ctx.userId}/${Date.now()}-${crypto.randomBytes(4).toString('hex')}-${name}`;
   const { data, error } = await sb.storage.from(BUCKET).createSignedUploadUrl(path);

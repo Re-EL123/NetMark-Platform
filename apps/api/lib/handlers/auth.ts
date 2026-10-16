@@ -2,6 +2,12 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import { getSupabase, rowOut } from '../db';
 import { verifySupabaseToken, loadUser } from '../middleware';
 import { capabilitiesFor } from '../permissions';
+import { rateLimit, rateLimitFail } from '../rateLimit';
+
+function clientKey(req: VercelRequest, suffix = '') {
+  const ip = (req.headers['x-forwarded-for'] as string) || (req.headers['x-real-ip'] as string) || (req.socket as any)?.remoteAddress || 'unknown';
+  return `auth:${suffix}:${ip}`;
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -61,6 +67,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (path === 'register' && req.method === 'POST') {
+    if (!rateLimit(clientKey(req, 'register'), { windowMs: 300000, max: 10 })) {
+      return rateLimitFail(res);
+    }
     try {
       const sb = getSupabase();
       const {
