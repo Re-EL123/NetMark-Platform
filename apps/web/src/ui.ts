@@ -296,6 +296,65 @@ export function dataTable(
   return `<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
+/** Simple static table (cells are pre-rendered HTML strings). */
+export function tableSimple(headers: string[], rows: string[][]): string {
+  if (!rows.length) return emptyState('No records.', 'inbox');
+  const head = headers.map((h) => `<th>${h}</th>`).join('');
+  const body = rows
+    .map((r) => `<tr>${r.map((cell) => `<td>${cell}</td>`).join('')}</tr>`)
+    .join('');
+  return `<div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+/* --------------------------- row actions ------------------------------- */
+const ACT_ICON: Record<string, string> = {
+  edit: 'pencil',
+  toggle: 'power',
+  remove: 'trash-2',
+  delete: 'trash-2',
+  status: 'refresh-cw',
+  set: 'settings',
+  pay: 'credit-card',
+  paid: 'credit-card',
+  process: 'check-circle-2',
+  complete: 'check-circle-2',
+  confirm: 'check',
+  ready: 'package-check',
+  cancel: 'ban',
+  renew: 'refresh-cw',
+  unlink: 'unlink',
+  revoke: 'unlink',
+  share: 'share-2',
+  accept: 'check',
+  approve: 'check',
+  verify: 'badge-check',
+  reject: 'x',
+  assign: 'truck',
+  view: 'eye',
+  stock: 'boxes',
+  refund: 'rotate-ccw',
+  payout: 'wallet',
+  copy: 'external-link',
+  activate: 'power',
+  suspend: 'ban',
+  reset: 'refresh-cw'
+};
+
+/** Render a row-action button wired through `wire()`. */
+export function act(action: string, id: string, label: string, cls = ''): string {
+  return `<button data-act="${action}" data-id="${esc(id)}" class="${cls}">${icon(ACT_ICON[action] || 'circle-dot')}<span>${esc(
+    label
+  )}</span></button>`;
+}
+
+/** Attach click handlers to every `[data-act]` button inside `root`. */
+export function wire(root: HTMLElement, handlers: Record<string, (id: string) => void>): void {
+  root.querySelectorAll('[data-act]').forEach((btn) => {
+    const el = btn as HTMLElement;
+    el.onclick = () => handlers[el.dataset.act || '']?.(el.dataset.id || '');
+  });
+}
+
 export type StatTone = 'brand' | 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 
 export interface StatItem {

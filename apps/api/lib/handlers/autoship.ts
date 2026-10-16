@@ -18,8 +18,12 @@ export default authed(async (req, res, ctx) => {
   if (slug.length === 0 && req.method === 'POST') {
     const { orderId, intervalDays, items } = req.body || {};
     if (!orderId) return fail(res, 'orderId required');
-    const { data: order } = await sb.from('orders').select('company_id').eq('id', orderId).maybeSingle();
-    if (order?.company_id) {
+    const { data: order } = await sb.from('orders').select('company_id, customer_id, user_id').eq('id', orderId).maybeSingle();
+    if (!order) return fail(res, 'Order not found', 404);
+    if (!ctx.isPlatform && order.customer_id !== ctx.userId && order.user_id !== ctx.userId) {
+      return fail(res, 'Forbidden', 403);
+    }
+    if (order.company_id) {
       const { entitlements } = await getCompanyEntitlements(sb, order.company_id);
       if (!entitlements.autoship) {
         return fail(res, 'Autoship is not available for this order. The store must upgrade to enable it.', 402);

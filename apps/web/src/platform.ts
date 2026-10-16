@@ -2,7 +2,7 @@ import { apiRequest } from './api';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { crudView } from './crud';
-import { openModal, confirmDialog, toast, money, titleCase, emptyState, statCards, dataTable, Field } from './ui';
+import { openModal, confirmDialog, toast, money, titleCase, emptyState, statCards, dataTable, act, wire, tableSimple, Field } from './ui';
 import { icon } from './icons';
 import { overviewStats, renderOverviewCharts } from './dashboard';
 import { donutChart, barList, chartCard } from './charts';
@@ -18,37 +18,6 @@ const ROLE_OPTIONS = [
 
 function opts(values: string[]) {
   return values.map((v) => ({ value: v, label: titleCase(v) }));
-}
-
-const ACT_ICON: Record<string, string> = {
-  edit: 'pencil',
-  toggle: 'power',
-  remove: 'trash-2',
-  status: 'refresh-cw',
-  pay: 'credit-card',
-  cancel: 'ban',
-  approve: 'check',
-  reject: 'x',
-  assign: 'truck',
-  view: 'eye',
-  payout: 'wallet',
-  copy: 'external-link',
-  activate: 'power',
-  suspend: 'ban',
-  reset: 'refresh-cw',
-  verify: 'badge-check'
-};
-function act(act: string, id: string, label: string, cls = '') {
-  return `<button data-act="${act}" data-id="${esc(id)}" class="${cls}">${icon(ACT_ICON[act] || 'circle-dot')}<span>${esc(
-    label
-  )}</span></button>`;
-}
-
-function wire(root: HTMLElement, handlers: Record<string, (id: string) => void>) {
-  root.querySelectorAll('[data-act]').forEach((btn) => {
-    const el = btn as HTMLElement;
-    el.onclick = () => handlers[el.dataset.act || '']?.(el.dataset.id || '');
-  });
 }
 
 const nav: NavItem[] = [
@@ -184,15 +153,6 @@ async function renderDashboard(c: HTMLElement) {
         ])
       )}
     </div>`;
-}
-
-function tableSimple(headers: string[], rows: string[][]) {
-  if (!rows.length) return emptyState('No records.', 'inbox');
-  return `<div class="table-wrap"><table><thead><tr>${headers
-    .map((h) => `<th>${h}</th>`)
-    .join('')}</tr></thead><tbody>${rows
-    .map((r) => `<tr>${r.map((cell) => `<td>${cell}</td>`).join('')}</tr>`)
-    .join('')}</tbody></table></div>`;
 }
 
 /* -------------------------------- users -------------------------------- */

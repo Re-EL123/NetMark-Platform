@@ -2,7 +2,7 @@ import { supabase } from './supabase';
 import { apiRequest, submitPayFast } from './api';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
-import { openModal, confirmDialog, toast, money, titleCase, emptyState } from './ui';
+import { openModal, confirmDialog, toast, money, titleCase, emptyState, tableSimple } from './ui';
 import { icon } from './icons';
 import { getMyReferralCode, shareLink, shareUrl } from './referral';
 
@@ -463,13 +463,6 @@ async function profile(c: HTMLElement, ctx: any) {
         toast('Password updated', 'success');
       }
     });
-}
-
-function tableSimple(headers: string[], rows: string[][]) {
-  if (!rows.length) return emptyState('No records.', 'inbox');
-  return `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows
-    .map((r) => `<tr>${r.map((cell) => `<td>${cell}</td>`).join('')}</tr>`)
-    .join('')}</tbody></table></div>`;
 }
 
 /* ------------------------------- autoship ------------------------------ */

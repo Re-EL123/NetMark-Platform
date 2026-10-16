@@ -300,8 +300,8 @@ export default authed(async (req, res, ctx) => {
   }
 
   if (id && slug[1] === 'refund' && req.method === 'POST') {
-    if (!canWrite) return fail(res, 'Forbidden', 403);
-    const { data: before } = await sb.from('orders').select('*').eq('id', id).maybeSingle();
+    if (!ctx.isPlatform && ctx.role !== 'owner') return fail(res, 'Forbidden', 403);
+    const { data: before } = await scope(sb.from('orders').select('*').eq('id', id)).maybeSingle();
     if (!before) return fail(res, 'Not found', 404);
     const amount = Number(req.body?.amount ?? before.total ?? 0);
     const { data: after } = await sb

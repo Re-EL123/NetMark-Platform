@@ -1,6 +1,5 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { getSupabase } from './db';
-import { hasPermission } from './permissions';
 
 export async function verifySupabaseToken(
   req: VercelRequest,
@@ -50,35 +49,4 @@ export async function loadUser(req: VercelRequest, res: VercelResponse, next: ()
     console.error('loadUser error', err);
     return res.status(500).json({ success: false, message: 'Server error' });
   }
-}
-
-export function requireRole(...roles: string[]) {
-  return (req: VercelRequest, res: VercelResponse, next: () => void) => {
-    const user = (req as any).user;
-    if (!user || !roles.includes(user.role)) {
-      return res.status(403).json({ success: false, message: 'Forbidden' });
-    }
-    next();
-  };
-}
-
-export function requirePermission(...capabilities: string[]) {
-  return (req: VercelRequest, res: VercelResponse, next: () => void) => {
-    const user = (req as any).user;
-    if (!user) return res.status(403).json({ success: false, message: 'Forbidden' });
-    const ok = capabilities.every((cap) => hasPermission(user.role, cap));
-    if (!ok) return res.status(403).json({ success: false, message: 'Forbidden' });
-    next();
-  };
-}
-
-export function requireCompanyScope(req: VercelRequest, res: VercelResponse, next: () => void) {
-  const user = (req as any).user;
-  if (!user) return res.status(403).json({ success: false, message: 'Forbidden' });
-  if (user.role === 'platformAdmin') return next();
-  if (user.role === 'owner' || user.company_id) {
-    (req as any).companyFilter = { companyId: user.company_id };
-    return next();
-  }
-  return res.status(403).json({ success: false, message: 'Forbidden' });
 }

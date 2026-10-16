@@ -17,6 +17,12 @@ export default authed(async (req, res, ctx) => {
   const slug = slugOf(req);
   const canWrite = ctx.isPlatform || ctx.role === 'owner';
 
+  // Roles without products.read (e.g. drivers) have no access to the catalog,
+  // matching the storefront listing endpoint's boundary.
+  if (!ctx.isPlatform && !hasPermission(ctx.role, 'products.read')) {
+    return fail(res, 'Forbidden', 403);
+  }
+
   // A store owner sees the catalog of every company they have a valid link to.
   let linkedCompanyIds: string[] | null = null;
   if (ctx.role === 'storeOwner') linkedCompanyIds = await validCompanyIdsForOwner(sb, ctx.userId);

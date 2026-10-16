@@ -124,11 +124,12 @@ export default authed(async (req, res, ctx) => {
 
   const id = slug[0];
 
-  // A code may only be touched by the owning company's owner or the platform.
+  // A code may be touched by the person it attributes referrals to, the owning
+  // company's owner, or the platform.
   const canTouch = (code: any) => {
     if (ctx.isPlatform) return true;
-    if (ctx.role === 'owner') return !!code.company_id && code.company_id === ctx.companyId;
-    return false;
+    if (code.distributor_id && code.distributor_id === ctx.userId) return true;
+    return !!(code.company_id && code.company_id === ctx.companyId);
   };
 
   if (id && req.method === 'PUT') {

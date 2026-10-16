@@ -2,7 +2,7 @@ import { apiRequest, submitPayFast } from './api';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { crudView } from './crud';
-import { openModal, confirmDialog, toast, money, titleCase, emptyState, statCards, Field } from './ui';
+import { openModal, confirmDialog, toast, money, titleCase, emptyState, statCards, act, wire, tableSimple, Field } from './ui';
 import { icon, iconify } from './icons';
 import { uploadFieldHtml, wireUploaders } from './upload';
 import { overviewStats, renderOverviewCharts } from './dashboard';
@@ -17,35 +17,6 @@ const ROLE_OPTIONS = ['storeOwner', 'driver', 'customer'].map((r) => ({
 
 function opts(values: string[]) {
   return values.map((v) => ({ value: v, label: titleCase(v) }));
-}
-const ACT_ICON: Record<string, string> = {
-  edit: 'pencil',
-  toggle: 'power',
-  remove: 'trash-2',
-  status: 'refresh-cw',
-  pay: 'credit-card',
-  cancel: 'ban',
-  approve: 'check',
-  reject: 'x',
-  assign: 'truck',
-  view: 'eye',
-  payout: 'wallet',
-  copy: 'external-link',
-  share: 'share-2',
-  activate: 'power',
-  suspend: 'ban',
-  reset: 'refresh-cw'
-};
-function act(a: string, id: string, label: string, cls = '') {
-  return `<button data-act="${a}" data-id="${esc(id)}" class="${cls}">${icon(ACT_ICON[a] || 'circle-dot')}<span>${esc(
-    label
-  )}</span></button>`;
-}
-function wire(root: HTMLElement, handlers: Record<string, (id: string) => void>) {
-  root.querySelectorAll('[data-act]').forEach((btn) => {
-    const el = btn as HTMLElement;
-    el.onclick = () => handlers[el.dataset.act || '']?.(el.dataset.id || '');
-  });
 }
 
 const nav: NavItem[] = [
@@ -112,13 +83,6 @@ async function dashboard(c: HTMLElement) {
       ['Product', 'Qty', 'Revenue'],
       (d.topProducts || []).map((p: any) => [esc(p.name), String(p.qty), money(p.revenue)])
     )}</div>`;
-}
-
-function tableSimple(headers: string[], rows: string[][]) {
-  if (!rows.length) return emptyState('No records.', 'inbox');
-  return `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows
-    .map((r) => `<tr>${r.map((cell) => `<td>${cell}</td>`).join('')}</tr>`)
-    .join('')}</tbody></table></div>`;
 }
 
 function users(c: HTMLElement) {

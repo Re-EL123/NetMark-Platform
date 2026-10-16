@@ -1,7 +1,7 @@
 import { apiRequest } from './api';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge } from './render';
-import { openModal, toast, money, statCards, emptyState } from './ui';
+import { openModal, toast, money, statCards, tableSimple } from './ui';
 import { icon } from './icons';
 import { chartCard, donutChart, barChart, ChartPoint } from './charts';
 
@@ -9,13 +9,6 @@ function addressOf(value: any): string {
   if (!value) return '';
   if (typeof value === 'string') return value;
   return value.line1 || value.street || value.address || [value.suburb, value.city].filter(Boolean).join(', ') || '';
-}
-
-function tableSimple(headers: string[], rows: string[][]) {
-  if (!rows.length) return emptyState('No records.', 'inbox');
-  return `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows
-    .map((r) => `<tr>${r.map((cell) => `<td>${cell}</td>`).join('')}</tr>`)
-    .join('')}</tbody></table></div>`;
 }
 
 const nav: NavItem[] = [

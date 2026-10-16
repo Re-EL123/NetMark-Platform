@@ -2,7 +2,7 @@ import { apiRequest, submitPayFast } from './api';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { crudView } from './crud';
-import { openModal, confirmDialog, toast, money, titleCase, emptyState } from './ui';
+import { openModal, confirmDialog, toast, money, titleCase, emptyState, act, wire, tableSimple } from './ui';
 import { icon } from './icons';
 import { overviewStats, renderOverviewCharts } from './dashboard';
 import { renderReferrals } from './referralsView';
@@ -11,36 +11,6 @@ import { getMyReferralCode, shareLink, shareUrl } from './referral';
 
 function opts(values: string[]) {
   return values.map((v) => ({ value: v, label: titleCase(v) }));
-}
-const ACT_ICON: Record<string, string> = {
-  edit: 'pencil',
-  toggle: 'power',
-  remove: 'trash-2',
-  status: 'refresh-cw',
-  pay: 'credit-card',
-  cancel: 'ban',
-  renew: 'refresh-cw',
-  unlink: 'unlink',
-  accept: 'check',
-  share: 'share-2'
-};
-function act(a: string, id: string, label: string, cls = '') {
-  return `<button data-act="${a}" data-id="${esc(id)}" class="${cls}">${icon(ACT_ICON[a] || 'circle-dot')}<span>${esc(
-    label
-  )}</span></button>`;
-}
-function wire(root: HTMLElement, handlers: Record<string, (id: string) => void>) {
-  root.querySelectorAll('[data-act]').forEach((btn) => {
-    const el = btn as HTMLElement;
-    el.onclick = () => handlers[el.dataset.act || '']?.(el.dataset.id || '');
-  });
-}
-
-function tableSimple(headers: string[], rows: string[][]) {
-  if (!rows.length) return emptyState('No records.', 'inbox');
-  return `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows
-    .map((r) => `<tr>${r.map((cell) => `<td>${cell}</td>`).join('')}</tr>`)
-    .join('')}</tbody></table></div>`;
 }
 
 const nav: NavItem[] = [
@@ -156,9 +126,6 @@ function stores(c: HTMLElement) {
 function companies(c: HTMLElement) {
   let rows: any[] = [];
 
-  const statusB = (s: string) =>
-    badge(titleCase(s || ''), s === 'active' ? 'success' : s === 'expired' ? 'danger' : 'neutral');
-
   const load = async () => {
     const res = await apiRequest('/company-links');
     rows = (res.success && res.data) || [];
@@ -202,7 +169,7 @@ function companies(c: HTMLElement) {
                     (r) => `<tr>
                   <td>${esc(r.companyName || r.companyId || '')}</td>
                   <td>${r.code ? badge(esc(r.code), 'info') : ''}</td>
-                  <td>${statusB(r.status)}</td>
+                  <td>${statusBadge(r.status)}</td>
                   <td>${r.expiresAt ? formatDate(r.expiresAt) : '<span class="empty">Never</span>'}</td>
                   <td><div class="row-actions">
                     ${act('share', r.id, 'Share')}
