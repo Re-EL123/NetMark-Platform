@@ -43,6 +43,7 @@ const nav: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: 'layout-dashboard' },
   { id: 'stores', label: 'My Stores', capability: 'stores.read', icon: 'store' },
   { id: 'store-market', label: 'Buy Store', icon: 'shopping-bag' },
+  { id: 'code-market', label: 'Buy Codes', icon: 'shopping-cart' },
   { id: 'companies', label: 'Companies', capability: 'companies.link', icon: 'building-2' },
   { id: 'catalog', label: 'Catalog', capability: 'products.read', icon: 'package-search' },
   { id: 'listings', label: 'My Store Products', capability: 'products.read', icon: 'boxes' },
@@ -63,6 +64,7 @@ initPanel({
     if (route === 'dashboard') return dashboard(c);
     if (route === 'stores') return stores(c);
     if (route === 'store-market') return storeMarket(c);
+    if (route === 'code-market') return codeMarket(c);
     if (route === 'companies') return companies(c);
     if (route === 'catalog') return catalog(c);
     if (route === 'listings') return listings(c);
@@ -629,6 +631,52 @@ async function storeMarket(c: HTMLElement) {
       const purchaseId = r.data?.id;
       if (!purchaseId) return toast('Store purchased — awaiting payment confirmation', 'success');
       const pay = await apiRequest(`/store-purchases/${purchaseId}/payfast/initiate`, { method: 'POST' });
+      if (!pay.success) {
+        toast(pay.message || 'Purchase saved — awaiting payment confirmation', 'info');
+        return;
+      }
+      toast('Redirecting to PayFast…', 'info');
+      submitPayFast(pay.data.processUrl, pay.data.fields);
+    };
+  });
+}
+
+/* ---------------------------- code marketplace ------------------------- */
+async function codeMarket(c: HTMLElement) {
+  c.innerHTML = '<p class="empty">Loading codes for sale…</p>';
+  const res = await apiRequest('/codes?forSale=true&pageSize=50');
+  if (!res.success) {
+    c.innerHTML = `<div class="card"><p class="empty">${esc(res.message)}</p></div>`;
+    return;
+  }
+  const rows: any[] = res.data || [];
+  if (!rows.length) {
+    c.innerHTML = emptyState('No codes are currently for sale.', 'ticket-percent');
+    return;
+  }
+  c.innerHTML = `
+    <p class="empty" style="margin-bottom:12px">Buy a company code to unlock that company's catalog and wholesale pricing for your store.</p>
+    <div class="card">
+      ${tableSimple(
+        ['Code', 'Company', 'Price', 'Uses', ''],
+        rows.map((r) => [
+          badge(r.code, 'info'),
+          esc((r.companyId || '').slice(0, 8) || '—'),
+          money(r.priceZar || 0),
+          `${r.uses || 0}${r.maxUses ? ' / ' + r.maxUses : ''}`,
+          `<button class="btn btn-sm" data-buy="${esc(r.id)}">${icon('shopping-cart')}<span>Buy</span></button>`
+        ])
+      )}
+    </div>`;
+  c.querySelectorAll('[data-buy]').forEach((b) => {
+    (b as HTMLElement).onclick = async () => {
+      const id = (b as HTMLElement).dataset.buy!;
+      if (!(await confirmDialog('Buy this code?', { confirmLabel: 'Buy' }))) return;
+      const r = await apiRequest('/code-purchases', { method: 'POST', body: JSON.stringify({ codeId: id }) });
+      if (!r.success) return toast(r.message || 'Could not purchase', 'error');
+      const purchaseId = r.data?.id;
+      if (!purchaseId) return toast('Code purchased — awaiting payment confirmation', 'success');
+      const pay = await apiRequest(`/code-purchases/${purchaseId}/payfast/initiate`, { method: 'POST' });
       if (!pay.success) {
         toast(pay.message || 'Purchase saved — awaiting payment confirmation', 'info');
         return;

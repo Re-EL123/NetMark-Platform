@@ -1,4 +1,4 @@
-import { apiRequest, submitPayFast } from './api';
+import { apiRequest } from './api';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { crudView } from './crud';
@@ -55,7 +55,6 @@ const nav: NavItem[] = [
   { id: 'drivers', label: 'Drivers', icon: 'truck' },
   { id: 'appointments', label: 'Appointments', icon: 'calendar-clock' },
   { id: 'codes', label: 'Codes', icon: 'ticket-percent' },
-  { id: 'code-market', label: 'Buy Codes', icon: 'shopping-cart' },
   { id: 'billing', label: 'Billing', icon: 'credit-card' },
   { id: 'wallet', label: 'Wallet', icon: 'wallet' },
   { id: 'commissions', label: 'Commissions', icon: 'banknote' },
@@ -82,7 +81,6 @@ initPanel({
     if (route === 'drivers') return drivers(c);
     if (route === 'appointments') return appointments(c);
     if (route === 'codes') return codes(c);
-    if (route === 'code-market') return codeMarket(c);
     if (route === 'billing') return billing(c);
     if (route === 'wallet') return wallet(c);
     if (route === 'commissions') return commissions(c);
@@ -458,21 +456,53 @@ function appointments(c: HTMLElement) {
 }
 
 function codes(c: HTMLElement) {
+  let rows: any[] = [];
+  const marketFields = (row?: any): Field[] => [
+    {
+      name: 'priceZar',
+      label: 'Price for store owners (ZAR)',
+      type: 'number',
+      step: '0.01',
+      min: '0',
+      value: row?.priceZar ?? 0,
+      help: 'What a store owner pays to buy this code.'
+    },
+    {
+      name: 'isForSale',
+      label: 'List for sale to store owners',
+      type: 'checkbox',
+      value: row ? !!row.isForSale : false,
+      help: 'Store owners see for-sale codes under Buy Codes in the business portal.'
+    }
+  ];
   crudView(c, {
     endpoint: '/codes',
+    onData: (r) => {
+      rows = r;
+    },
     columns: [
       { key: 'code', label: 'Code', render: (r) => badge(r.code, 'info') },
       { key: 'uses', label: 'Uses', render: (r) => `${r.uses || 0}${r.maxUses ? ' / ' + r.maxUses : ''}` },
+      { key: 'priceZar', label: 'Price', render: (r) => money(r.priceZar || 0) },
+      {
+        key: 'isForSale',
+        label: 'For sale',
+        render: (r) => (r.purchased ? badge('Sold', 'neutral') : r.isForSale ? badge('For sale', 'success') : badge('Internal', 'neutral'))
+      },
       { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') }
     ],
     toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>New code</span></button>`,
-    actions: (r) => act('toggle', r.id, r.isActive ? 'Disable' : 'Enable') + act('delete', r.id, 'Delete', 'danger'),
+    actions: (r) =>
+      act('edit', r.id, 'Edit') +
+      act('toggle', r.id, r.isActive ? 'Disable' : 'Enable') +
+      act('delete', r.id, 'Delete', 'danger'),
     bind: (root, reload) => {
       (root.querySelector('[data-new]') as HTMLElement).onclick = () =>
         openModal({
           title: 'New referral code',
           fields: [
             { name: 'code', label: 'Code', help: 'Leave blank to auto-generate' },
+            ...marketFields(),
             { name: 'maxUses', label: 'Max uses', type: 'number' },
             { name: 'expiresAt', label: 'Expires', type: 'date' }
           ],
@@ -484,6 +514,20 @@ function codes(c: HTMLElement) {
           }
         });
       wire(root, {
+        edit: (id) => {
+          const row = rows.find((r) => r.id === id);
+          if (!row) return;
+          openModal({
+            title: `Edit code ${row.code}`,
+            fields: [...marketFields(row)],
+            onSubmit: async (v) => {
+              const res = await apiRequest(`/codes/${id}`, { method: 'PUT', body: JSON.stringify(v) });
+              if (!res.success) throw new Error(res.message);
+              toast('Code updated', 'success');
+              reload();
+            }
+          });
+        },
         toggle: async (id) => {
           await apiRequest(`/codes/${id}/toggle`, { method: 'POST' });
           reload();
@@ -645,53 +689,6 @@ async function settings(c: HTMLElement) {
     });
     toast(r.success ? 'Submitted for approval' : r.message || 'Failed', r.success ? 'success' : 'error');
     if (r.success) settings(c);
-  });
-}
-
-/* --------------------------- code marketplace -------------------------- */
-async function codeMarket(c: HTMLElement) {
-  c.innerHTML = '<p class="empty">Loading codes for sale…</p>';
-  const res = await apiRequest('/codes?forSale=true&pageSize=50');
-  if (!res.success) {
-    c.innerHTML = `<div class="card"><p class="empty">${esc(res.message)}</p></div>`;
-    return;
-  }
-  const rows: any[] = res.data || [];
-  if (!rows.length) {
-    c.innerHTML = emptyState('No codes are currently for sale.', 'ticket-percent');
-    return;
-  }
-  c.innerHTML = `
-    <p class="empty" style="margin-bottom:12px">Codes from other companies that unlock their catalog for your store owners.</p>
-    <div class="card">
-      ${tableSimple(
-        ['Code', 'Company', 'Price', 'Uses', ''],
-        rows.map((r) => [
-          badge(r.code, 'info'),
-          esc((r.companyId || '').slice(0, 8) || '—'),
-          money(r.priceZar || 0),
-          `${r.uses || 0}${r.maxUses ? ' / ' + r.maxUses : ''}`,
-          `<button class="btn btn-sm" data-buy="${esc(r.id)}">${icon('shopping-cart')}<span>Buy</span></button>`
-        ])
-      )}
-    </div>`;
-  iconify(c);
-  c.querySelectorAll('[data-buy]').forEach((b) => {
-    (b as HTMLElement).onclick = async () => {
-      const id = (b as HTMLElement).dataset.buy!;
-      if (!(await confirmDialog('Purchase this code?', { confirmLabel: 'Purchase' }))) return;
-      const r = await apiRequest('/code-purchases', { method: 'POST', body: JSON.stringify({ codeId: id }) });
-      if (!r.success) return toast(r.message || 'Could not purchase', 'error');
-      const purchaseId = r.data?.id;
-      if (!purchaseId) return toast('Code purchased — awaiting payment confirmation', 'success');
-      const pay = await apiRequest(`/code-purchases/${purchaseId}/payfast/initiate`, { method: 'POST' });
-      if (!pay.success) {
-        toast(pay.message || 'Purchase saved — awaiting payment confirmation', 'info');
-        return;
-      }
-      toast('Redirecting to PayFast…', 'info');
-      submitPayFast(pay.data.processUrl, pay.data.fields);
-    };
   });
 }
 
