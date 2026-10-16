@@ -1,4 +1,4 @@
--- NetMark Platform - migration 002: full role build-out, admin control,
+	-- NetMark Platform - migration 002: full role build-out, admin control,
 -- PayFast payments, audit, settings, notifications, payouts.
 -- Idempotent: safe to run repeatedly against an existing database.
 
