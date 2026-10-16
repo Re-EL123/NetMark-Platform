@@ -105,6 +105,14 @@ export default authed(async (req, res, ctx) => {
         user_metadata: { name }
       });
       if (authErr || !created?.user) return fail(res, authErr?.message || 'Could not create user');
+
+      let tenantId: string | null = null;
+      if (companyId) {
+        const { data: companyRow } = await sb.from('companies').select('tenant_id').eq('id', companyId).maybeSingle();
+        tenantId = companyRow?.tenant_id || null;
+      }
+      if (!tenantId) tenantId = crypto.randomUUID();
+
       const { data: user, error } = await sb
         .from('users')
         .insert({
@@ -114,6 +122,7 @@ export default authed(async (req, res, ctx) => {
           phone: phone || null,
           role: role || 'customer',
           company_id: companyId || null,
+          tenant_id: tenantId,
           profile_image: profileImage || null,
           status: status || 'active',
           verification_status: 'verified'

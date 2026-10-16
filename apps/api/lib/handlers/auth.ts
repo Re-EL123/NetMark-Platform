@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { getSupabase, rowOut } from '../db';
 import { verifySupabaseToken, loadUser } from '../middleware';
@@ -162,6 +163,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // referral code only records the referrer (and, for store owners, seeds a
       // company link so they can browse that company's catalog).
       let resolvedCompanyId: string | null = null;
+      let resolvedTenantId: string | null = null;
       if (role === 'owner') {
         const baseSlug =
           String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') ||
@@ -172,8 +174,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .insert({ name: `${name}'s Company`, slug, owner_id: uid, status: 'active' })
           .select('*')
           .single();
-        if (newCompany) resolvedCompanyId = newCompany.id;
+        if (newCompany) {
+          resolvedCompanyId = newCompany.id;
+          // Share the company's tenant so owner-scoped tenant filtering lines up.
+          resolvedTenantId = newCompany.tenant_id || null;
+        }
       }
+      if (!resolvedTenantId) resolvedTenantId = randomUUID();
 
       const { data: user, error: userErr } = await sb
         .from('users')
@@ -184,6 +191,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           phone: phone || null,
           role,
           company_id: resolvedCompanyId,
+          tenant_id: resolvedTenantId,
           distributor_code: codeRow ? codeRow.code : null,
           verification_status: role === 'platformAdmin' ? 'verified' : 'pending'
         })
