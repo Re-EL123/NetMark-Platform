@@ -43,9 +43,22 @@ export function resetDismissedAds() {
   localStorage.removeItem(DISMISS_KEY);
 }
 
+const ADS_TTL_MS = 60_000;
+const adsCache: Record<string, { at: number; data: Ad[] }> = {};
+
 async function fetchAds(placement?: Placement): Promise<Ad[]> {
+  const key = placement || 'all';
+  const hit = adsCache[key];
+  if (hit && Date.now() - hit.at < ADS_TTL_MS) return hit.data;
   const res = await apiRequest(`/ads${placement ? `?placement=${placement}` : ''}`);
-  return res?.success ? (res.data as Ad[]) : [];
+  const data = res?.success ? (res.data as Ad[]) : [];
+  if (res?.success) adsCache[key] = { at: Date.now(), data };
+  return data;
+}
+
+/** Drop cached ads so the next render picks up changes immediately. */
+export function invalidateAds(): void {
+  for (const key of Object.keys(adsCache)) delete adsCache[key];
 }
 
 function mediaHtml(ad: Ad): string {

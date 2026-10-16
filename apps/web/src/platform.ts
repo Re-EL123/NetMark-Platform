@@ -6,7 +6,7 @@ import { openModal, confirmDialog, toast, money, titleCase, emptyState, statCard
 import { icon } from './icons';
 import { overviewStats, renderOverviewCharts } from './dashboard';
 import { donutChart, barList, chartCard } from './charts';
-import { platformAdsHtml, resetDismissedAds, type Ad } from './ads';
+import { platformAdsHtml, resetDismissedAds, invalidateAds, type Ad } from './ads';
 
 const ROLE_OPTIONS = [
   'platformAdmin',
@@ -236,8 +236,39 @@ async function userModal(row: any, reload: () => void) {
 }
 
 async function loadCompanies(): Promise<{ value: string; label: string }[]> {
-  const res = await apiRequest('/companies?pageSize=100');
-  return (res.data || []).map((co: any) => ({ value: co.id, label: co.name }));
+  return refOptions('companies', async () => {
+    const res = await apiRequest('/companies?pageSize=100');
+    return (res.data || []).map((co: any) => ({ value: co.id, label: co.name }));
+  });
+}
+
+type SelectOption = { value: string; label: string };
+const refCache: Record<string, { at: number; data: SelectOption[] }> = {};
+const REF_TTL_MS = 60_000;
+
+async function refOptions(key: string, loader: () => Promise<SelectOption[]>): Promise<SelectOption[]> {
+  const hit = refCache[key];
+  if (hit && Date.now() - hit.at < REF_TTL_MS) return hit.data;
+  const data = await loader();
+  refCache[key] = { at: Date.now(), data };
+  return data;
+}
+
+async function loadOwners(): Promise<SelectOption[]> {
+  return refOptions('owners', async () => {
+    const res = await apiRequest('/admin/users?role=owner&pageSize=100');
+    return (res.data || []).map((u: any) => ({ value: u.id, label: `${u.name} (${u.email})` }));
+  });
+}
+
+async function loadDrivers(): Promise<SelectOption[]> {
+  return refOptions('drivers', async () => {
+    const res = await apiRequest('/drivers?status=approved&pageSize=100');
+    return (res.data || []).map((d: any) => ({
+      value: d.id,
+      label: d.user?.name || d.licenseNumber || d.id.slice(0, 8)
+    }));
+  });
 }
 
 /* ------------------------------ companies ------------------------------ */
@@ -289,8 +320,7 @@ function renderCompanies(c: HTMLElement) {
 }
 
 async function companyModal(row: any, reload: () => void) {
-  const users = await apiRequest('/admin/users?role=owner&pageSize=100');
-  const owners = [{ value: '', label: 'None' }, ...(users.data || []).map((u: any) => ({ value: u.id, label: `${u.name} (${u.email})` }))];
+  const owners = [{ value: '', label: 'None' }, ...(await loadOwners())];
   await openModal({
     title: row ? 'Edit company' : 'New company',
     fields: [
@@ -599,8 +629,7 @@ async function orderStatusModal(row: any, reload: () => void) {
 }
 
 async function assignModal(row: any, reload: () => void) {
-  const res = await apiRequest('/drivers?status=approved&pageSize=100');
-  const drivers = (res.data || []).map((d: any) => ({ value: d.id, label: d.user?.name || d.licenseNumber || d.id.slice(0, 8) }));
+  const drivers = await loadDrivers();
   if (!drivers.length) return toast('No approved drivers available', 'error');
   await openModal({
     title: 'Assign driver',
@@ -778,8 +807,7 @@ function renderPayouts(c: HTMLElement) {
     actions: (r) => (r.status === 'pending' ? act('process', r.id, 'Mark paid') : ''),
     bind: (root, reload) => {
       (root.querySelector('[data-new]') as HTMLElement).onclick = async () => {
-        const res = await apiRequest('/drivers?status=approved&pageSize=100');
-        const drivers = (res.data || []).map((d: any) => ({ value: d.id, label: d.user?.name || d.id.slice(0, 8) }));
+        const drivers = await loadDrivers();
         await openModal({
           title: 'New payout',
           fields: [
@@ -887,6 +915,7 @@ async function renderAds(c: HTMLElement) {
     b.addEventListener('click', async () => {
       if (await confirmDialog('Delete this advert?', { danger: true, confirmLabel: 'Delete' })) {
         await apiRequest(`/ads/${(b as HTMLElement).dataset.adDel}`, { method: 'DELETE' });
+        invalidateAds();
         toast('Advert deleted', 'success');
         renderAds(c);
       }
@@ -943,6 +972,7 @@ function adModal(row: Ad | null | undefined, reload: () => void) {
         ? await apiRequest(`/ads/${row.id}`, { method: 'PUT', body: JSON.stringify(payload) })
         : await apiRequest('/ads', { method: 'POST', body: JSON.stringify(payload) });
       if (!res.success) throw new Error(res.message || 'Failed');
+      invalidateAds();
       toast(row ? 'Advert updated' : 'Advert created', 'success');
       reload();
     }

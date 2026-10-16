@@ -36,14 +36,17 @@ function countUp(el: HTMLElement) {
 
 /** Replay staggered entrance + count-up for a freshly rendered region. */
 export function animateIn(root: HTMLElement) {
+  // Cap the stagger index so regions with many children (long lists, dense
+  // dashboards) never make the last element wait seconds to appear.
+  const MAX_STAGGER = 8;
   const kids = Array.from(root.children) as HTMLElement[];
-  kids.forEach((el, i) => el.style.setProperty('--stagger', String(i)));
+  kids.forEach((el, i) => el.style.setProperty('--stagger', String(Math.min(i, MAX_STAGGER))));
 
   const stats = root.querySelectorAll<HTMLElement>('.stats .stat');
-  stats.forEach((el, i) => el.style.setProperty('--stagger', String(i)));
+  stats.forEach((el, i) => el.style.setProperty('--stagger', String(Math.min(i, MAX_STAGGER))));
 
   const cards = root.querySelectorAll<HTMLElement>('.grid .product-card');
-  cards.forEach((el, i) => el.style.setProperty('--stagger', String(i)));
+  cards.forEach((el, i) => el.style.setProperty('--stagger', String(Math.min(i, MAX_STAGGER))));
 
   root.classList.remove('nm-enter');
   // Force a reflow so the class re-triggers the animation on re-render.

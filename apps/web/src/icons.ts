@@ -210,17 +210,35 @@ export function iconButton(name: string, tip: string, className = 'icon-btn'): s
  * handlers still get their icons without an explicit `iconify()` call.
  */
 let observer: MutationObserver | null = null;
+let scheduled = false;
+
+function scheduleIconify(): void {
+  if (scheduled) return;
+  scheduled = true;
+  const run = () => {
+    scheduled = false;
+    iconify(document);
+  };
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+  else setTimeout(run, 16);
+}
+
 export function autoIconify(): void {
   if (observer || typeof MutationObserver === 'undefined') return;
   observer = new MutationObserver((mutations) => {
+    // Only react when a batch actually introduces new icon placeholders. Rendered
+    // Lucide <svg> elements are skipped so replacing placeholders never re-queues
+    // work (which previously looped and made large renders expensive).
     for (const m of mutations) {
-      m.addedNodes.forEach((node) => {
-        if (node.nodeType !== 1) return;
+      for (const node of Array.from(m.addedNodes)) {
+        if (node.nodeType !== 1) continue;
         const el = node as Element;
-        if (el.matches?.('svg.lucide')) return;
-        if (el.matches?.('[data-icon]')) iconify(el.parentElement || el);
-        else if (el.querySelector?.('[data-icon]')) iconify(el);
-      });
+        if (el.matches?.('svg.lucide')) continue;
+        if (el.matches?.('[data-icon]') || el.querySelector?.('[data-icon]')) {
+          scheduleIconify();
+          return;
+        }
+      }
     }
   });
   observer.observe(document.body, { childList: true, subtree: true });

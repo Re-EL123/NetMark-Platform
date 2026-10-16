@@ -1197,14 +1197,14 @@ svg.lucide {
 
 /* ---------- Motion: staggered entrance ---------- */
 .nm-enter > * {
-  animation: nm-fade-up 500ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-  animation-delay: calc(var(--stagger, 0) * 55ms);
+  animation: nm-fade-up 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: calc(var(--stagger, 0) * 35ms);
 }
 
 .nm-enter .stat,
 .nm-enter .grid .product-card {
-  animation: nm-fade-up 500ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
-  animation-delay: calc(var(--stagger, 0) * 55ms);
+  animation: nm-fade-up 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: calc(var(--stagger, 0) * 35ms);
 }
 
 @keyframes nm-fade-up {
@@ -2311,6 +2311,210 @@ svg.chart {
   .ad-media {
     width: 64px;
     height: 48px;
+  }
+}
+
+/* =====================================================================
+   Notifications panel
+   ===================================================================== */
+.notif-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.notif-item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.notif-item:last-child {
+  border-bottom: none;
+}
+
+.notif-item.unread {
+  border-left: 3px solid var(--brand);
+  padding-left: 12px;
+}
+
+.notif-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.notif-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.notif-body {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: 2px;
+}
+
+.notif-time {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* =====================================================================
+   Responsiveness & smoothness
+   ===================================================================== */
+
+/* Media never overflows its container. */
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+/* Touch niceties: no tap flash and momentum scrolling for scroll regions. */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.table-wrap,
+.sidebar nav {
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-wrap {
+  max-width: 100%;
+}
+
+/* Horizontal nav rail: hide the scrollbar on touch devices. */
+.sidebar nav {
+  scrollbar-width: none;
+}
+
+.sidebar nav::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---- Tablet ---- */
+@media (max-width: 1024px) {
+  .sidebar {
+    width: 208px;
+  }
+
+  .content {
+    padding: 20px;
+  }
+}
+
+/* ---- Phones / small tablets ---- */
+@media (max-width: 720px) {
+  header {
+    padding: 12px 14px;
+    gap: 10px;
+  }
+
+  header h1 {
+    font-size: 17px;
+  }
+
+  .content {
+    padding: 14px;
+  }
+
+  .modal-overlay {
+    padding: 14px;
+  }
+
+  .modal {
+    max-width: 100%;
+  }
+
+  .modal-body {
+    padding: 18px;
+    max-height: calc(100vh - 180px);
+  }
+
+  .toolbar {
+    gap: 8px;
+  }
+
+  .toolbar input,
+  .toolbar select {
+    min-width: 0;
+    flex: 1 1 140px;
+  }
+
+  .stats {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+  }
+
+  .detail-grid {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 12px;
+  }
+
+  .toast-stack {
+    right: 12px;
+    left: 12px;
+    bottom: 12px;
+  }
+
+  .toast {
+    max-width: none;
+  }
+
+  .ad-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+}
+
+/* ---- Small phones ---- */
+@media (max-width: 520px) {
+  .sidebar {
+    gap: 10px;
+  }
+
+  .sidebar nav a {
+    padding: 9px 10px;
+    font-size: 13px;
+  }
+
+  .user-meta {
+    gap: 8px;
+  }
+
+  .stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .stat {
+    padding: 14px;
+  }
+
+  .stat .stat-value {
+    font-size: 22px;
+  }
+
+  .card {
+    padding: 18px;
+  }
+
+  .modal-overlay {
+    padding: 10px;
+  }
+}
+
+/* Respect reduced-motion for scrolling too. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
   }
 }
 

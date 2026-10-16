@@ -160,6 +160,8 @@ export interface ModalOptions {
   html?: string;
   submitLabel?: string;
   wide?: boolean;
+  /** Called right after the modal is mounted - use for async hydration. */
+  onMount?: (body: HTMLElement, overlay: HTMLElement) => Promise<void> | void;
   onSubmit: (values: Record<string, any>) => Promise<any> | any;
 }
 
@@ -189,6 +191,18 @@ export function openModal(opts: ModalOptions): Promise<void> {
     document.body.appendChild(overlay);
     iconify(overlay);
     wireUploaders(overlay);
+    if (opts.onMount) {
+      const body = overlay.querySelector('.modal-body') as HTMLElement | null;
+      if (body) {
+        try {
+          Promise.resolve(opts.onMount(body, overlay)).catch(() => {
+            /* hydration failures must not break the modal */
+          });
+        } catch {
+          /* ignore */
+        }
+      }
+    }
 
     const close = () => {
       overlay.remove();

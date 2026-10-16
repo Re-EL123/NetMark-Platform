@@ -68,28 +68,53 @@ async function loadMe(): Promise<boolean> {
   return true;
 }
 
-async function openNotifications() {
-  const res = await apiRequest('/notifications?pageSize=50');
-  const items = res.success ? res.data : [];
-  await openModal({
-    title: 'Notifications',
-    html: items.length
-      ? `<div>${items
-          .map(
-            (n: any) => `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
-        <div style="font-weight:600">${esc(n.title)} ${n.read ? '' : '<span class="badge badge-info">new</span>'}</div>
-        <div class="empty" style="font-size:13px">${esc(n.body || '')}</div>
-        <div class="empty" style="font-size:12px">${esc(new Date(n.createdAt).toLocaleString())}</div>
+let notifCache: any[] | null = null;
+
+function notifItemsHtml(items: any[]): string {
+  if (!items.length) return '<p class="empty">No notifications.</p>';
+  return items
+    .map(
+      (n: any) => `<div class="notif-item${n.read ? '' : ' unread'}">
+        <div class="notif-item-head">
+          <span class="notif-title">${esc(n.title)}</span>
+          ${n.read ? '' : '<span class="badge badge-info">new</span>'}
+        </div>
+        ${n.body ? `<div class="notif-body">${esc(n.body)}</div>` : ''}
+        <div class="notif-time">${esc(new Date(n.createdAt).toLocaleString())}</div>
       </div>`
-          )
-          .join('')}</div>`
-      : '<p class="empty">No notifications.</p>',
+    )
+    .join('');
+}
+
+function openNotifications() {
+  // Open instantly with whatever we already have, then refresh in the
+  // background. No network round-trip blocks the modal from appearing.
+  openModal({
+    title: 'Notifications',
+    html: `<div class="notif-list" id="notifList">${
+      notifCache ? notifItemsHtml(notifCache) : '<p class="empty">Loading notifications…</p>'
+    }</div>`,
+    submitLabel: 'Mark all read',
+    onMount: async (body) => {
+      const res = await apiRequest('/notifications?pageSize=50');
+      const list = body.querySelector('#notifList') as HTMLElement | null;
+      if (!res.success) {
+        if (list) list.innerHTML = `<p class="empty">${esc(res.message || 'Could not load notifications.')}</p>`;
+        return;
+      }
+      const items: any[] = res.data || [];
+      notifCache = items;
+      if (list) list.innerHTML = notifItemsHtml(items);
+      const unread = typeof res.meta?.unread === 'number' ? res.meta.unread : items.filter((n: any) => !n.read).length;
+      updateBadge(unread);
+      iconify(body);
+    },
     onSubmit: async () => {
       await apiRequest('/notifications/read', { method: 'POST', body: JSON.stringify({}) });
+      notifCache = (notifCache || []).map((n) => ({ ...n, read: true }));
       updateBadge(0);
     }
   });
-  updateBadge(0);
 }
 
 function updateBadge(count: number) {
@@ -103,9 +128,12 @@ function updateBadge(count: number) {
   }
 }
 
-async function refreshBadge() {
-  const res = await apiRequest('/notifications?unread=true&pageSize=1');
-  updateBadge(res.success ? res.data?.length || res.meta?.unread || 0 : 0);
+async function warmNotifications() {
+  const res = await apiRequest('/notifications?pageSize=30');
+  if (!res.success) return;
+  const items: any[] = res.data || [];
+  notifCache = items;
+  updateBadge(typeof res.meta?.unread === 'number' ? res.meta.unread : items.filter((n: any) => !n.read).length);
 }
 
 function applyTheme(theme: string) {
@@ -234,7 +262,8 @@ export async function initPanel(opts: PanelOptions) {
 
   renderAdBanner(document.getElementById('adBanner') as HTMLElement);
 
-  await refreshBadge();
+  // Warm the notification cache in the background; never block first paint.
+  warmNotifications();
   await run(currentRoute());
 
   // Show a dismissable popup ad shortly after the panel is ready.

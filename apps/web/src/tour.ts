@@ -1,6 +1,3 @@
-import { driver } from 'driver.js';
-import 'driver.js/dist/driver.css';
-
 export interface TourItem {
   id: string;
   label: string;
@@ -43,8 +40,11 @@ export function resetTour(key: string) {
 /**
  * Run the guided tour for a panel. All steps are resolved lazily against the
  * live DOM so a panel that hides a section (by capability) never trips up.
+ * driver.js is imported on demand so it stays out of the initial bundle.
  */
-export function startTour(opts: TourOptions) {
+export async function startTour(opts: TourOptions) {
+  const [{ driver }] = await Promise.all([import('driver.js'), import('driver.js/dist/driver.css')]);
+
   const intro =
     opts.intro ||
     `This is your ${opts.title}. Follow these quick steps to learn your way around — you can replay this tour anytime with the compass button.`;
