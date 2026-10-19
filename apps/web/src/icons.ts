@@ -95,7 +95,14 @@ import {
   Video,
   Image,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Globe,
+  Phone,
+  Mail,
+  MessageCircle,
+  Copy,
+  QrCode,
+  Palette
 } from 'lucide';
 
 /**
@@ -199,7 +206,14 @@ const REGISTRY: Record<string, any> = {
   Video,
   Image,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Globe,
+  Phone,
+  Mail,
+  MessageCircle,
+  Copy,
+  QrCode,
+  Palette
 };
 /**
  * Produce a placeholder element. `iconify()` later swaps it for the real SVG.

@@ -3,6 +3,7 @@ import auth from '../lib/handlers/auth';
 import users from '../lib/handlers/users';
 import companies from '../lib/handlers/companies';
 import stores from '../lib/handlers/stores';
+import storefront from '../lib/handlers/storefront';
 import products from '../lib/handlers/products';
 import storeProducts from '../lib/handlers/storeProducts';
 import purchases from '../lib/handlers/purchases';
@@ -76,7 +77,8 @@ const handlers: Record<string, Handler> = {
   notifications,
   reviews,
   uploads,
-  ads
+  ads,
+  storefront
 };export default async function handler(req: VercelRequest, res: VercelResponse) {
   // The vercel.json rewrite sends every /api/* request here while preserving
   // the original URL in req.url. We split it into a domain + remaining

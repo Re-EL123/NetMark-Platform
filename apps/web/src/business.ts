@@ -16,6 +16,7 @@ function opts(values: string[]) {
 const nav: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', group: 'Overview', icon: 'layout-dashboard' },
   { id: 'stores', label: 'My Stores', group: 'Stores', capability: 'stores.read', icon: 'store' },
+  { id: 'storefront', label: 'Storefront', group: 'Stores', capability: 'stores.read', icon: 'globe' },
   { id: 'store-market', label: 'Buy Store', group: 'Stores', icon: 'shopping-bag' },
   { id: 'code-market', label: 'Buy Codes', group: 'Stores', icon: 'shopping-cart' },
   { id: 'companies', label: 'Companies', group: 'Stores', capability: 'companies.link', icon: 'building-2' },
@@ -40,6 +41,7 @@ initPanel({
     ctx.titleEl.textContent = nav.find((n) => n.id === route)?.label || 'Business';
     if (route === 'dashboard') return dashboard(c);
     if (route === 'stores') return stores(c);
+    if (route === 'storefront') return storefront(c);
     if (route === 'store-market') return storeMarket(c);
     if (route === 'code-market') return codeMarket(c);
     if (route === 'companies') return companies(c);
@@ -689,6 +691,180 @@ async function reports(c: HTMLElement) {
       ['Product', 'Qty', 'Revenue'],
       (d.topProducts || []).map((p: any) => [esc(p.name), String(p.qty), money(p.revenue)])
     )}</div>`;
+}
+
+/* ------------------------------- storefront ---------------------------- */
+function storefrontLink(slug: string, refCode?: string | null): string {
+  const b = import.meta.env.BASE_URL || '/';
+  const base = b.endsWith('/') ? b.slice(0, -1) : b;
+  const url = `${location.origin}${base}/storefront/?s=${encodeURIComponent(slug)}`;
+  return refCode ? `${url}&ref=${encodeURIComponent(refCode)}` : url;
+}
+
+function sfConfig(r: any): any {
+  const sf = r?.settings?.storefront;
+  return sf && typeof sf === 'object' ? sf : {};
+}
+
+async function storefront(c: HTMLElement) {
+  c.innerHTML = '<p class="empty">Loading your storefronts…</p>';
+  let stores: any[] = [];
+  try {
+    stores = await myStores();
+  } catch {
+    stores = [];
+  }
+  stores = stores.filter((r) => r.slug);
+  const refCode = await getMyReferralCode().catch(() => null);
+
+  if (!stores.length) {
+    c.innerHTML = emptyState('Create a store first — then you can publish a shareable storefront landing page for it.', 'globe');
+    return;
+  }
+
+  const render = () => {
+    c.innerHTML = `
+      <div class="card">
+        <p class="empty">Each store gets its own public landing page with a shareable link and its own SEO. Share it on WhatsApp or social media — visitors can browse your products and contact you directly.</p>
+      </div>
+      ${stores
+        .map((r) => {
+          const sf = sfConfig(r);
+          const enabled = sf.enabled !== false && r.isActive;
+          const url = storefrontLink(r.slug, refCode);
+          return `<div class="card">
+            <div style="display:flex;gap:14px;align-items:center">
+              ${r.logo ? `<img src="${esc(r.logo)}" alt="" style="width:46px;height:46px;border-radius:12px;object-fit:cover" />` : `<span class="badge" style="width:46px;height:46px;display:inline-flex;align-items:center;justify-content:center;font-size:20px">${esc((r.name || '?').charAt(0).toUpperCase())}</span>`}
+              <div style="flex:1;min-width:0">
+                <h3 style="margin:0 0 4px">${esc(r.name)} ${badge(enabled ? 'Live' : r.isActive ? 'Disabled' : 'Store inactive', enabled ? 'success' : 'warning')}</h3>
+                <div class="empty" style="word-break:break-all;font-size:12px">${esc(url)}</div>
+              </div>
+            </div>
+            <div class="row-actions" style="justify-content:flex-start;flex-wrap:wrap;margin-top:14px">
+              <button class="btn btn-sm" data-sf-open="${esc(r.id)}">${icon('external-link')}<span>Open</span></button>
+              <button class="btn btn-sm btn-ghost" data-sf-copy="${esc(r.id)}">${icon('copy')}<span>Copy link</span></button>
+              <button class="btn btn-sm btn-ghost" data-sf-share="${esc(r.id)}">${icon('share-2')}<span>Share</span></button>
+              <button class="btn btn-sm btn-ghost" data-sf-edit="${esc(r.id)}">${icon('pencil')}<span>Edit page</span></button>
+              <button class="btn btn-sm btn-ghost" data-sf-toggle="${esc(r.id)}">${icon('power')}<span>${sf.enabled === false ? 'Enable' : 'Disable'}</span></button>
+            </div>
+            ${!r.isActive ? '<p class="empty" style="margin-top:10px">This store is deactivated, so its storefront is hidden from visitors.</p>' : ''}
+          </div>`;
+        })
+        .join('')}`;
+
+    const byId = (id: string) => stores.find((s) => s.id === id);
+
+    c.querySelectorAll('[data-sf-copy]').forEach((el) => {
+      (el as HTMLElement).onclick = async () => {
+        const r = byId((el as HTMLElement).dataset.sfCopy!);
+        if (!r) return;
+        const url = storefrontLink(r.slug, refCode);
+        try {
+          await navigator.clipboard.writeText(url);
+          toast('Storefront link copied', 'success');
+        } catch {
+          toast(url, 'info');
+        }
+      };
+    });
+    c.querySelectorAll('[data-sf-open]').forEach((el) => {
+      (el as HTMLElement).onclick = () => {
+        const r = byId((el as HTMLElement).dataset.sfOpen!);
+        if (r) window.open(storefrontLink(r.slug, refCode), '_blank', 'noopener');
+      };
+    });
+    c.querySelectorAll('[data-sf-share]').forEach((el) => {
+      (el as HTMLElement).onclick = () => {
+        const r = byId((el as HTMLElement).dataset.sfShare!);
+        if (r) void shareLink(storefrontLink(r.slug, refCode), r.name, `Browse ${r.name} online.`);
+      };
+    });
+    c.querySelectorAll('[data-sf-toggle]').forEach((el) => {
+      (el as HTMLElement).onclick = async () => {
+        const r = byId((el as HTMLElement).dataset.sfToggle!);
+        if (!r) return;
+        const sf = sfConfig(r);
+        const next = { ...sf, enabled: sf.enabled === false };
+        const res = await apiRequest(`/stores/${r.id}`, { method: 'PUT', body: JSON.stringify({ settings: { storefront: next } }) });
+        if (!res.success) return toast(res.message || 'Could not update', 'error');
+        if (res.data) r.settings = res.data.settings;
+        toast(next.enabled ? 'Storefront enabled' : 'Storefront disabled', 'success');
+        render();
+      };
+    });
+    c.querySelectorAll('[data-sf-edit]').forEach((el) => {
+      (el as HTMLElement).onclick = () => {
+        const r = byId((el as HTMLElement).dataset.sfEdit!);
+        if (r) editStorefront(r, render);
+      };
+    });
+  };
+
+  render();
+}
+
+function editStorefront(r: any, done: () => void) {
+  const sf = sfConfig(r);
+  void openModal({
+    title: `Storefront — ${r.name}`,
+    wide: true,
+    submitLabel: 'Save storefront',
+    fields: [
+      { name: 'enabled', label: 'Publish storefront', type: 'checkbox', value: sf.enabled !== false, help: 'Turn off to hide the page from visitors.' },
+      { name: 'tagline', label: 'Tagline', value: sf.tagline, placeholder: 'Fresh produce delivered daily', full: true },
+      { name: 'about', label: 'About your store', type: 'textarea', rows: 4, value: sf.about, placeholder: 'Tell customers who you are and what you sell.', full: true },
+      { name: 'logo', label: 'Logo', type: 'image', folder: 'stores', value: sf.logo || r.logo },
+      { name: 'banner', label: 'Banner image', type: 'image', folder: 'stores', value: sf.banner || r.banner },
+      { name: 'themeColor', label: 'Accent colour', value: sf.themeColor || '#e50914', placeholder: '#e50914' },
+      { name: 'ctaLabel', label: 'Main button label', value: sf.ctaLabel, placeholder: 'Order on WhatsApp' },
+      { name: 'phone', label: 'Phone', type: 'tel', value: sf.phone },
+      { name: 'whatsapp', label: 'WhatsApp number', type: 'tel', value: sf.whatsapp, help: 'Include country code, e.g. +27…' },
+      { name: 'email', label: 'Email', type: 'email', value: sf.email },
+      { name: 'address', label: 'Address', value: sf.address || r.address },
+      { name: 'hours', label: 'Opening hours', value: sf.hours, placeholder: 'Mon–Fri 8:00–17:00' },
+      { name: 'showProducts', label: 'Show products', type: 'checkbox', value: sf.showProducts !== false },
+      { name: 'facebook', label: 'Facebook URL', value: sf.social?.facebook },
+      { name: 'instagram', label: 'Instagram URL', value: sf.social?.instagram },
+      { name: 'tiktok', label: 'TikTok URL', value: sf.social?.tiktok },
+      { name: 'x', label: 'X (Twitter) URL', value: sf.social?.x },
+      { name: 'metaTitle', label: 'SEO title', value: sf.metaTitle, help: 'Shown in search results and link previews.', full: true },
+      { name: 'metaDescription', label: 'SEO description', type: 'textarea', rows: 2, value: sf.metaDescription, full: true },
+      { name: 'metaKeywords', label: 'SEO keywords', value: sf.metaKeywords, placeholder: 'comma, separated, keywords', full: true }
+    ],
+    onSubmit: async (v) => {
+      const next = {
+        enabled: !!v.enabled,
+        tagline: v.tagline || '',
+        about: v.about || '',
+        logo: v.logo || '',
+        banner: v.banner || '',
+        themeColor: v.themeColor || '#e50914',
+        ctaLabel: v.ctaLabel || '',
+        phone: v.phone || '',
+        whatsapp: v.whatsapp || '',
+        email: v.email || '',
+        address: v.address || '',
+        hours: v.hours || '',
+        showProducts: !!v.showProducts,
+        social: {
+          facebook: v.facebook || '',
+          instagram: v.instagram || '',
+          tiktok: v.tiktok || '',
+          x: v.x || '',
+          youtube: sf.social?.youtube || ''
+        },
+        metaTitle: v.metaTitle || '',
+        metaDescription: v.metaDescription || '',
+        metaKeywords: v.metaKeywords || '',
+        featured: Array.isArray(sf.featured) ? sf.featured : []
+      };
+      const res = await apiRequest(`/stores/${r.id}`, { method: 'PUT', body: JSON.stringify({ settings: { storefront: next } }) });
+      if (!res.success) throw new Error(res.message || 'Could not save storefront');
+      if (res.data) r.settings = res.data.settings;
+      toast('Storefront saved', 'success');
+      done();
+    }
+  });
 }
 
 /* ---------------------------- store marketplace ------------------------ */

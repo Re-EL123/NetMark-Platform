@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /storefront/
+Allow: /
+Disallow: /platform/
+Disallow: /owner/
+Disallow: /business/
+Disallow: /shop/
+Disallow: /driver/
+Disallow: /register.html
+
+Sitemap: https://netmark-api.vercel.app/api/storefront/sitemap

@@ -19,7 +19,8 @@ export default defineConfig({
         owner: resolve(__dirname, 'owner/index.html'),
         business: resolve(__dirname, 'business/index.html'),
         shop: resolve(__dirname, 'shop/index.html'),
-        driver: resolve(__dirname, 'driver/index.html')
+        driver: resolve(__dirname, 'driver/index.html'),
+        storefront: resolve(__dirname, 'storefront/index.html')
       }
     }
   },
