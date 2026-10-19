@@ -14,20 +14,20 @@ function opts(values: string[]) {
 }
 
 const nav: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: 'layout-dashboard' },
-  { id: 'stores', label: 'My Stores', capability: 'stores.read', icon: 'store' },
-  { id: 'store-market', label: 'Buy Store', icon: 'shopping-bag' },
-  { id: 'code-market', label: 'Buy Codes', icon: 'shopping-cart' },
-  { id: 'companies', label: 'Companies', capability: 'companies.link', icon: 'building-2' },
-  { id: 'catalog', label: 'Catalog', capability: 'products.read', icon: 'package-search' },
-  { id: 'listings', label: 'My Store Products', capability: 'products.read', icon: 'boxes' },
-  { id: 'purchases', label: 'Buy From Company', capability: 'orders.read', icon: 'shopping-bag' },
-  { id: 'orders', label: 'Orders', capability: 'orders.read', icon: 'receipt' },
-  { id: 'appointments', label: 'Appointments', capability: 'appointments.read', icon: 'calendar-clock' },
-  { id: 'referrals', label: 'Referrals', capability: 'referrals.read', icon: 'share-2' },
-  { id: 'team', label: 'My Team', capability: 'referrals.read', icon: 'users' },
-  { id: 'wallet', label: 'Wallet', icon: 'wallet' },
-  { id: 'reports', label: 'Reports', capability: 'reports.read', icon: 'bar-chart-3' }
+  { id: 'dashboard', label: 'Dashboard', group: 'Overview', icon: 'layout-dashboard' },
+  { id: 'stores', label: 'My Stores', group: 'Stores', capability: 'stores.read', icon: 'store' },
+  { id: 'store-market', label: 'Buy Store', group: 'Stores', icon: 'shopping-bag' },
+  { id: 'code-market', label: 'Buy Codes', group: 'Stores', icon: 'shopping-cart' },
+  { id: 'companies', label: 'Companies', group: 'Stores', capability: 'companies.link', icon: 'building-2' },
+  { id: 'catalog', label: 'Catalog', group: 'Stores', capability: 'products.read', icon: 'package-search' },
+  { id: 'listings', label: 'My Store Products', group: 'Stores', capability: 'products.read', icon: 'boxes' },
+  { id: 'purchases', label: 'Buy From Company', group: 'Sales', capability: 'orders.read', icon: 'shopping-bag' },
+  { id: 'orders', label: 'Orders', group: 'Sales', capability: 'orders.read', icon: 'receipt' },
+  { id: 'appointments', label: 'Appointments', group: 'Sales', capability: 'appointments.read', icon: 'calendar-clock' },
+  { id: 'referrals', label: 'Referrals', group: 'Growth', capability: 'referrals.read', icon: 'share-2' },
+  { id: 'team', label: 'My Team', group: 'Growth', capability: 'referrals.read', icon: 'users' },
+  { id: 'wallet', label: 'Wallet', group: 'Finance', icon: 'wallet' },
+  { id: 'reports', label: 'Reports', group: 'Finance', capability: 'reports.read', icon: 'bar-chart-3' }
 ];
 
 initPanel({

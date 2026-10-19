@@ -156,11 +156,14 @@ export async function initPanel(opts: PanelOptions) {
   document.title = `NetMark - ${opts.title}`;
   document.body.innerHTML = `
     <div class="app">
-      <aside class="sidebar">
-        <div class="brand"><img src="${import.meta.env.BASE_URL}netmark-logo.png" alt="NetMark" /></div>
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-head">
+          <div class="brand"><img src="${import.meta.env.BASE_URL}netmark-logo.png" alt="NetMark" /></div>
+          <button id="sidebarToggle" class="sidebar-toggle" data-tip="Collapse menu" data-tip-pos="right" title="Collapse menu" aria-label="Toggle sidebar" aria-expanded="true">${icon('panel-left-close')}</button>
+        </div>
         <nav id="nav"></nav>
         <div class="sidebar-foot">
-          <button id="themeToggle" class="icon-btn" data-tip="Toggle light / dark theme" data-tip-pos="right" title="Toggle theme" style="color:#fff">${icon('moon')}</button>
+          <button id="themeToggle" class="icon-btn" data-tip="Toggle light / dark theme" data-tip-pos="right" title="Toggle theme">${icon('moon')}</button>
         </div>
       </aside>
       <div class="main">
@@ -188,13 +191,102 @@ export async function initPanel(opts: PanelOptions) {
   const titleEl = document.getElementById('pageTitle') as HTMLElement;
 
   const visible = opts.nav.filter((n) => !n.capability || can(n.capability));
-  navEl.innerHTML = visible
-    .map(
-      (n) =>
-        `<a href="#${n.id}" data-nav="${n.id}">${icon(n.icon || 'circle-dot')}<span>${esc(n.label)}</span></a>`
-    )
-    .join('');
-  iconify(navEl);
+
+  function navLink(n: NavItem): string {
+    return `<a href="#${n.id}" data-nav="${n.id}" data-label="${esc(n.label)}">${icon(
+      n.icon || 'circle-dot'
+    )}<span class="nav-label">${esc(n.label)}</span></a>`;
+  }
+
+  function renderNav() {
+    const groups: { label: string; items: NavItem[] }[] = [];
+    for (const n of visible) {
+      const label = n.group || '';
+      let g = groups.find((x) => x.label === label);
+      if (!g) {
+        g = { label, items: [] };
+        groups.push(g);
+      }
+      g.items.push(n);
+    }
+    const showLabels = groups.some((g) => g.label);
+    navEl.innerHTML = groups
+      .map(
+        (g, i) =>
+          `<div class="nav-group${i > 0 ? ' nav-group-divided' : ''}">${
+            showLabels && g.label ? `<div class="nav-group-label">${esc(g.label)}</div>` : ''
+          }${g.items.map(navLink).join('')}</div>`
+      )
+      .join('');
+    iconify(navEl);
+  }
+  renderNav();
+
+  const appEl = document.querySelector('.app') as HTMLElement;
+  const sidebarToggle = document.getElementById('sidebarToggle') as HTMLButtonElement | null;
+  const COLLAPSE_KEY = 'netmark_sidebar_collapsed';
+
+  let flyout: HTMLElement | null = null;
+  let flyoutFor: HTMLElement | null = null;
+  function hideFlyout() {
+    if (flyout) {
+      flyout.remove();
+      flyout = null;
+      flyoutFor = null;
+    }
+  }
+
+  function setCollapsed(collapsed: boolean) {
+    appEl.classList.toggle('sidebar-collapsed', collapsed);
+    try {
+      localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+    if (sidebarToggle) {
+      sidebarToggle.innerHTML = icon(collapsed ? 'panel-left-open' : 'panel-left-close');
+      sidebarToggle.setAttribute('aria-expanded', String(!collapsed));
+      const tip = collapsed ? 'Expand menu' : 'Collapse menu';
+      sidebarToggle.title = tip;
+      sidebarToggle.dataset.tip = tip;
+      iconify(sidebarToggle);
+    }
+    hideFlyout();
+  }
+
+  function showFlyout(a: HTMLElement) {
+    const label = a.dataset.label || '';
+    if (!label) return;
+    hideFlyout();
+    flyout = document.createElement('div');
+    flyout.className = 'nav-flyout';
+    flyout.textContent = label;
+    document.body.appendChild(flyout);
+    const r = a.getBoundingClientRect();
+    const top = Math.max(
+      8,
+      Math.min(r.top + r.height / 2 - flyout.offsetHeight / 2, window.innerHeight - flyout.offsetHeight - 8)
+    );
+    flyout.style.top = `${top}px`;
+    flyout.style.left = `${r.right + 10}px`;
+    flyoutFor = a;
+  }
+
+  navEl.addEventListener('mouseover', (e) => {
+    if (!appEl.classList.contains('sidebar-collapsed')) return;
+    const a = (e.target as HTMLElement).closest('a[data-nav]') as HTMLElement | null;
+    if (!a || a === flyoutFor) return;
+    showFlyout(a);
+  });
+  navEl.addEventListener('mouseleave', hideFlyout);
+  navEl.addEventListener('scroll', hideFlyout, { passive: true } as AddEventListenerOptions);
+  window.addEventListener('resize', hideFlyout);
+  window.addEventListener('scroll', hideFlyout, true);
+
+  if (sidebarToggle) {
+    setCollapsed(localStorage.getItem(COLLAPSE_KEY) === '1');
+    sidebarToggle.addEventListener('click', () => setCollapsed(!appEl.classList.contains('sidebar-collapsed')));
+  }
 
   function currentRoute(): string {
     const hash = window.location.hash.replace('#', '');
@@ -215,6 +307,7 @@ export async function initPanel(opts: PanelOptions) {
   };
 
   async function run(id: string) {
+    hideFlyout();
     navEl.querySelectorAll('a').forEach((a) => a.classList.toggle('active', (a as HTMLElement).dataset.nav === id));
     content.innerHTML = '<p class="empty">Loading…</p>';
     try {

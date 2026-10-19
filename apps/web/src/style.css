@@ -2533,3 +2533,445 @@ svg {
   white-space: pre-wrap;
   overflow-x: auto;
 }
+
+/* =====================================================================
+   Sidebar: grouped sections, own scroll, collapse toggle + hover flyout
+   ===================================================================== */
+.sidebar {
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.sidebar-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 14px 12px;
+}
+
+.sidebar-head .brand {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 10px 12px;
+}
+
+.sidebar-toggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.sidebar-toggle:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.sidebar-toggle svg.lucide {
+  width: 18px;
+  height: 18px;
+}
+
+/* The nav gets its own scroll area; brand + footer stay put. */
+.sidebar nav {
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 12px 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+.sidebar nav::-webkit-scrollbar {
+  width: 8px;
+  display: block;
+}
+
+.sidebar nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+}
+
+.sidebar nav::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav-group + .nav-group {
+  margin-top: 10px;
+}
+
+.nav-group-divided {
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.nav-group-label {
+  padding: 8px 12px 4px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.sidebar nav a {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 14px;
+  font-weight: 500;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.sidebar nav a:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  text-decoration: none;
+}
+
+.sidebar nav a.active {
+  background: var(--brand);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(229, 9, 20, 0.34);
+}
+
+.sidebar nav a svg.lucide {
+  width: 18px;
+  height: 18px;
+  opacity: 0.9;
+}
+
+.nav-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 14px 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-foot .icon-btn {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.sidebar-foot .icon-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* ---- Collapsed icon rail ---- */
+.app.sidebar-collapsed .sidebar {
+  width: 74px;
+}
+
+.app.sidebar-collapsed .sidebar-head {
+  justify-content: center;
+  padding: 16px 0 12px;
+}
+
+.app.sidebar-collapsed .sidebar-head .brand {
+  display: none;
+}
+
+.app.sidebar-collapsed .sidebar nav {
+  padding: 4px 12px 12px;
+}
+
+.app.sidebar-collapsed .nav-label,
+.app.sidebar-collapsed .nav-group-label {
+  display: none;
+}
+
+.app.sidebar-collapsed .nav-group + .nav-group {
+  margin-top: 6px;
+}
+
+.app.sidebar-collapsed .nav-group-divided {
+  padding-top: 6px;
+}
+
+.app.sidebar-collapsed .sidebar nav a {
+  justify-content: center;
+  padding: 11px 0;
+}
+
+.app.sidebar-collapsed .sidebar nav a.active {
+  box-shadow: 0 4px 12px rgba(229, 9, 20, 0.4);
+}
+
+/* ---- Hover flyout (labels shown while the rail is collapsed) ---- */
+.nav-flyout {
+  position: fixed;
+  z-index: 6000;
+  padding: 8px 12px;
+  background: var(--black);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--shadow-dropdown);
+  pointer-events: none;
+  animation: nav-flyout-in 130ms ease;
+}
+
+.nav-flyout::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  transform: translateY(-50%) rotate(45deg);
+  background: var(--black);
+  border-left: 1px solid rgba(255, 255, 255, 0.14);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+[data-theme='dark'] .nav-flyout,
+[data-theme='dark'] .nav-flyout::before {
+  background: #fafafa;
+  color: #111;
+}
+
+[data-theme='dark'] .nav-flyout::before {
+  border-color: var(--border);
+}
+
+@keyframes nav-flyout-in {
+  from {
+    opacity: 0;
+    transform: translateX(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* ---- Small screens: sidebar becomes a horizontal top rail ---- */
+@media (max-width: 720px) {
+  .sidebar {
+    height: auto;
+    position: static;
+    overflow: visible;
+    padding: 12px 16px;
+    gap: 12px;
+  }
+
+  .sidebar-head {
+    padding: 0;
+    flex: none;
+  }
+
+  .app.sidebar-collapsed .sidebar,
+  .app.sidebar-collapsed .sidebar-head .brand {
+    display: flex;
+  }
+
+  .sidebar-head .brand {
+    display: flex;
+  }
+
+  .sidebar-toggle {
+    display: none;
+  }
+
+  .app.sidebar-collapsed .sidebar {
+    width: 100%;
+  }
+
+  .sidebar nav,
+  .app.sidebar-collapsed .sidebar nav {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0;
+    gap: 6px;
+    flex: 1;
+    scrollbar-width: none;
+  }
+
+  .sidebar nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-group,
+  .app.sidebar-collapsed .nav-group {
+    display: contents;
+  }
+
+  .nav-group + .nav-group,
+  .app.sidebar-collapsed .nav-group + .nav-group {
+    margin-top: 0;
+  }
+
+  .nav-group-label {
+    display: none;
+  }
+
+  .nav-label,
+  .app.sidebar-collapsed .nav-label {
+    display: inline;
+  }
+
+  .sidebar nav a,
+  .app.sidebar-collapsed .sidebar nav a {
+    justify-content: flex-start;
+    white-space: nowrap;
+    padding: 9px 12px;
+  }
+
+  .sidebar-foot {
+    border-top: none;
+    padding: 0;
+  }
+}
+
+/* =====================================================================
+   Global UI polish
+   ===================================================================== */
+html {
+  scroll-behavior: smooth;
+  scrollbar-color: var(--grey-300) transparent;
+}
+
+html[data-theme='dark'] {
+  scrollbar-color: #3f3f46 transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--grey-300);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--grey-400);
+  background-clip: padding-box;
+}
+
+[data-theme='dark'] ::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  background-clip: padding-box;
+}
+
+/* Header hugs the top with a frosted effect. */
+header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  backdrop-filter: saturate(180%) blur(8px);
+  -webkit-backdrop-filter: saturate(180%) blur(8px);
+  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+}
+
+/* Comfortable content column on large displays. */
+.content {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+/* Softer, interactive surfaces. */
+.card {
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.card:hover {
+  box-shadow: 0 6px 20px rgba(17, 17, 17, 0.07);
+}
+
+[data-theme='dark'] .card:hover {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.42);
+}
+
+.stat {
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.stat:hover {
+  box-shadow: 0 6px 20px rgba(17, 17, 17, 0.07);
+}
+
+[data-theme='dark'] .stat:hover {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+.table-wrap {
+  box-shadow: var(--shadow-card);
+}
+
+.table-wrap tbody tr {
+  transition: background var(--transition-fast);
+}
+
+/* Consistent interaction feedback on buttons. */
+.btn,
+.btn-sm,
+.btn-ghost,
+.btn-danger,
+.logout-btn,
+.icon-btn,
+.sidebar-toggle {
+  transition: background var(--transition-fast), border-color var(--transition-fast),
+    box-shadow var(--transition-fast), transform var(--transition-fast), color var(--transition-fast);
+}
+
+.btn:active:not(:disabled),
+.btn-sm:active:not(:disabled),
+.btn-danger:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-flyout {
+    animation: none;
+  }
+
+  .card,
+  .stat,
+  .sidebar nav a,
+  .sidebar-toggle {
+    transition: none;
+  }
+}

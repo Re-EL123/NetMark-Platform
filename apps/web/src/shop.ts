@@ -29,13 +29,13 @@ function setCart(lines: CartLine[]) {
 }
 
 const nav: NavItem[] = [
-  { id: 'catalog', label: 'Shop', icon: 'shopping-bag' },
-  { id: 'cart', label: 'Cart', icon: 'shopping-cart' },
-  { id: 'orders', label: 'My Orders', icon: 'receipt' },
-  { id: 'appointments', label: 'Appointments', icon: 'calendar-clock' },
-  { id: 'autoship', label: 'Autoship', icon: 'refresh-cw' },
-  { id: 'privacy', label: 'Data & Consent', icon: 'shield' },
-  { id: 'profile', label: 'Profile', icon: 'user' }
+  { id: 'catalog', label: 'Shop', group: 'Shopping', icon: 'shopping-bag' },
+  { id: 'cart', label: 'Cart', group: 'Shopping', icon: 'shopping-cart' },
+  { id: 'orders', label: 'My Orders', group: 'Account', icon: 'receipt' },
+  { id: 'appointments', label: 'Appointments', group: 'Account', icon: 'calendar-clock' },
+  { id: 'autoship', label: 'Autoship', group: 'Account', icon: 'refresh-cw' },
+  { id: 'privacy', label: 'Data & Consent', group: 'Account', icon: 'shield' },
+  { id: 'profile', label: 'Profile', group: 'Account', icon: 'user' }
 ];
 
 initPanel({

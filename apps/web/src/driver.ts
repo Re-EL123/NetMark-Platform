@@ -12,11 +12,11 @@ function addressOf(value: any): string {
 }
 
 const nav: NavItem[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: 'gauge' },
-  { id: 'available', label: 'Available Jobs', icon: 'map-pin' },
-  { id: 'deliveries', label: 'My Deliveries', icon: 'truck' },
-  { id: 'earnings', label: 'Earnings', icon: 'banknote' },
-  { id: 'profile', label: 'Profile', icon: 'user' }
+  { id: 'dashboard', label: 'Dashboard', group: 'Overview', icon: 'gauge' },
+  { id: 'available', label: 'Available Jobs', group: 'Deliveries', icon: 'map-pin' },
+  { id: 'deliveries', label: 'My Deliveries', group: 'Deliveries', icon: 'truck' },
+  { id: 'earnings', label: 'Earnings', group: 'Account', icon: 'banknote' },
+  { id: 'profile', label: 'Profile', group: 'Account', icon: 'user' }
 ];
 
 let driver: any = null;
