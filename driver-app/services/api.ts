@@ -12,7 +12,7 @@ export function setOnUnauthorized(callback: (() => void) | null) {
 
 const REMOTE_API_URL =
   Constants.expoConfig?.extra?.apiUrl ||
-  "https://netmark-api.vercel.app/api";
+  "https://api.netmark.re-el.co.za/api";
 
 function isLocalWebHost(hostname: string): boolean {
   return (

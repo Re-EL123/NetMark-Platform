@@ -84,7 +84,7 @@ export function storefrontBase(): string {
   return (
     process.env.STOREFRONT_BASE_URL ||
     process.env.API_PUBLIC_URL ||
-    'https://netmark-api.vercel.app'
+    'https://shop.netmark.re-el.co.za'
   ).replace(/\/+$/, '');
 }
 

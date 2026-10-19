@@ -8,4 +8,4 @@ Disallow: /shop/
 Disallow: /driver/
 Disallow: /register.html
 
-Sitemap: https://netmark-api.vercel.app/api/storefront/sitemap
+Sitemap: https://api.netmark.re-el.co.za/api/storefront/sitemap

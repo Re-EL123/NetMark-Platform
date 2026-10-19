@@ -31,7 +31,7 @@ export interface PayFastConfig {
 
 export function payfastConfig(): PayFastConfig {
   const sandbox = String(process.env.PAYFAST_SANDBOX || 'true').toLowerCase() === 'true';
-  const apiBase = process.env.API_PUBLIC_URL || 'https://netmark-api.vercel.app';
+  const apiBase = process.env.API_PUBLIC_URL || 'https://api.netmark.re-el.co.za';
   const merchantId = process.env.PAYFAST_MERCHANT_ID || '';
   const merchantKey = process.env.PAYFAST_MERCHANT_KEY || '';
   return {
