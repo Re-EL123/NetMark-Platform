@@ -144,7 +144,11 @@ function applyTheme(theme: string) {
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem('netmark_theme', theme);
   const btn = document.getElementById('themeToggle');
-  if (btn) {
+  const iconHost = btn?.querySelector('.theme-icon') as HTMLElement | null;
+  if (iconHost) {
+    iconHost.innerHTML = icon(theme === 'dark' ? 'sun' : 'moon');
+    iconify(iconHost);
+  } else if (btn) {
     btn.innerHTML = icon(theme === 'dark' ? 'sun' : 'moon');
     iconify(btn);
   }
@@ -163,7 +167,9 @@ export async function initPanel(opts: PanelOptions) {
         </div>
         <nav id="nav"></nav>
         <div class="sidebar-foot">
-          <button id="themeToggle" class="icon-btn" data-tip="Toggle light / dark theme" data-tip-pos="right" title="Toggle theme">${icon('moon')}</button>
+          <button id="themeToggle" class="icon-btn" data-tip="Toggle light / dark theme" data-tip-pos="right" title="Toggle theme" aria-label="Toggle light or dark theme">
+            <span class="theme-icon">${icon('moon')}</span><span class="nav-label">Theme</span>
+          </button>
         </div>
       </aside>
       <div class="main">

@@ -649,10 +649,15 @@ tbody tr:hover td {
 
 .icon-btn {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
   background: transparent;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 8px 10px;
   cursor: pointer;
   font-size: 16px;
   line-height: 1;
@@ -730,7 +735,9 @@ tbody tr:hover td {
   gap: 6px;
 }
 
-.row-actions button,
+/* Text-link style actions. Scoped with :not(.btn) so real buttons placed in a
+   row-actions container keep their own .btn / .btn-sm / .btn-ghost styling. */
+.row-actions button:not(.btn),
 .link-btn {
   background: transparent;
   border: none;
@@ -742,25 +749,25 @@ tbody tr:hover td {
   border-radius: var(--radius-sm);
 }
 
-.row-actions button:hover,
+.row-actions button:not(.btn):hover,
 .link-btn:hover {
   background: var(--netmark-red-soft);
 }
 
-.row-actions button.danger {
+.row-actions button:not(.btn).danger {
   color: var(--danger);
 }
 
-.row-actions button.danger:hover {
+.row-actions button:not(.btn).danger:hover {
   background: #fee2e2;
 }
 
-[data-theme='dark'] .row-actions button:hover,
+[data-theme='dark'] .row-actions button:not(.btn):hover,
 [data-theme='dark'] .link-btn:hover {
   background: rgba(229, 9, 20, 0.15);
 }
 
-[data-theme='dark'] .row-actions button.danger:hover {
+[data-theme='dark'] .row-actions button:not(.btn).danger:hover {
   background: rgba(185, 28, 28, 0.2);
 }
 
@@ -2387,15 +2394,6 @@ svg {
   max-width: 100%;
 }
 
-/* Horizontal nav rail: hide the scrollbar on touch devices. */
-.sidebar nav {
-  scrollbar-width: none;
-}
-
-.sidebar nav::-webkit-scrollbar {
-  display: none;
-}
-
 /* ---- Tablet ---- */
 @media (max-width: 1024px) {
   .sidebar {
@@ -2584,39 +2582,38 @@ svg {
   height: 18px;
 }
 
-/* The nav gets its own scroll area; brand + footer stay put. */
+/* The nav gets its own scroll area; brand + footer stay put. A thin thumb over
+   a transparent track keeps the rail clean whether or not it overflows. */
 .sidebar nav {
   flex: 1;
   min-height: 0;
   flex-direction: column;
   gap: 2px;
-  padding: 4px 10px 12px 12px;
-  overflow-y: scroll;
+  padding: 4px 8px 12px 12px;
+  overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.32) rgba(255, 255, 255, 0.06);
+  scrollbar-color: rgba(255, 255, 255, 0.26) transparent;
 }
 
 .sidebar nav::-webkit-scrollbar {
-  width: 10px;
-  display: block;
+  width: 8px;
 }
 
 .sidebar nav::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.24);
   border: 2px solid transparent;
   border-radius: 999px;
   background-clip: padding-box;
 }
 
 .sidebar nav::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.42);
   background-clip: padding-box;
 }
 
 .sidebar nav::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 999px;
+  background: transparent;
 }
 
 .nav-group {
@@ -2682,19 +2679,29 @@ svg {
 .sidebar-foot {
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 12px 14px 18px;
+  padding: 10px 14px 16px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* The theme toggle lines up with the nav items (icon column) instead of
+   floating in the middle of the rail. */
 .sidebar-foot .icon-btn {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.14);
+  width: 100%;
+  height: auto;
+  justify-content: flex-start;
+  gap: 11px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.68);
+  background: transparent;
+  border-color: transparent;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .sidebar-foot .icon-btn:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
 }
 
 /* ---- Collapsed icon rail ---- */
@@ -2713,6 +2720,16 @@ svg {
 
 .app.sidebar-collapsed .sidebar nav {
   padding: 4px 12px 12px;
+}
+
+.app.sidebar-collapsed .sidebar-foot {
+  justify-content: center;
+  padding: 10px 12px 16px;
+}
+
+.app.sidebar-collapsed .sidebar-foot .icon-btn {
+  justify-content: center;
+  padding: 10px 0;
 }
 
 .app.sidebar-collapsed .nav-label,
@@ -2878,9 +2895,18 @@ svg {
     padding: 9px 12px;
   }
 
-  .sidebar-foot {
+  .sidebar-foot,
+  .app.sidebar-collapsed .sidebar-foot {
     border-top: none;
     padding: 0;
+    justify-content: flex-start;
+  }
+
+  .sidebar-foot .icon-btn,
+  .app.sidebar-collapsed .sidebar-foot .icon-btn {
+    width: auto;
+    padding: 9px 12px;
+    justify-content: flex-start;
   }
 }
 
@@ -3037,4 +3063,187 @@ header {
   flex: 1;
   min-width: 0;
   font-weight: 600;
+}
+
+/* --------------------- modal field sections ----------------------------- */
+.form-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0 16px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.form-section:first-child {
+  padding-top: 0;
+  border-top: none;
+  margin-top: 0;
+}
+
+.form-section::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ---------------------- storefront store cards -------------------------- */
+.sf-store-head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.sf-store-logo {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  object-fit: cover;
+  flex: none;
+  border: 1px solid var(--border);
+}
+
+.sf-store-logo.ph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: var(--grey-100);
+}
+
+[data-theme='dark'] .sf-store-logo.ph {
+  background: var(--dark);
+}
+
+.sf-store-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sf-store-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.sf-store-url-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sf-store-url {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sf-store-url-row .icon-btn {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+
+.sf-store-url-row .icon-btn:hover {
+  background: var(--grey-100);
+  color: var(--text-primary);
+}
+
+[data-theme='dark'] .sf-store-url-row .icon-btn:hover {
+  background: var(--dark);
+}
+
+.sf-store-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.sf-store-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sf-store-meta svg.lucide {
+  width: 14px;
+  height: 14px;
+  opacity: 0.75;
+}
+
+.sf-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+/* ------------------------- network section heading ---------------------- */
+.network-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 28px 0 12px;
+}
+
+.network-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 20px;
+}
+
+.network-heading svg.lucide {
+  color: var(--brand);
+}
+
+/* ---------------------------- referral QR ------------------------------- */
+.ref-qr-wrap {
+  display: inline-block;
+  padding: 14px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid var(--border);
+}
+
+/* =====================================================================
+   Dark-mode fixups: interactive surfaces that were hard-coded light
+   ===================================================================== */
+[data-theme='dark'] .icon-btn:hover,
+[data-theme='dark'] .btn-ghost:hover,
+[data-theme='dark'] .btn-secondary:hover,
+[data-theme='dark'] button.secondary:hover {
+  background: var(--dark);
+}
+
+[data-theme='dark'] .error {
+  background: rgba(185, 28, 28, 0.18);
+  border-color: rgba(248, 113, 113, 0.5);
+  color: #fca5a5;
+}
+
+[data-theme='dark'] .success {
+  background: rgba(21, 128, 61, 0.18);
+  border-color: rgba(74, 222, 128, 0.5);
+  color: #4ade80;
 }

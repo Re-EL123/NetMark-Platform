@@ -92,7 +92,8 @@ export interface Field {
     | 'file'
     | 'document'
     | 'gallery'
-    | 'documents';
+    | 'documents'
+    | 'section';
   required?: boolean;
   value?: any;
   options?: { value: string; label: string }[];
@@ -112,6 +113,9 @@ export interface Field {
 const UPLOAD_TYPES = ['image', 'video', 'file', 'document', 'gallery', 'documents'];
 
 function fieldHtml(f: Field): string {
+  if (f.type === 'section') {
+    return `<div class="form-section">${esc(f.label)}</div>`;
+  }
   if (f.type && UPLOAD_TYPES.includes(f.type)) {
     return uploadFieldHtml({
       name: f.name,

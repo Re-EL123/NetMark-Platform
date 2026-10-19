@@ -4,7 +4,7 @@ import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { crudView } from './crud';
 import { openModal, confirmDialog, toast, money, titleCase, emptyState, act, wire, tableSimple } from './ui';
-import { icon } from './icons';
+import { icon, iconify } from './icons';
 import { overviewStats, renderOverviewCharts } from './dashboard';
 import { renderReferrals } from './referralsView';
 import { renderWallet } from './walletView';
@@ -227,10 +227,15 @@ function companies(c: HTMLElement) {
  */
 async function referrals(c: HTMLElement) {
   await renderReferrals(c);
+  const heading = document.createElement('div');
+  heading.className = 'network-heading';
+  heading.innerHTML = `<h2>${icon('users')} Your network</h2>`;
+  c.appendChild(heading);
   const section = document.createElement('div');
   section.id = 'network';
   c.appendChild(section);
   await team(section);
+  iconify(heading);
 }
 
 async function team(c: HTMLElement) {
@@ -261,7 +266,7 @@ async function team(c: HTMLElement) {
       ${companyOpts}
       <div class="card">
         <h3>Your membership</h3>
-        <div class="grid">
+        <div class="detail-grid">
           <div><span class="empty">Member number</span><div>${badge(me?.memberNo || '—', 'info')}</div></div>
           <div><span class="empty">Rank</span><div>${esc(me?.rankName || '—')}</div></div>
           <div><span class="empty">Status</span><div>${statusBadge(status)}</div></div>
@@ -274,7 +279,7 @@ async function team(c: HTMLElement) {
           ${
             status === 'paused'
               ? `<button class="btn btn-sm" data-status="active">${icon('play')}<span>Resume activity</span></button>`
-              : `<button class="btn btn-sm btn-outline" data-status="paused">${icon('pause')}<span>Pause activity</span></button>`
+              : `<button class="btn btn-sm btn-ghost" data-status="paused">${icon('pause')}<span>Pause activity</span></button>`
           }
           <button class="btn btn-sm" id="shareRecruit">${icon('share-2')}<span>Recruit members</span></button>
         </div>
@@ -749,17 +754,23 @@ async function storefront(c: HTMLElement) {
           const contacts = Number(st.contact || 0);
           const featuredCount = Array.isArray(sf.featured) ? sf.featured.length : 0;
           return `<div class="card">
-            <div style="display:flex;gap:14px;align-items:center">
-              ${r.logo ? `<img src="${esc(r.logo)}" alt="" style="width:46px;height:46px;border-radius:12px;object-fit:cover" />` : `<span class="badge" style="width:46px;height:46px;display:inline-flex;align-items:center;justify-content:center;font-size:20px">${esc((r.name || '?').charAt(0).toUpperCase())}</span>`}
-              <div style="flex:1;min-width:0">
-                <h3 style="margin:0 0 4px">${esc(r.name)} ${badge(enabled ? 'Live' : r.isActive ? 'Disabled' : 'Store inactive', enabled ? 'success' : 'warning')}</h3>
-                <div class="empty" style="word-break:break-all;font-size:12px">${esc(url)}</div>
-                <div class="empty" style="font-size:12px;margin-top:6px">${icon('eye')} ${views} view${views === 1 ? '' : 's'} · ${icon('message-circle')} ${contacts} contact${contacts === 1 ? '' : 's'} · ${icon('star')} ${featuredCount} featured</div>
+            <div class="sf-store-head">
+              ${r.logo ? `<img class="sf-store-logo" src="${esc(r.logo)}" alt="" />` : `<span class="sf-store-logo ph">${esc((r.name || '?').charAt(0).toUpperCase())}</span>`}
+              <div class="sf-store-info">
+                <h3 class="sf-store-name">${esc(r.name)} ${badge(enabled ? 'Live' : r.isActive ? 'Disabled' : 'Store inactive', enabled ? 'success' : 'warning')}</h3>
+                <div class="sf-store-url-row">
+                  <span class="sf-store-url" title="${esc(url)}">${esc(url)}</span>
+                  <button class="icon-btn" data-sf-copy="${esc(r.id)}" data-tip="Copy link" title="Copy link" aria-label="Copy storefront link">${icon('copy')}</button>
+                </div>
+                <div class="sf-store-meta">
+                  <span>${icon('eye')} ${views} view${views === 1 ? '' : 's'}</span>
+                  <span>${icon('message-circle')} ${contacts} contact${contacts === 1 ? '' : 's'}</span>
+                  <span>${icon('star')} ${featuredCount} featured</span>
+                </div>
               </div>
             </div>
-            <div class="row-actions" style="justify-content:flex-start;flex-wrap:wrap;margin-top:14px">
+            <div class="row-actions sf-actions">
               <button class="btn btn-sm" data-sf-open="${esc(r.id)}">${icon('external-link')}<span>Open</span></button>
-              <button class="btn btn-sm btn-ghost" data-sf-copy="${esc(r.id)}">${icon('copy')}<span>Copy link</span></button>
               <button class="btn btn-sm btn-ghost" data-sf-qr="${esc(r.id)}">${icon('qr-code')}<span>QR code</span></button>
               <button class="btn btn-sm btn-ghost" data-sf-share="${esc(r.id)}">${icon('share-2')}<span>Share</span></button>
               <button class="btn btn-sm btn-ghost" data-sf-featured="${esc(r.id)}">${icon('star')}<span>Featured</span></button>
@@ -909,25 +920,34 @@ function editStorefront(r: any, done: () => void) {
     wide: true,
     submitLabel: 'Save storefront',
     fields: [
+      { name: 'secPublish', label: 'Publishing', type: 'section' },
       { name: 'enabled', label: 'Publish storefront', type: 'checkbox', value: sf.enabled !== false, help: 'Turn off to hide the page from visitors.' },
+      { name: 'showProducts', label: 'Show products on the page', type: 'checkbox', value: sf.showProducts !== false },
       { name: 'tagline', label: 'Tagline', value: sf.tagline, placeholder: 'Fresh produce delivered daily', full: true },
       { name: 'about', label: 'About your store', type: 'textarea', rows: 4, value: sf.about, placeholder: 'Tell customers who you are and what you sell.', full: true },
+
+      { name: 'secBrand', label: 'Branding & call to action', type: 'section' },
       { name: 'logo', label: 'Logo', type: 'image', folder: 'stores', value: sf.logo || r.logo },
-      { name: 'banner', label: 'Banner image', type: 'image', folder: 'stores', value: sf.banner || r.banner },
+      { name: 'banner', label: 'Banner image', type: 'image', folder: 'stores', value: sf.banner || r.banner, help: 'Wide image shown behind the top of the page.' },
       { name: 'themeColor', label: 'Accent colour', value: sf.themeColor || '#e50914', placeholder: '#e50914' },
       { name: 'ctaLabel', label: 'Main button label', value: sf.ctaLabel, placeholder: 'Order on WhatsApp' },
+
+      { name: 'secContact', label: 'Contact details', type: 'section' },
       { name: 'phone', label: 'Phone', type: 'tel', value: sf.phone },
       { name: 'whatsapp', label: 'WhatsApp number', type: 'tel', value: sf.whatsapp, help: 'Include country code, e.g. +27…' },
       { name: 'email', label: 'Email', type: 'email', value: sf.email },
       { name: 'address', label: 'Address', value: sf.address || r.address },
       { name: 'hours', label: 'Opening hours', value: sf.hours, placeholder: 'Mon–Fri 8:00–17:00' },
-      { name: 'showProducts', label: 'Show products', type: 'checkbox', value: sf.showProducts !== false },
+
+      { name: 'secSocial', label: 'Social links', type: 'section' },
       { name: 'facebook', label: 'Facebook URL', value: sf.social?.facebook },
       { name: 'instagram', label: 'Instagram URL', value: sf.social?.instagram },
       { name: 'tiktok', label: 'TikTok URL', value: sf.social?.tiktok },
       { name: 'x', label: 'X (Twitter) URL', value: sf.social?.x },
-      { name: 'metaTitle', label: 'SEO title', value: sf.metaTitle, help: 'Shown in search results and link previews.', full: true },
-      { name: 'metaDescription', label: 'SEO description', type: 'textarea', rows: 2, value: sf.metaDescription, full: true },
+
+      { name: 'secSeo', label: 'Search engine listing', type: 'section' },
+      { name: 'metaTitle', label: 'SEO title', value: sf.metaTitle, placeholder: r.name, help: 'Shown in Google and link previews. Keep it under 60 characters.', full: true },
+      { name: 'metaDescription', label: 'SEO description', type: 'textarea', rows: 2, value: sf.metaDescription, placeholder: 'A one-sentence summary of what you sell.', help: 'Aim for about 150–160 characters.', full: true },
       { name: 'metaKeywords', label: 'SEO keywords', value: sf.metaKeywords, placeholder: 'comma, separated, keywords', full: true }
     ],
     onSubmit: async (v) => {

@@ -1,8 +1,9 @@
 import { apiRequest } from './api';
 import { esc, formatDate } from './render';
-import { statCards, dataTable, emptyState, money, toast } from './ui';
+import { statCards, dataTable, emptyState, money, toast, openModal } from './ui';
 import { icon, iconify } from './icons';
 import { shareUrl, shareLink } from './referral';
+import { qrSvg } from './qr';
 
 function sum(rows: any[], status?: string) {
   return rows
@@ -42,12 +43,15 @@ export async function renderReferrals(c: HTMLElement) {
         Share your link — whoever signs up becomes your referral, and you earn on their orders
         and on any code or store they buy.
       </p>
-      <p class="empty" style="margin:10px 0">Your code: <strong>${esc(code || '—')}</strong></p>
+      <div class="sf-store-meta" style="margin:12px 0 4px">
+        <span>${icon('ticket-percent')} Your code: <strong>${esc(code || '—')}</strong></span>
+      </div>
       <div class="row-actions">
         <button class="btn btn-sm" id="shareSignup">${icon('share-2')}<span>Share invite</span></button>
-        <button class="btn btn-sm" id="copySignup">${icon('link-2')}<span>Copy invite link</span></button>
-        <button class="btn btn-sm" id="shareShop">${icon('shopping-bag')}<span>Share shop</span></button>
-        <button class="btn btn-sm" id="copyShop">${icon('link-2')}<span>Copy shop link</span></button>
+        <button class="btn btn-sm btn-ghost" id="copySignup">${icon('link-2')}<span>Copy invite link</span></button>
+        <button class="btn btn-sm btn-ghost" id="qrSignup">${icon('qr-code')}<span>QR code</span></button>
+        <button class="btn btn-sm btn-ghost" id="shareShop">${icon('shopping-bag')}<span>Share shop</span></button>
+        <button class="btn btn-sm btn-ghost" id="copyShop">${icon('link-2')}<span>Copy shop link</span></button>
       </div>
     </div>
 
@@ -91,6 +95,18 @@ export async function renderReferrals(c: HTMLElement) {
     shareLink(signupUrl, 'Join NetMark', `Use code ${code || ''} to join NetMark`)
   );
   (c.querySelector('#copySignup') as HTMLElement | null)?.addEventListener('click', () => copy(signupUrl));
+  (c.querySelector('#qrSignup') as HTMLElement | null)?.addEventListener('click', () =>
+    openModal({
+      title: 'Referral QR code',
+      submitLabel: 'Done',
+      html: `<div style="text-align:center">
+        <span class="ref-qr-wrap">${qrSvg(signupUrl, 5, 2)}</span>
+        <p class="empty" style="word-break:break-all;font-size:12px;margin-top:14px">${esc(signupUrl)}</p>
+        <p class="empty" style="font-size:12px;margin-top:6px">Anyone who scans this lands on the sign-up page with your code attached.</p>
+      </div>`,
+      onSubmit: () => undefined
+    })
+  );
   (c.querySelector('#shareShop') as HTMLElement | null)?.addEventListener('click', () =>
     shareLink(shopUrl, 'Shop on NetMark', 'Browse the NetMark marketplace')
   );
