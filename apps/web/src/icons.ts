@@ -88,7 +88,12 @@ import {
   KeyRound,
   Webhook,
   Flag,
-  Share2
+  Share2,
+  Award,
+  UserPlus,
+  Upload,
+  Video,
+  Image
 } from 'lucide';
 
 /**
@@ -185,7 +190,12 @@ const REGISTRY: Record<string, any> = {
   KeyRound,
   Webhook,
   Flag,
-  Share2
+  Share2,
+  Award,
+  UserPlus,
+  Upload,
+  Video,
+  Image
 };
 /**
  * Produce a placeholder element. `iconify()` later swaps it for the real SVG.
