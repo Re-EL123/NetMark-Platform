@@ -31,6 +31,7 @@ const nav: NavItem[] = [
   { id: 'drivers', label: 'Drivers', icon: 'truck' },
   { id: 'appointments', label: 'Appointments', icon: 'calendar-clock' },
   { id: 'plans', label: 'Plans', icon: 'layers' },
+  { id: 'ranks', label: 'Ranks', icon: 'award' },
   { id: 'codes', label: 'Distributor Codes', icon: 'ticket-percent' },
   { id: 'code-purchases', label: 'Code Purchases', icon: 'shopping-cart' },
   { id: 'store-purchases', label: 'Store Purchases', icon: 'shopping-bag' },
@@ -72,6 +73,7 @@ initPanel({
     if (route === 'appointments') return renderAppointments(c);
     if (route === 'codes') return renderCodes(c);
     if (route === 'plans') return renderPlans(c);
+    if (route === 'ranks') return renderRanks(c);
     if (route === 'code-purchases') return renderCodePurchases(c);
     if (route === 'store-purchases') return renderStorePurchases(c);
     if (route === 'consent') return renderConsent(c);
@@ -1302,6 +1304,86 @@ function renderPlans(c: HTMLElement) {
               reload();
             }
           });
+        }
+      });
+    }
+  });
+}
+
+/* ------------------------------- ranks -------------------------------- */
+function rankFields(r: any = {}): Field[] {
+  return [
+    { name: 'name', label: 'Name', value: r.name, required: true },
+    { name: 'slug', label: 'Slug', value: r.slug, help: 'Lowercase identifier, e.g. crown-ambassador' },
+    { name: 'level', label: 'Level', type: 'number', value: String(r.level ?? 0), help: 'Higher = more senior' },
+    { name: 'minPersonalBv', label: 'Min personal BV (lifetime)', type: 'number', value: String(r.minPersonalBv ?? 0) },
+    { name: 'minGroupBv', label: 'Min group BV (lifetime)', type: 'number', value: String(r.minGroupBv ?? 0) },
+    { name: 'minPersonalPeriodBv', label: 'Min personal BV per month (bonus)', type: 'number', value: String(r.minPersonalPeriodBv ?? 0) },
+    { name: 'retailOverridePercent', label: 'Retail override %', type: 'number', value: String(r.retailOverridePercent ?? 0) },
+    { name: 'monthlyBonusZar', label: 'Monthly bonus (ZAR)', type: 'number', value: String(r.monthlyBonusZar ?? 0) },
+    { name: 'leadershipPoolPercent', label: 'Leadership pool %', type: 'number', value: String(r.leadershipPoolPercent ?? 0) },
+    { name: 'sortOrder', label: 'Sort order', type: 'number', value: String(r.sortOrder ?? 0) }
+  ];
+}
+
+function renderRanks(c: HTMLElement) {
+  let ranks: any[] = [];
+  crudView(c, {
+    endpoint: '/memberships/ranks',
+    onData: (r) => {
+      ranks = r;
+    },
+    columns: [
+      { key: 'name', label: 'Rank' },
+      { key: 'level', label: 'Level' },
+      { key: 'minPersonalBv', label: 'Personal BV', render: (r) => money(r.minPersonalBv || 0) },
+      { key: 'minGroupBv', label: 'Group BV', render: (r) => money(r.minGroupBv || 0) },
+      { key: 'minPersonalPeriodBv', label: 'Monthly BV', render: (r) => money(r.minPersonalPeriodBv || 0) },
+      { key: 'retailOverridePercent', label: 'Override', render: (r) => `${Number(r.retailOverridePercent || 0)}%` },
+      { key: 'monthlyBonusZar', label: 'Monthly bonus', render: (r) => money(r.monthlyBonusZar || 0) },
+      { key: 'leadershipPoolPercent', label: 'Pool', render: (r) => `${Number(r.leadershipPoolPercent || 0)}%` },
+      { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') }
+    ],
+    toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>New rank</span></button>`,
+    actions: (r) => act('edit', r.id, 'Edit') + act('remove', r.id, 'Delete', 'danger'),
+    empty: 'No ranks configured.',
+    bind: (root, reload) => {
+      (root.querySelector('[data-new]') as HTMLElement).onclick = () =>
+        openModal({
+          title: 'New rank',
+          wide: true,
+          fields: [...rankFields(), { name: 'isActive', label: 'Active', type: 'checkbox', value: true }],
+          submitLabel: 'Create rank',
+          onSubmit: async (v) => {
+            const res = await apiRequest('/memberships/ranks', { method: 'POST', body: JSON.stringify(v) });
+            if (!res.success) throw new Error(res.message);
+            toast('Rank created', 'success');
+            reload();
+          }
+        });
+      wire(root, {
+        edit: (id) => {
+          const r = ranks.find((x) => x.id === id);
+          if (!r) return;
+          openModal({
+            title: `Edit ${r.name}`,
+            wide: true,
+            fields: [...rankFields(r), { name: 'isActive', label: 'Active', type: 'checkbox', value: r.isActive !== false }],
+            onSubmit: async (v) => {
+              const res = await apiRequest(`/memberships/ranks/${id}`, { method: 'PUT', body: JSON.stringify(v) });
+              if (!res.success) throw new Error(res.message);
+              toast('Rank updated', 'success');
+              reload();
+            }
+          });
+        },
+        remove: async (id) => {
+          if (await confirmDialog('Delete this rank? Members on it lose the rank.', { danger: true, confirmLabel: 'Delete' })) {
+            const res = await apiRequest(`/memberships/ranks/${id}`, { method: 'DELETE' });
+            if (!res.success) return toast(res.message || 'Failed', 'error');
+            toast('Rank deleted', 'success');
+            reload();
+          }
         }
       });
     }

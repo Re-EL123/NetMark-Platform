@@ -31,6 +31,7 @@ const nav: NavItem[] = [
   { id: 'appointments', label: 'Appointments', icon: 'calendar-clock' },
   { id: 'codes', label: 'Codes', icon: 'ticket-percent' },
   { id: 'referrals', label: 'Referrals', capability: 'referrals.read', icon: 'share-2' },
+  { id: 'network', label: 'Network', capability: 'referrals.read', icon: 'users' },
   { id: 'billing', label: 'Billing', icon: 'credit-card' },
   { id: 'wallet', label: 'Wallet', icon: 'wallet' },
   { id: 'commissions', label: 'Commissions', icon: 'banknote' },
@@ -58,6 +59,7 @@ initPanel({
     if (route === 'appointments') return appointments(c);
     if (route === 'codes') return codes(c);
     if (route === 'referrals') return renderReferrals(c);
+    if (route === 'network') return network(c);
     if (route === 'billing') return billing(c);
     if (route === 'wallet') return wallet(c);
     if (route === 'commissions') return commissions(c);
@@ -724,6 +726,76 @@ async function commissionCard(c: HTMLElement) {
     }
     const r = await apiRequest('/settings/commission', { method: 'PUT', body: JSON.stringify({ value }) });
     toast(r.success ? 'Commission updated' : r.message || 'Failed', r.success ? 'success' : 'error');
+  });
+}
+
+/* -------------------------------- network ------------------------------ */
+function network(c: HTMLElement) {
+  let rows: any[] = [];
+  crudView(c, {
+    endpoint: '/memberships/network',
+    onData: (r) => {
+      rows = r;
+    },
+    searchPlaceholder: 'Search member number…',
+    filters: () => [{ name: 'status', label: 'Status', options: opts(['active', 'paused', 'suspended', 'terminated']) }],
+    columns: [
+      { key: 'memberName', label: 'Member', render: (r) => `${esc(r.memberName || '—')}${r.memberEmail ? ` <span class="empty">${esc(r.memberEmail)}</span>` : ''}` },
+      { key: 'memberNo', label: 'Member no.', render: (r) => badge(r.memberNo, 'info') },
+      { key: 'rankName', label: 'Rank', render: (r) => esc(r.rankName || '—') },
+      { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
+      { key: 'personalBv', label: 'Personal BV', render: (r) => money(r.personalBv || 0) },
+      { key: 'groupBv', label: 'Group BV', render: (r) => money(r.groupBv || 0) },
+      { key: 'joinedAt', label: 'Joined', render: (r) => formatDate(r.joinedAt) }
+    ],
+    toolbar: () =>
+      `<button class="btn btn-sm" data-add>${icon('user-plus')}<span>Add member</span></button><button class="btn btn-sm" id="shareNetwork">${icon('share-2')}<span>Invite</span></button>`,
+    actions: (r) => act('status', r.id, 'Status'),
+    empty: 'No members in your network yet. Invite people with your code.',
+    bind: (root, reload) => {
+      (root.querySelector('[data-add]') as HTMLElement).onclick = () =>
+        openModal({
+          title: 'Add member to your network',
+          fields: [
+            { name: 'email', label: 'Member email', required: true, help: 'They must already have a NetMark account.' },
+            { name: 'sponsorId', label: 'Sponsor user ID (optional)', help: 'Leave blank to place them directly under you.' }
+          ],
+          submitLabel: 'Add member',
+          onSubmit: async (v) => {
+            const res = await apiRequest('/memberships', { method: 'POST', body: JSON.stringify(v) });
+            if (!res.success) throw new Error(res.message);
+            toast('Member added', 'success');
+            reload();
+          }
+        });
+      (root.querySelector('#shareNetwork') as HTMLElement).onclick = async () => {
+        const code = await getMyReferralCode();
+        await shareLink(shareUrl('register', code), 'NetMark', 'Join my NetMark team');
+      };
+      wire(root, {
+        status: (id) => {
+          const row = rows.find((r) => r.id === id);
+          openModal({
+            title: `Membership — ${row?.memberName || ''}`,
+            fields: [
+              {
+                name: 'status',
+                label: 'Status',
+                type: 'select',
+                value: row?.status || 'active',
+                options: opts(['active', 'paused', 'suspended', 'terminated'])
+              }
+            ],
+            onSubmit: async (v) => {
+              const res = await apiRequest(`/memberships/${id}`, { method: 'PUT', body: JSON.stringify(v) });
+              if (!res.success) throw new Error(res.message);
+              toast('Membership updated', 'success');
+              reload();
+            }
+          });
+        }
+      });
+    }
   });
 }
 

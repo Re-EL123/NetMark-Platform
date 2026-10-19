@@ -4,6 +4,7 @@ import { recordAudit } from '../audit';
 import { notify } from '../notify';
 import { payfastConfig, buildPaymentFields } from '../payfast';
 import { validCompanyIdsForOwner } from '../companyLinks';
+import { applyVolume } from '../ranks';
 
 /**
  * Wholesale purchases — how a store owner restocks from the company they joined.
@@ -180,6 +181,20 @@ export default authed(async (req, res, ctx) => {
     await recordAudit(req, { action: 'purchase.status', entityType: 'purchase', entityId: id, before: { status: before.status }, after: { status } });
     if (before.store_owner_id && status !== before.status) {
       await notify({ userId: before.store_owner_id, type: 'order', title: `Purchase ${status}`, body: `Your purchase ${before.reference} is now ${status}.`, data: { purchaseId: id } });
+    }
+    // A completed wholesale purchase earns volume for the buyer and their
+    // company downline (only on the transition into 'completed').
+    if (status === 'completed' && before.status !== 'completed' && before.store_owner_id) {
+      try {
+        await applyVolume(sb, {
+          companyId: before.company_id || null,
+          userId: before.store_owner_id,
+          bv: Number(before.subtotal || 0),
+          tenantId: before.tenant_id || null
+        });
+      } catch (err: any) {
+        console.error('purchase volume failed', id, err?.message || err);
+      }
     }
     return ok(res, { data: decorate(after) });
   }

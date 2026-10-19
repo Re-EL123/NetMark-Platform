@@ -1,6 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { notify } from './notify';
 import { getCompanyEntitlements } from './planLimits';
+import { overrideChain, getMembership } from './ranks';
 
 /**
  * Commission engine v2.
@@ -265,6 +266,8 @@ export interface RecordCommissionOpts {
   description?: string;
   holdDays?: number;
   autoApprove?: boolean;
+  /** Non-uuid idempotency key for scheduled payouts (e.g. monthly rank bonus). */
+  dedupeKey?: string | null;
 }
 
 /**
@@ -278,8 +281,12 @@ export async function recordCommission(sb: SupabaseClient, opts: RecordCommissio
   const refType = opts.refType || (opts.orderId ? 'order' : 'manual');
   const refId = opts.refId || opts.orderId || null;
   const level = opts.level ?? null;
+  const dedupeKey = opts.dedupeKey || null;
 
-  if (refId) {
+  if (dedupeKey) {
+    const { data: existing } = await sb.from('commissions').select('*').eq('dedupe_key', dedupeKey).maybeSingle();
+    if (existing) return existing;
+  } else if (refId) {
     const { data: existing } = await findCommission(sb, refType, refId, opts.userId, level);
     if (existing) return existing;
   }
@@ -306,11 +313,19 @@ export async function recordCommission(sb: SupabaseClient, opts: RecordCommissio
     released_at: autoApprove ? new Date().toISOString() : null,
     description: opts.description || null
   };
+  // Only send dedupe_key when it's actually used, so a database that hasn't
+  // run migration 017 yet keeps recording ordinary commissions.
+  if (opts.dedupeKey) payload.dedupe_key = opts.dedupeKey;
 
   let row: any = null;
   const { data, error } = await sb.from('commissions').insert(payload).select('*').single();
   if (!error) {
     row = data;
+  } else if (row === null && opts.dedupeKey) {
+    const { data: existing } = await sb.from('commissions').select('*').eq('dedupe_key', opts.dedupeKey).maybeSingle();
+    if (existing) return existing;
+    console.error('recordCommission insert failed', error.message);
+    return null;
   } else if (refId) {
     // Unique index fired: this event already paid this user at this level.
     const { data: existing } = await findCommission(sb, refType, refId, opts.userId, level);
@@ -377,8 +392,7 @@ export async function walkSponsors(sb: SupabaseClient, firstReferrerId: string, 
  * base, capped by config. Safe to call more than once for the same order.
  */
 export async function payOrderCommissions(sb: SupabaseClient, order: any): Promise<number> {
-  const first = order?.distributor_id;
-  if (!first) return 0;
+  const first = order?.distributor_id || null;
 
   const base = commissionBase(order);
   if (base <= 0) return 0;
@@ -390,7 +404,16 @@ export async function payOrderCommissions(sb: SupabaseClient, order: any): Promi
   const rates = [cfg.l1Percent, cfg.l2Percent, cfg.l3Percent].slice(0, depth);
   if (!rates.some((r) => r > 0)) return 0;
 
-  const chain = await walkSponsors(sb, first, rates.length, order.customer_id);
+  // Prefer the per-company downline (memberships), which needs no legacy
+  // distributor_id. Fall back to the global referrer chain otherwise.
+  let chain: string[];
+  if (order.company_id && order.customer_id) {
+    chain = await overrideChain(sb, order.company_id, order.customer_id, first, rates.length);
+  } else if (first) {
+    chain = await walkSponsors(sb, first, rates.length, order.customer_id);
+  } else {
+    return 0;
+  }
   if (!chain.length) return 0;
 
   const labels = ['direct referrer', 'sponsor', 'senior sponsor'];
@@ -451,7 +474,14 @@ export async function payPurchaseReferral(
     .select('id, tenant_id, distributor_id, name')
     .eq('id', opts.purchaserId)
     .maybeSingle();
-  const referrer = buyer?.distributor_id || null;
+
+  // Prefer the buyer's sponsor inside the company they bought into.
+  let referrer: string | null = null;
+  if (opts.companyId) {
+    const m = await getMembership(sb, opts.companyId, opts.purchaserId);
+    referrer = m?.sponsor_id || null;
+  }
+  if (!referrer) referrer = buyer?.distributor_id || null;
   if (!referrer || referrer === opts.purchaserId) return false;
 
   const cfg = await getCommissionConfig(sb, opts.companyId || null);
@@ -476,6 +506,62 @@ export async function payPurchaseReferral(
     autoApprove: cfg.autoApprove
   });
   return !!row;
+}
+
+/**
+ * Credit a store owner the direct profit margin on a completed sale from their
+ * own store. The margin depends on how the listing is sourced:
+ *   mode 'add'       -> retail - wholesale (the store owner never prepaid)
+ *   mode 'wholesale' -> the full retail (they own the stock, prepaid wholesale)
+ * Aggregated into one payout per order so it stays idempotent.
+ */
+export async function payStoreMargins(sb: SupabaseClient, order: any): Promise<number> {
+  if (!order?.store_id || !Array.isArray(order.items) || !order.items.length) return 0;
+
+  const { data: store } = await sb.from('stores').select('*').eq('id', order.store_id).maybeSingle();
+  if (!store?.store_owner_id) return 0;
+  const ownerId = store.store_owner_id;
+  if (order.customer_id && ownerId === order.customer_id) return 0;
+
+  let total = 0;
+  for (const line of order.items) {
+    const productId = line.productId || line.product_id || line.id;
+    if (!productId) continue;
+    const qty = Math.max(1, Number(line.quantity || 1));
+    const lineRetail = Number(line.price != null ? line.price : Number(line.lineTotal || 0) / qty);
+    const { data: product } = await sb.from('products').select('price, company_id').eq('id', productId).maybeSingle();
+    const wholesale = Number(product?.price || 0);
+    const { data: listing } = await sb
+      .from('store_products')
+      .select('mode, price')
+      .eq('store_id', order.store_id)
+      .eq('product_id', productId)
+      .maybeSingle();
+    const mode = listing?.mode === 'wholesale' ? 'wholesale' : 'add';
+    const unitRetail = listing?.price != null ? Number(listing.price) : lineRetail;
+    const perUnit = mode === 'wholesale' ? unitRetail : Math.max(0, unitRetail - wholesale);
+    total += perUnit * qty;
+  }
+
+  total = round2(total);
+  if (total <= 0) return 0;
+
+  const row = await recordCommission(sb, {
+    tenantId: order.tenant_id || store.tenant_id || null,
+    userId: ownerId,
+    companyId: order.company_id || null,
+    orderId: order.id,
+    refId: order.id,
+    refType: 'order_margin',
+    amountZar: total,
+    bonusType: 'margin',
+    level: null,
+    source: 'order',
+    description: `Store profit margin on order ${order.order_number || ''}`.trim(),
+    holdDays: 0,
+    autoApprove: true
+  });
+  return row ? 1 : 0;
 }
 
 /** Move every due pending commission into spendable balance. */

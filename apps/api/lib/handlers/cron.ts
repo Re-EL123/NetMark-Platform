@@ -3,6 +3,7 @@ import { slugOf, getSupabase } from '../http';
 import { notify } from '../notify';
 import { recordAudit } from '../audit';
 import { releaseDueCommissions } from '../commissionEngine';
+import { suspendInactiveMemberships, runMonthlyBonuses } from '../ranks';
 
 function orderNumber() {
   return 'NM-' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5).toUpperCase();
@@ -28,7 +29,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (slug[0] === 'plans' && (req.method === 'GET' || req.method === 'POST')) {
     return runPlanBilling(res);
   }
+  if (slug[0] === 'memberships' && (req.method === 'GET' || req.method === 'POST')) {
+    return runMemberships(res);
+  }
   return res.status(404).json({ success: false, message: 'Unknown cron job' });
+}
+
+/**
+ * Suspend memberships dormant past the platform's inactivity window (their
+ * member numbers are retained and reactivate on the next purchase) and pay the
+ * monthly rank bonuses for the current period.
+ */
+async function runMemberships(res: VercelResponse) {
+  const sb = getSupabase();
+  const { data: cfg } = await sb
+    .from('settings')
+    .select('value')
+    .eq('scope', 'platform')
+    .eq('key', 'compensation')
+    .maybeSingle();
+  const days = Number(cfg?.value?.inactivityDays ?? 90);
+  const suspended = await suspendInactiveMemberships(sb, days);
+  const bonuses = await runMonthlyBonuses(sb);
+  return res.status(200).json({ success: true, data: { suspended, bonuses, inactivityDays: days } });
 }
 
 /** Move commission credits whose hold window has elapsed into available balance. */

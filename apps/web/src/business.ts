@@ -25,6 +25,7 @@ const nav: NavItem[] = [
   { id: 'orders', label: 'Orders', capability: 'orders.read', icon: 'receipt' },
   { id: 'appointments', label: 'Appointments', capability: 'appointments.read', icon: 'calendar-clock' },
   { id: 'referrals', label: 'Referrals', capability: 'referrals.read', icon: 'share-2' },
+  { id: 'team', label: 'My Team', capability: 'referrals.read', icon: 'users' },
   { id: 'wallet', label: 'Wallet', icon: 'wallet' },
   { id: 'reports', label: 'Reports', capability: 'reports.read', icon: 'bar-chart-3' }
 ];
@@ -48,6 +49,7 @@ initPanel({
     if (route === 'orders') return orders(c);
     if (route === 'appointments') return appointments(c);
     if (route === 'referrals') return renderReferrals(c);
+    if (route === 'team') return team(c);
     if (route === 'wallet') return renderWallet(c);
     if (route === 'reports') return reports(c);
   }
@@ -216,6 +218,97 @@ function companies(c: HTMLElement) {
   load();
 }
 
+async function team(c: HTMLElement) {
+  c.innerHTML = '<p class="empty">Loading your network…</p>';
+  const mine = await apiRequest('/memberships');
+  const memberships: any[] = (mine.success && mine.data) || [];
+  if (!memberships.length) {
+    c.innerHTML = emptyState(
+      'You are not part of a network yet. Link a company with a code (or enter one at sign-up) to join its downline.',
+      'users'
+    );
+    return;
+  }
+
+  const load = async (companyId: string) => {
+    const res = await apiRequest(`/memberships/team?companyId=${encodeURIComponent(companyId)}`);
+    const team = (res.success && res.data) || { me: null, members: [], counts: { direct: 0, total: 0 } };
+    const me = team.me || memberships.find((m) => m.companyId === companyId) || null;
+    const companyOpts =
+      memberships.length > 1
+        ? `<div class="form-group" style="max-width:320px"><label for="teamCompany">Company network</label><select id="teamCompany">${memberships
+            .map((m) => `<option value="${esc(m.companyId)}" ${m.companyId === companyId ? 'selected' : ''}>${esc(m.companyName || 'Company')}</option>`)
+            .join('')}</select></div>`
+        : '';
+    const status = me?.status || 'active';
+
+    c.innerHTML = `
+      ${companyOpts}
+      <div class="card">
+        <h3>Your membership</h3>
+        <div class="grid">
+          <div><span class="empty">Member number</span><div>${badge(me?.memberNo || '—', 'info')}</div></div>
+          <div><span class="empty">Rank</span><div>${esc(me?.rankName || '—')}</div></div>
+          <div><span class="empty">Status</span><div>${statusBadge(status)}</div></div>
+          <div><span class="empty">Personal BV</span><div>${money(me?.personalBv || 0)}</div></div>
+          <div><span class="empty">Group BV</span><div>${money(me?.groupBv || 0)}</div></div>
+          <div><span class="empty">Downline</span><div>${team.counts.total || 0} (${team.counts.direct || 0} direct)</div></div>
+        </div>
+        <p class="empty" style="margin-top:10px">Your member number never expires. Pause or resume your activity at any time.</p>
+        <div class="row-actions">
+          ${
+            status === 'paused'
+              ? `<button class="btn btn-sm" data-status="active">${icon('play')}<span>Resume activity</span></button>`
+              : `<button class="btn btn-sm btn-outline" data-status="paused">${icon('pause')}<span>Pause activity</span></button>`
+          }
+          <button class="btn btn-sm" id="shareRecruit">${icon('share-2')}<span>Recruit members</span></button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Your downline</h3>
+        ${
+          (team.members || []).length
+            ? `<div class="table-wrap"><table><thead><tr><th>Member</th><th>Member no.</th><th>Rank</th><th>Status</th><th>Personal BV</th><th>Group BV</th><th>Joined</th></tr></thead><tbody>${team.members
+                .map(
+                  (m: any) => `<tr>
+                <td>${esc(m.memberName || '—')}${m.memberEmail ? ` <span class="empty">${esc(m.memberEmail)}</span>` : ''}</td>
+                <td>${badge(m.memberNo, 'info')}</td>
+                <td>${esc(m.rankName || '—')}</td>
+                <td>${statusBadge(m.status)}</td>
+                <td>${money(m.personalBv || 0)}</td>
+                <td>${money(m.groupBv || 0)}</td>
+                <td>${formatDate(m.joinedAt)}</td>
+              </tr>`
+                )
+                .join('')}</tbody></table></div>`
+            : '<p class="empty">No one in your downline yet. Share your code to recruit members.</p>'
+        }
+      </div>`;
+
+    const sel = c.querySelector('#teamCompany') as HTMLSelectElement | null;
+    if (sel) sel.onchange = () => load(sel.value);
+
+    c.querySelectorAll('[data-status]').forEach((b) =>
+      b.addEventListener('click', async () => {
+        const next = (b as HTMLElement).dataset.status!;
+        const res = await apiRequest(`/memberships/${me.id}`, { method: 'PUT', body: JSON.stringify({ status: next }) });
+        if (!res.success) return toast(res.message || 'Failed', 'error');
+        toast(next === 'paused' ? 'Activity paused' : 'Activity resumed', 'success');
+        load(companyId);
+      })
+    );
+
+    const share = c.querySelector('#shareRecruit');
+    if (share)
+      (share as HTMLElement).onclick = async () => {
+        const code = await getMyReferralCode();
+        await shareLink(shareUrl('register', code), me?.companyName || 'NetMark', `Join my ${me?.companyName || 'NetMark'} team`);
+      };
+  };
+
+  load(memberships[0].companyId);
+}
+
 async function catalog(c: HTMLElement) {
   c.innerHTML = '<p class="empty">Loading catalog…</p>';
   const [prodRes, storeRes] = await Promise.all([apiRequest('/products?pageSize=100&isActive=true'), myStores()]);
@@ -278,9 +371,19 @@ async function catalog(c: HTMLElement) {
             step: '0.01',
             value: product?.price,
             help: `Company price ${money(product?.price)} — set a higher price to earn a margin.`
+          },
+          {
+            name: 'mode',
+            label: 'How you source it',
+            type: 'select',
+            options: [
+              { value: 'add', label: 'Add (no upfront buy — earn retail − wholesale)' },
+              { value: 'wholesale', label: 'Wholesale (prepay stock, keep full retail)' }
+            ],
+            value: 'add',
+            help: 'Add: the company fulfils and you earn the margin per sale. Wholesale: buy stock first from the Buy From Company tab and keep the full retail.'
           }
         ],
-        submitLabel: 'Add to store',
         onSubmit: async (v) => {
           const res = await apiRequest('/store-products', { method: 'POST', body: JSON.stringify({ productId, ...v }) });
           if (!res.success) throw new Error(res.message || 'Failed');
@@ -302,6 +405,7 @@ function listings(c: HTMLElement) {
       { key: 'price', label: 'Retail', render: (r) => money(r.price) },
       { key: 'basePrice', label: 'Company', render: (r) => money(r.basePrice) },
       { key: 'margin', label: 'Margin', render: (r) => badge(money(r.margin), Number(r.margin) > 0 ? 'success' : 'neutral') },
+      { key: 'mode', label: 'Sourcing', render: (r) => badge(r.mode === 'wholesale' ? 'Wholesale' : 'Add', r.mode === 'wholesale' ? 'info' : 'neutral') },
       { key: 'companyLinked', label: 'Company link', render: (r) => (r.companyLinked ? statusBadge('active') : badge('Hidden — renew code', 'danger')) },
       { key: 'isActive', label: 'Active', render: (r) => statusBadge(r.isActive ? 'active' : 'inactive') }
     ],
@@ -313,7 +417,17 @@ function listings(c: HTMLElement) {
           openModal({
             title: `Retail price — ${row?.name || ''}`,
             fields: [
-              { name: 'price', label: 'Your retail price', type: 'number', step: '0.01', value: row?.price, help: `Company price ${money(row?.basePrice)}` }
+              { name: 'price', label: 'Your retail price', type: 'number', step: '0.01', value: row?.price, help: `Company price ${money(row?.basePrice)}` },
+              {
+                name: 'mode',
+                label: 'Sourcing',
+                type: 'select',
+                value: row?.mode || 'add',
+                options: [
+                  { value: 'add', label: 'Add — earn the retail−wholesale spread' },
+                  { value: 'wholesale', label: 'Wholesale — you own the stock, keep full retail' }
+                ]
+              }
             ],
             onSubmit: async (v) => {
               const res = await apiRequest(`/store-products/${id}`, { method: 'PUT', body: JSON.stringify(v) });

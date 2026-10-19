@@ -4,6 +4,7 @@ import { getSupabase, rowOut } from '../db';
 import { verifySupabaseToken, loadUser } from '../middleware';
 import { capabilitiesFor } from '../permissions';
 import { rateLimit, rateLimitFail } from '../rateLimit';
+import { ensureMembership } from '../ranks';
 
 function clientKey(req: VercelRequest, suffix = '') {
   const ip = (req.headers['x-forwarded-for'] as string) || (req.headers['x-real-ip'] as string) || (req.socket as any)?.remoteAddress || 'unknown';
@@ -225,6 +226,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             { onConflict: 'store_owner_id,company_id' }
           );
           if (linkErr) console.error('register company_link error', linkErr);
+        }
+
+        // A signup code that names a company recruits the new member into that
+        // company's downline, sponsored by whoever issued the code.
+        try {
+          await ensureMembership(sb, {
+            companyId: codeRow.company_id,
+            userId: uid,
+            sponsorId: codeRow.distributor_id || null,
+            tenantId: resolvedTenantId
+          });
+        } catch (memberErr) {
+          console.error('register membership error', memberErr);
         }
       }
 

@@ -12,6 +12,7 @@
   "crons": [
     { "path": "/api/cron/autoship", "schedule": "0 6 * * *" },
     { "path": "/api/cron/commissions", "schedule": "0 7 * * *" },
-    { "path": "/api/cron/plans", "schedule": "0 8 * * *" }
+    { "path": "/api/cron/plans", "schedule": "0 8 * * *" },
+    { "path": "/api/cron/memberships", "schedule": "0 9 * * *" }
   ]
 }

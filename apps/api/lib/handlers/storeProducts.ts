@@ -5,6 +5,12 @@ import { recordAudit } from '../audit';
 import { storeIdsForUser } from '../scope';
 import { validCompanyIdsForOwner, validLinkKeysForOwners } from '../companyLinks';
 
+/** True when the DB hasn't run migration 017 yet (no store_products.mode). */
+function missingModeColumn(err: any) {
+  const msg = String(err?.message || '');
+  return err?.code === '42703' || err?.code === 'PGRST204' || /column .*\bmode\b/i.test(msg);
+}
+
 /**
  * Store product listings — the bridge between a company's catalog and the
  * storefronts that sell it.
@@ -33,6 +39,10 @@ async function decorate(sb: any, listings: any[]) {
     const s: any = storeMap.get(l.store_id) || {};
     const basePrice = Number(p.price || 0);
     const price = l.price != null ? Number(l.price) : basePrice;
+    const mode = l.mode === 'wholesale' ? 'wholesale' : 'add';
+    // 'add' earns the retail−wholesale spread on each sale; 'wholesale' means
+    // the store owner prepaid for stock and keeps the full retail.
+    const earningPerUnit = mode === 'wholesale' ? price : Math.max(0, price - basePrice);
     return {
       id: l.id,
       storeId: l.store_id,
@@ -41,7 +51,9 @@ async function decorate(sb: any, listings: any[]) {
       companyName: compMap.get(l.company_id)?.name || null,
       price,
       basePrice,
+      mode,
       margin: Math.round((price - basePrice) * 100) / 100,
+      earningPerUnit: Math.round(earningPerUnit * 100) / 100,
       isActive: l.is_active !== false,
       name: p.name,
       sku: p.sku,
@@ -133,9 +145,10 @@ export default authed(async (req, res, ctx) => {
   /* -------------------------------- POST --------------------------------- */
   if (slug.length === 0 && req.method === 'POST') {
     if (!canWrite) return fail(res, 'Forbidden', 403);
-    const { storeId, productId, price, isActive } = req.body || {};
+    const { storeId, productId, price, isActive, mode } = req.body || {};
     if (!storeId || !productId) return fail(res, 'Store and product are required');
     if (!(await ownsStore(storeId))) return fail(res, 'Store not found', 403);
+    const listingMode = mode === 'wholesale' ? 'wholesale' : 'add';
 
     const { data: product } = await sb.from('products').select('*').eq('id', productId).maybeSingle();
     if (!product) return fail(res, 'Product not found', 404);
@@ -159,28 +172,51 @@ export default authed(async (req, res, ctx) => {
       .maybeSingle();
 
     if (existing) {
-      const { data } = await sb
+      let { data, error } = await sb
         .from('store_products')
-        .update({ price: retail, is_active: isActive !== false })
+        .update({ price: retail, mode: listingMode, is_active: isActive !== false })
         .eq('id', existing.id)
         .select('*')
         .single();
+      if (error && missingModeColumn(error)) {
+        ({ data, error } = await sb
+          .from('store_products')
+          .update({ price: retail, is_active: isActive !== false })
+          .eq('id', existing.id)
+          .select('*')
+          .single());
+      }
+      if (error) return fail(res, 'Could not update listing');
       await recordAudit(req, { action: 'listing.update', entityType: 'store_product', entityId: existing.id, after: rowOut(data) });
       const [out] = await decorate(sb, [data]);
       return ok(res, { data: out });
     }
 
-    const { data, error } = await sb
+    let { data, error } = await sb
       .from('store_products')
       .insert({
         store_id: storeId,
         product_id: productId,
         company_id: product.company_id || null,
         price: retail,
+        mode: listingMode,
         is_active: isActive !== false
       })
       .select('*')
       .single();
+    if (error && missingModeColumn(error)) {
+      ({ data, error } = await sb
+        .from('store_products')
+        .insert({
+          store_id: storeId,
+          product_id: productId,
+          company_id: product.company_id || null,
+          price: retail,
+          is_active: isActive !== false
+        })
+        .select('*')
+        .single());
+    }
     if (error) return fail(res, 'Could not add product to store');
     await recordAudit(req, { action: 'listing.create', entityType: 'store_product', entityId: data.id, after: rowOut(data) });
     const [out] = await decorate(sb, [data]);
@@ -197,8 +233,14 @@ export default authed(async (req, res, ctx) => {
     const b = req.body || {};
     const patch: any = {};
     if (b.price !== undefined) patch.price = b.price === '' || b.price == null ? null : Number(b.price);
+    if (b.mode !== undefined) patch.mode = b.mode === 'wholesale' ? 'wholesale' : 'add';
     if (b.isActive !== undefined) patch.is_active = b.isActive;
-    const { data: after } = await sb.from('store_products').update(patch).eq('id', id).select('*').single();
+    let { data: after, error: putErr } = await sb.from('store_products').update(patch).eq('id', id).select('*').single();
+    if (putErr && missingModeColumn(putErr) && patch.mode !== undefined) {
+      delete patch.mode;
+      ({ data: after, error: putErr } = await sb.from('store_products').update(patch).eq('id', id).select('*').single());
+    }
+    if (putErr) return fail(res, 'Could not update listing');
     await recordAudit(req, { action: 'listing.update', entityType: 'store_product', entityId: id, after: rowOut(after) });
     const [out] = await decorate(sb, [after]);
     return ok(res, { data: out });

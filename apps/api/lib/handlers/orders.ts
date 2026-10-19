@@ -5,7 +5,8 @@ import { recordAudit } from '../audit';
 import { notify } from '../notify';
 import { storeIdsForUser } from '../scope';
 import { validLinkKeysForOwners } from '../companyLinks';
-import { payOrderCommissions, reverseCommissions } from '../commissionEngine';
+import { payOrderCommissions, payStoreMargins, reverseCommissions } from '../commissionEngine';
+import { applyVolume } from '../ranks';
 import { dispatchWebhook } from '../webhooks';
 
 const ORDER_STATUSES = ['pending', 'confirmed', 'ready', 'completed', 'cancelled'];
@@ -226,6 +227,15 @@ export default authed(async (req, res, ctx) => {
     if (status === 'completed' && before.order_status !== 'completed') {
       try {
         await payOrderCommissions(sb, before);
+        // Store owner's direct profit margin (add: retail-wholesale; wholesale: full retail).
+        await payStoreMargins(sb, before);
+        // Volume (BV) accrues to the buyer and their company downline.
+        await applyVolume(sb, {
+          companyId: before.company_id || null,
+          userId: before.customer_id || before.user_id,
+          bv: Number(before.subtotal_excl_vat ?? before.subtotal ?? 0),
+          tenantId: before.tenant_id || null
+        });
       } catch (err: any) {
         console.error('commission payout failed', id, err?.message || err);
       }
@@ -235,6 +245,7 @@ export default authed(async (req, res, ctx) => {
     if (status === 'cancelled' && before.order_status !== 'cancelled') {
       try {
         await reverseCommissions(sb, 'order', id, `Order ${before.order_number || ''} cancelled`.trim());
+        await reverseCommissions(sb, 'order_margin', id, `Order ${before.order_number || ''} cancelled`.trim());
       } catch (err: any) {
         console.error('commission reversal failed', id, err?.message || err);
       }
@@ -280,6 +291,7 @@ export default authed(async (req, res, ctx) => {
         const { data: after } = await sb.from('orders').update({ order_status: 'cancelled' }).eq('id', id).select('*').single();
         await recordAudit(req, { action: 'order.cancel', entityType: 'order', entityId: id });
         await reverseCommissions(sb, 'order', id, `Order ${before.order_number || ''} cancelled`.trim()).catch(() => {});
+        await reverseCommissions(sb, 'order_margin', id, `Order ${before.order_number || ''} cancelled`.trim()).catch(() => {});
         return ok(res, { data: rowOut(after) });
       }
       return fail(res, 'Forbidden', 403);
@@ -295,6 +307,7 @@ export default authed(async (req, res, ctx) => {
     await recordAudit(req, { action: 'order.update', entityType: 'order', entityId: id, before: rowOut(before), after: rowOut(after) });
     if (patch.order_status === 'cancelled' && before.order_status !== 'cancelled') {
       await reverseCommissions(sb, 'order', id, `Order ${before.order_number || ''} cancelled`.trim()).catch(() => {});
+      await reverseCommissions(sb, 'order_margin', id, `Order ${before.order_number || ''} cancelled`.trim()).catch(() => {});
     }
     return ok(res, { data: rowOut(after) });
   }
@@ -312,6 +325,7 @@ export default authed(async (req, res, ctx) => {
       .single();
     await recordAudit(req, { action: 'order.refund', entityType: 'order', entityId: id, after: { amount } });
     await reverseCommissions(sb, 'order', id, `Order ${before.order_number || ''} refunded`.trim()).catch(() => {});
+    await reverseCommissions(sb, 'order_margin', id, `Order ${before.order_number || ''} refunded`.trim()).catch(() => {});
     if (before.customer_id) {
       await notify({ userId: before.customer_id, type: 'payment', title: 'Refund issued', body: `A refund of ${amount} was issued for order ${before.order_number}.`, data: { orderId: id } });
     }
