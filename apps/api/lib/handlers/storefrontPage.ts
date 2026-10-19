@@ -18,7 +18,11 @@ import { loadStorefront, storefrontUrl, StorefrontData } from './storefront';
  */
 
 const WEB_BASE = (process.env.WEB_BASE_URL || 'https://netmark.re-el.co.za').replace(/\/+$/, '');
-const CACHE_TTL = 5 * 60 * 1000;
+// The static site's asset filenames are content-hashed and change on every
+// deploy, so cache the shell only briefly — a long TTL would serve links to
+// chunks that no longer exist. Server-rendered body content keeps the page
+// usable even during this short window.
+const CACHE_TTL = 60 * 1000;
 let baseCache = '';
 let baseCachedAt = 0;
 
@@ -210,7 +214,7 @@ async function fetchBase(): Promise<string> {
   const now = Date.now();
   if (baseCache && now - baseCachedAt < CACHE_TTL) return baseCache;
   try {
-    const res = await fetch(`${WEB_BASE}/storefront/`);
+    const res = await fetch(`${WEB_BASE}/storefront/`, { cache: 'no-store' });
     if (res.ok) {
       baseCache = await res.text();
       baseCachedAt = now;
