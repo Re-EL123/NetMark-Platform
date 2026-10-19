@@ -7,14 +7,22 @@ import { rateLimit, rateLimitFail } from '../rateLimit';
  * Public storefront endpoint.
  *
  * Everything here is unauthenticated: a store owner shares a link like
- * `/storefront/?s=<slug>` and any visitor (and search-engine crawler) can load
- * the landing page without an account. We therefore expose only a curated,
- * whitelisted subset of the store's data — never the raw `stores` row or its
- * full `settings` blob.
+ * `/s/<slug>` and any visitor (and search-engine crawler) can load the landing
+ * page without an account. We therefore expose only a curated, whitelisted
+ * subset of the store's data — never the raw `stores` row or its full
+ * `settings` blob.
  *
  * Storefront configuration lives in `stores.settings.storefront` (a jsonb
  * merge on PUT /stores/<id>), so no migration is required.
  */
+
+export interface StorefrontData {
+  store: any;
+  storefront: ReturnType<typeof publicStorefront>;
+  products: any[];
+  ratings: { average: number; count: number };
+  reviews: any[];
+}
 
 function clientKey(req: VercelRequest) {
   const ip =
@@ -71,8 +79,17 @@ function xmlEscape(v: any): string {
     .replace(/'/g, '&apos;');
 }
 
-function siteBase(): string {
-  return (process.env.PUBLIC_SITE_URL || 'https://netmark.re-el.co.za').replace(/\/+$/, '');
+/** Base URL for canonical/shareable storefront links (the SSR host). */
+export function storefrontBase(): string {
+  return (
+    process.env.STOREFRONT_BASE_URL ||
+    process.env.API_PUBLIC_URL ||
+    'https://netmark-api.vercel.app'
+  ).replace(/\/+$/, '');
+}
+
+export function storefrontUrl(slug: string): string {
+  return `${storefrontBase()}/s/${encodeURIComponent(slug)}`;
 }
 
 /** First name only — reviews are public, so we don't expose full names. */
@@ -93,77 +110,18 @@ async function resolveStore(sb: any, ref: string) {
   return store;
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-
-  const slug = Array.isArray(req.query.slug) ? req.query.slug : [String(req.query.slug || '')];
-  const ref = String(slug[0] || '').trim();
-
-  if (!rateLimit(clientKey(req), { windowMs: 60000, max: 180 })) return rateLimitFail(res);
-
-  const sb = getSupabase();
-
-  // GET /api/storefront/sitemap -> XML index of every enabled storefront.
-  if (ref === 'sitemap' || ref === 'sitemap.xml') {
-    if (req.method !== 'GET') return res.status(405).json({ success: false, message: 'Method not allowed' });
-    const { data } = await sb
-      .from('stores')
-      .select('slug,updated_at,settings')
-      .eq('is_active', true)
-      .limit(5000);
-    const base = siteBase();
-    const urls = (data || [])
-      .filter((s: any) => s.slug && (s.settings?.storefront?.enabled !== false))
-      .map((s: any) => {
-        const loc = `${base}/storefront/?s=${encodeURIComponent(s.slug)}`;
-        const lastmod = s.updated_at ? String(s.updated_at).slice(0, 10) : '';
-        return `<url><loc>${xmlEscape(loc)}</loc>${lastmod ? `<lastmod>${xmlEscape(lastmod)}</lastmod>` : ''}<changefreq>weekly</changefreq></url>`;
-      })
-      .join('');
-    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    return res
-      .status(200)
-      .send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
-  }
-
-  if (!ref) return res.status(400).json({ success: false, message: 'Missing store reference' });
-
-  // POST /api/storefront/:slug/event — best-effort, anonymous analytics counter.
-  if (String(slug[1] || '') === 'event') {
-    if (req.method !== 'POST') return res.status(405).json({ success: false, message: 'Method not allowed' });
-    if (!rateLimit(`storefront-event:${clientKey(req)}`, { windowMs: 60000, max: 300 })) return rateLimitFail(res);
-    const type = String((req.body || {}).type || '');
-    if (!EVENT_TYPES.has(type)) return res.status(400).json({ success: false, message: 'Unknown event type' });
-    const store = await resolveStore(sb, ref);
-    if (!store || store.is_active === false) return res.status(404).json({ success: false, message: 'Storefront not found' });
-    const settings = store.settings && typeof store.settings === 'object' ? store.settings : {};
-    const sf = settings.storefront && typeof settings.storefront === 'object' ? settings.storefront : {};
-    if (sf.enabled === false) return res.status(404).json({ success: false, message: 'This storefront is not available' });
-    const stats = settings.storefrontStats && typeof settings.storefrontStats === 'object' ? settings.storefrontStats : {};
-    const next = {
-      ...stats,
-      [type]: Number(stats[type] || 0) + 1,
-      lastEventAt: new Date().toISOString()
-    };
-    await sb.from('stores').update({ settings: { ...settings, storefrontStats: next } }).eq('id', store.id);
-    return res.status(200).json({ success: true });
-  }
-
-  if (req.method !== 'GET') return res.status(405).json({ success: false, message: 'Method not allowed' });
-
+/**
+ * Load everything the public storefront needs. Returns null when the store is
+ * missing, inactive or its storefront is switched off. Shared by the JSON
+ * endpoint and the server-rendered page so their output never diverges.
+ */
+export async function loadStorefront(sb: any, ref: string): Promise<StorefrontData | null> {
+  if (!ref) return null;
   const store = await resolveStore(sb, ref);
-  if (!store || store.is_active === false) {
-    return res.status(404).json({ success: false, message: 'Storefront not found' });
-  }
+  if (!store || store.is_active === false) return null;
 
   const storefront = publicStorefront(store);
-  if (!storefront.enabled) {
-    return res.status(404).json({ success: false, message: 'This storefront is not available' });
-  }
+  if (!storefront.enabled) return null;
 
   let products: any[] = [];
   if (storefront.showProducts) {
@@ -196,7 +154,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .filter(Boolean);
 
     if (storefront.featured.length) {
-      const order = new Map<string, number>(storefront.featured.map((id: string, i: number) => [id, i] as [string, number]));
+      const order = new Map<string, number>(
+        storefront.featured.map((id: string, i: number) => [id, i] as [string, number])
+      );
       products.sort((a: any, b: any) => (order.get(a.id) ?? 9999) - (order.get(b.id) ?? 9999));
     }
   }
@@ -231,20 +191,81 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     /* reviews not available — storefront still renders */
   }
 
+  return { store, storefront, products, ratings, reviews };
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  applyCors(res);
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
+  const slug = Array.isArray(req.query.slug) ? req.query.slug : [String(req.query.slug || '')];
+  const ref = String(slug[0] || '').trim();
+
+  if (!rateLimit(clientKey(req), { windowMs: 60000, max: 180 })) return rateLimitFail(res);
+
+  const sb = getSupabase();
+
+  // GET /api/storefront/sitemap -> XML index of every enabled storefront.
+  if (ref === 'sitemap' || ref === 'sitemap.xml') {
+    if (req.method !== 'GET') return res.status(405).json({ success: false, message: 'Method not allowed' });
+    const { data } = await sb
+      .from('stores')
+      .select('slug,updated_at,settings')
+      .eq('is_active', true)
+      .limit(5000);
+    const urls = (data || [])
+      .filter((s: any) => s.slug && s.settings?.storefront?.enabled !== false)
+      .map((s: any) => {
+        const loc = storefrontUrl(s.slug);
+        const lastmod = s.updated_at ? String(s.updated_at).slice(0, 10) : '';
+        return `<url><loc>${xmlEscape(loc)}</loc>${lastmod ? `<lastmod>${xmlEscape(lastmod)}</lastmod>` : ''}<changefreq>weekly</changefreq></url>`;
+      })
+      .join('');
+    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res
+      .status(200)
+      .send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
+  }
+
+  if (!ref) return res.status(400).json({ success: false, message: 'Missing store reference' });
+
+  // POST /api/storefront/:slug/event — best-effort, anonymous analytics counter.
+  if (String(slug[1] || '') === 'event') {
+    if (req.method !== 'POST') return res.status(405).json({ success: false, message: 'Method not allowed' });
+    if (!rateLimit(`storefront-event:${clientKey(req)}`, { windowMs: 60000, max: 300 })) return rateLimitFail(res);
+    const type = String((req.body || {}).type || '');
+    if (!EVENT_TYPES.has(type)) return res.status(400).json({ success: false, message: 'Unknown event type' });
+    const store = await resolveStore(sb, ref);
+    if (!store || store.is_active === false) return res.status(404).json({ success: false, message: 'Storefront not found' });
+    const settings = store.settings && typeof store.settings === 'object' ? store.settings : {};
+    const sf = settings.storefront && typeof settings.storefront === 'object' ? settings.storefront : {};
+    if (sf.enabled === false) return res.status(404).json({ success: false, message: 'This storefront is not available' });
+    const stats = settings.storefrontStats && typeof settings.storefrontStats === 'object' ? settings.storefrontStats : {};
+    const next = { ...stats, [type]: Number(stats[type] || 0) + 1, lastEventAt: new Date().toISOString() };
+    await sb.from('stores').update({ settings: { ...settings, storefrontStats: next } }).eq('id', store.id);
+    return res.status(200).json({ success: true });
+  }
+
+  if (req.method !== 'GET') return res.status(405).json({ success: false, message: 'Method not allowed' });
+
+  const data = await loadStorefront(sb, ref);
+  if (!data) return res.status(404).json({ success: false, message: 'Storefront not found' });
+
   res.setHeader('Cache-Control', 'public, max-age=120, stale-while-revalidate=600');
   return res.status(200).json({
     success: true,
     data: {
       store: {
-        id: store.id,
-        name: store.name || '',
-        slug: store.slug || store.id,
-        url: `${siteBase()}/storefront/?s=${encodeURIComponent(store.slug || store.id)}`
+        id: data.store.id,
+        name: data.store.name || '',
+        slug: data.store.slug || data.store.id,
+        url: storefrontUrl(data.store.slug || data.store.id)
       },
-      storefront,
-      products,
-      ratings,
-      reviews
+      storefront: data.storefront,
+      products: data.products,
+      ratings: data.ratings,
+      reviews: data.reviews
     }
   });
 }

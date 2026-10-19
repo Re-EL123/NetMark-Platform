@@ -245,17 +245,16 @@ async function main() {
   const ratings = body.data.ratings || { average: 0, count: 0 };
   const reviews: Review[] = body.data.reviews || [];
   activeRef = store.slug;
-  const origin = location.origin;
-  const base = import.meta.env.BASE_URL || '/';
-  const basePath = base.endsWith('/') ? base.slice(0, -1) : base;
-  const pageUrl = `${origin}${basePath}/storefront/?s=${encodeURIComponent(store.slug)}`;
+  // Canonical + share URL points at the server-rendered page so link previews
+  // carry the store's meta regardless of which host renders this client.
+  const pageUrl = `${API_BASE_URL.replace(/\/api\/?$/, '')}/s/${encodeURIComponent(store.slug)}`;
   const refCode = getReferralCode();
   const shareUrl = refCode ? `${pageUrl}&ref=${encodeURIComponent(refCode)}` : pageUrl;
 
   const title = sf.metaTitle || `${store.name}${sf.tagline ? ' — ' + sf.tagline : ''}`;
   const description =
     sf.metaDescription || sf.tagline || sf.about.slice(0, 160) || `Browse products from ${store.name}.`;
-  const image = sf.banner || sf.logo || `${origin}${base}favicon.png`;
+  const image = sf.banner || sf.logo || '';
 
   document.title = title;
   setMeta('name', 'description', description);
@@ -266,11 +265,11 @@ async function main() {
   setMeta('property', 'og:title', title);
   setMeta('property', 'og:description', description);
   setMeta('property', 'og:url', pageUrl);
-  setMeta('property', 'og:image', image);
-  setMeta('name', 'twitter:card', 'summary_large_image');
+  if (image) setMeta('property', 'og:image', image);
+  setMeta('name', 'twitter:card', image ? 'summary_large_image' : 'summary');
   setMeta('name', 'twitter:title', title);
   setMeta('name', 'twitter:description', description);
-  setMeta('name', 'twitter:image', image);
+  if (image) setMeta('name', 'twitter:image', image);
   setCanonical(pageUrl);
   document.documentElement.style.setProperty('--sf-accent', sf.themeColor || '#e50914');
 

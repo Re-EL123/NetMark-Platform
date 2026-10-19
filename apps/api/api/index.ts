@@ -4,6 +4,7 @@ import users from '../lib/handlers/users';
 import companies from '../lib/handlers/companies';
 import stores from '../lib/handlers/stores';
 import storefront from '../lib/handlers/storefront';
+import storefrontPage from '../lib/handlers/storefrontPage';
 import products from '../lib/handlers/products';
 import storeProducts from '../lib/handlers/storeProducts';
 import purchases from '../lib/handlers/purchases';
@@ -86,6 +87,15 @@ const handlers: Record<string, Handler> = {
   // normalized to an array (what each handler expects).
   const rawUrl = req.url || '';
   const pathOnly = rawUrl.split('?')[0];
+
+  // Server-rendered storefront pages live at /s/<slug> (see vercel.json).
+  // Handled here rather than in a separate file so we still deploy a single
+  // serverless function.
+  if (pathOnly === '/s' || pathOnly.startsWith('/s/')) {
+    const slug = decodeURIComponent(pathOnly.replace(/^\/s\/?/, '').split('/')[0] || '');
+    return storefrontPage(req, res, slug);
+  }
+
   const parts = pathOnly.replace(/^\/api\/?/, '').split('/').filter(Boolean);
 
   if (parts.length === 0) {
