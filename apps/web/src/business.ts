@@ -27,8 +27,7 @@ const nav: NavItem[] = [
   { id: 'purchases', label: 'Buy From Company', group: 'Sales', capability: 'orders.read', icon: 'shopping-bag' },
   { id: 'orders', label: 'Orders', group: 'Sales', capability: 'orders.read', icon: 'receipt' },
   { id: 'appointments', label: 'Appointments', group: 'Sales', capability: 'appointments.read', icon: 'calendar-clock' },
-  { id: 'referrals', label: 'Referrals', group: 'Growth', capability: 'referrals.read', icon: 'share-2' },
-  { id: 'team', label: 'My Team', group: 'Growth', capability: 'referrals.read', icon: 'users' },
+  { id: 'referrals', label: 'Referrals & Network', group: 'Growth', capability: 'referrals.read', icon: 'share-2' },
   { id: 'wallet', label: 'Wallet', group: 'Finance', icon: 'wallet' },
   { id: 'reports', label: 'Reports', group: 'Finance', capability: 'reports.read', icon: 'bar-chart-3' }
 ];
@@ -52,8 +51,7 @@ initPanel({
     if (route === 'purchases') return purchases(c);
     if (route === 'orders') return orders(c);
     if (route === 'appointments') return appointments(c);
-    if (route === 'referrals') return renderReferrals(c);
-    if (route === 'team') return team(c);
+    if (route === 'referrals' || route === 'team') return referrals(c);
     if (route === 'wallet') return renderWallet(c);
     if (route === 'reports') return reports(c);
   }
@@ -220,6 +218,19 @@ function companies(c: HTMLElement) {
   }
 
   load();
+}
+
+/**
+ * Store-owner Growth page: the referral link/earnings dashboard plus the
+ * member's own downline network (recruited members, ranks, personal/group BV)
+ * in each company they buy from.
+ */
+async function referrals(c: HTMLElement) {
+  await renderReferrals(c);
+  const section = document.createElement('div');
+  section.id = 'network';
+  c.appendChild(section);
+  await team(section);
 }
 
 async function team(c: HTMLElement) {
