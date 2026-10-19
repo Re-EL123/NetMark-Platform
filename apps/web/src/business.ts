@@ -8,6 +8,7 @@ import { overviewStats, renderOverviewCharts } from './dashboard';
 import { renderReferrals } from './referralsView';
 import { renderWallet } from './walletView';
 import { getMyReferralCode, shareLink, shareUrl } from './referral';
+import { qrSvg, downloadQrPng, downloadQrSvg } from './qr';
 
 function opts(values: string[]) {
   return values.map((v) => ({ value: v, label: titleCase(v) }));
@@ -732,18 +733,25 @@ async function storefront(c: HTMLElement) {
           const sf = sfConfig(r);
           const enabled = sf.enabled !== false && r.isActive;
           const url = storefrontLink(r.slug, refCode);
+          const st = (r.settings && r.settings.storefrontStats) || {};
+          const views = Number(st.view || 0);
+          const contacts = Number(st.contact || 0);
+          const featuredCount = Array.isArray(sf.featured) ? sf.featured.length : 0;
           return `<div class="card">
             <div style="display:flex;gap:14px;align-items:center">
               ${r.logo ? `<img src="${esc(r.logo)}" alt="" style="width:46px;height:46px;border-radius:12px;object-fit:cover" />` : `<span class="badge" style="width:46px;height:46px;display:inline-flex;align-items:center;justify-content:center;font-size:20px">${esc((r.name || '?').charAt(0).toUpperCase())}</span>`}
               <div style="flex:1;min-width:0">
                 <h3 style="margin:0 0 4px">${esc(r.name)} ${badge(enabled ? 'Live' : r.isActive ? 'Disabled' : 'Store inactive', enabled ? 'success' : 'warning')}</h3>
                 <div class="empty" style="word-break:break-all;font-size:12px">${esc(url)}</div>
+                <div class="empty" style="font-size:12px;margin-top:6px">${icon('eye')} ${views} view${views === 1 ? '' : 's'} · ${icon('message-circle')} ${contacts} contact${contacts === 1 ? '' : 's'} · ${icon('star')} ${featuredCount} featured</div>
               </div>
             </div>
             <div class="row-actions" style="justify-content:flex-start;flex-wrap:wrap;margin-top:14px">
               <button class="btn btn-sm" data-sf-open="${esc(r.id)}">${icon('external-link')}<span>Open</span></button>
               <button class="btn btn-sm btn-ghost" data-sf-copy="${esc(r.id)}">${icon('copy')}<span>Copy link</span></button>
+              <button class="btn btn-sm btn-ghost" data-sf-qr="${esc(r.id)}">${icon('qr-code')}<span>QR code</span></button>
               <button class="btn btn-sm btn-ghost" data-sf-share="${esc(r.id)}">${icon('share-2')}<span>Share</span></button>
+              <button class="btn btn-sm btn-ghost" data-sf-featured="${esc(r.id)}">${icon('star')}<span>Featured</span></button>
               <button class="btn btn-sm btn-ghost" data-sf-edit="${esc(r.id)}">${icon('pencil')}<span>Edit page</span></button>
               <button class="btn btn-sm btn-ghost" data-sf-toggle="${esc(r.id)}">${icon('power')}<span>${sf.enabled === false ? 'Enable' : 'Disable'}</span></button>
             </div>
@@ -798,9 +806,89 @@ async function storefront(c: HTMLElement) {
         if (r) editStorefront(r, render);
       };
     });
+    c.querySelectorAll('[data-sf-qr]').forEach((el) => {
+      (el as HTMLElement).onclick = () => {
+        const r = byId((el as HTMLElement).dataset.sfQr!);
+        if (r) showStorefrontQr(r, refCode);
+      };
+    });
+    c.querySelectorAll('[data-sf-featured]').forEach((el) => {
+      (el as HTMLElement).onclick = () => {
+        const r = byId((el as HTMLElement).dataset.sfFeatured!);
+        if (r) editFeatured(r, render);
+      };
+    });
   };
 
   render();
+}
+
+function showStorefrontQr(r: any, refCode: string | null) {
+  const url = storefrontLink(r.slug, refCode);
+  void openModal({
+    title: `QR code — ${r.name}`,
+    submitLabel: 'Done',
+    html: `<div style="text-align:center">
+      <div style="display:inline-block;background:#fff;padding:14px;border-radius:14px">${qrSvg(url, 5, 2)}</div>
+      <p class="empty" style="word-break:break-all;font-size:12px;margin-top:14px">${esc(url)}</p>
+      <div class="row-actions" style="justify-content:center;margin-top:12px">
+        <button type="button" class="btn btn-sm" data-qr-png>Download PNG</button>
+        <button type="button" class="btn btn-sm btn-ghost" data-qr-svg>Download SVG</button>
+      </div>
+      <p class="empty" style="font-size:12px;margin-top:10px">Print it on signage, flyers or packaging so customers can scan straight to your storefront.</p>
+    </div>`,
+    onMount: (body) => {
+      (body.querySelector('[data-qr-png]') as HTMLElement | null)?.addEventListener('click', () =>
+        downloadQrPng(url, `storefront-${r.slug}.png`)
+      );
+      (body.querySelector('[data-qr-svg]') as HTMLElement | null)?.addEventListener('click', () =>
+        downloadQrSvg(url, `storefront-${r.slug}.svg`)
+      );
+    },
+    onSubmit: () => undefined
+  });
+}
+
+function editFeatured(r: any, done: () => void) {
+  const sf = sfConfig(r);
+  const selected = new Set<string>(Array.isArray(sf.featured) ? sf.featured : []);
+  let box: HTMLElement | null = null;
+  void openModal({
+    title: `Featured products — ${r.name}`,
+    wide: true,
+    submitLabel: 'Save featured',
+    html: `<div id="sfFeatList"><p class="empty">Loading products…</p></div>
+      <p class="empty" style="font-size:12px;margin-top:10px">Featured products appear first on your storefront page.</p>`,
+    onMount: async (body) => {
+      box = body.querySelector('#sfFeatList') as HTMLElement;
+      const res = await apiRequest(`/store-products?storeId=${encodeURIComponent(r.id)}&pageSize=200`);
+      const rows: any[] = (res.success && res.data) || [];
+      if (!box) return;
+      if (!rows.length) {
+        box.innerHTML = '<p class="empty">No products listed yet. Add products under “My Store Products” first.</p>';
+        return;
+      }
+      box.innerHTML = `<div class="sf-feat-pick">${rows
+        .map(
+          (l) => `<label class="sf-feat-item">
+            <input type="checkbox" value="${esc(l.id)}" ${selected.has(l.id) ? 'checked' : ''} />
+            ${l.image ? `<img src="${esc(l.image)}" alt="" />` : '<span class="sf-feat-ph"></span>'}
+            <span class="sf-feat-name">${esc(l.name)}</span>
+            <span class="empty">${money(l.price)}</span>
+          </label>`
+        )
+        .join('')}</div>`;
+    },
+    onSubmit: async () => {
+      const ids = Array.from(box?.querySelectorAll('input[type=checkbox]:checked') || []).map((el) => (el as HTMLInputElement).value);
+      const next = { ...sfConfig(r), featured: ids };
+      const res = await apiRequest(`/stores/${r.id}`, { method: 'PUT', body: JSON.stringify({ settings: { storefront: next } }) });
+      if (!res.success) throw new Error(res.message || 'Could not save featured products');
+      if (res.data) r.settings = res.data.settings;
+      toast('Featured products saved', 'success');
+      done();
+    }
+  });
 }
 
 function editStorefront(r: any, done: () => void) {

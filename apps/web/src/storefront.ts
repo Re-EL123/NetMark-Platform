@@ -43,10 +43,65 @@ interface StorefrontConfig {
   social: Record<string, string>;
 }
 
+interface Review {
+  rating: number;
+  comment: string;
+  createdAt: string | null;
+  author: string;
+}
+
 interface Payload {
   store: { id: string; name: string; slug: string; url: string };
   storefront: StorefrontConfig;
   products: Product[];
+  ratings: { average: number; count: number };
+  reviews: Review[];
+}
+
+let activeRef = '';
+
+/** Anonymous, best-effort analytics ping. Never blocks or breaks the page. */
+function beacon(type: 'view' | 'contact' | 'share' | 'product', ref: string) {
+  if (!ref) return;
+  const url = `${API_BASE_URL}/storefront/${encodeURIComponent(ref)}/event`;
+  try {
+    const body = JSON.stringify({ type });
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
+      return;
+    }
+    void fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true });
+  } catch {
+    /* ignore */
+  }
+}
+
+function starsHtml(rating: number): string {
+  const rounded = Math.max(0, Math.min(5, Math.round(Number(rating) || 0)));
+  let out = '';
+  for (let i = 1; i <= 5; i++) {
+    out += `<span class="sf-star${i <= rounded ? ' on' : ''}">★</span>`;
+  }
+  return `<span class="sf-stars" aria-label="${rounded} out of 5">${out}</span>`;
+}
+
+function reviewCard(rv: Review): string {
+  return `<article class="sf-review">
+    <div class="sf-review-head">
+      <span class="sf-review-author">${esc(rv.author)}</span>
+      ${starsHtml(rv.rating)}
+    </div>
+    ${rv.comment ? `<p class="sf-review-body">${esc(rv.comment)}</p>` : ''}
+    ${rv.createdAt ? `<time class="sf-review-date">${esc(formatDate(rv.createdAt))}</time>` : ''}
+  </article>`;
+}
+
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString();
+  } catch {
+    return '';
+  }
 }
 
 function escAttr(v: any): string {
@@ -187,6 +242,9 @@ async function main() {
   if (!res.ok || !body?.success) return notFound(body?.message);
 
   const { store, storefront: sf, products } = body.data as Payload;
+  const ratings = body.data.ratings || { average: 0, count: 0 };
+  const reviews: Review[] = body.data.reviews || [];
+  activeRef = store.slug;
   const origin = location.origin;
   const base = import.meta.env.BASE_URL || '/';
   const basePath = base.endsWith('/') ? base.slice(0, -1) : base;
@@ -239,6 +297,7 @@ async function main() {
       <nav>
         ${showProducts ? `<a href="#products">Products</a>` : ''}
         ${sf.about ? `<a href="#about">About</a>` : ''}
+        ${ratings.count ? `<a href="#reviews">Reviews</a>` : ''}
         <a href="#contact">Contact</a>
       </nav>
       <button class="sf-share" id="sfShare" type="button">Share</button>
@@ -267,6 +326,19 @@ async function main() {
           ? `<section class="sf-section" id="about">
               <h2>About ${esc(storeName)}</h2>
               <p>${esc(sf.about).replace(/\n/g, '<br />')}</p>
+            </section>`
+          : ''
+      }
+      ${
+        ratings.count
+          ? `<section class="sf-section" id="reviews">
+              <h2>Reviews</h2>
+              <div class="sf-rating-summary">
+                ${starsHtml(ratings.average)}
+                <strong>${(Number(ratings.average) || 0).toFixed(1)}</strong>
+                <span class="sf-muted">${ratings.count} review${ratings.count === 1 ? '' : 's'}</span>
+              </div>
+              <div class="sf-reviews">${reviews.map(reviewCard).join('')}</div>
             </section>`
           : ''
       }
@@ -304,6 +376,21 @@ async function main() {
       ...(sf.address ? { address: { '@type': 'PostalAddress', streetAddress: sf.address, addressCountry: 'ZA' } } : {}),
       ...(sf.hours ? { openingHours: sf.hours } : {}),
       ...(Object.values(sf.social || {}).filter(Boolean).length ? { sameAs: Object.values(sf.social).filter(Boolean) } : {}),
+      ...(ratings.count
+        ? {
+            aggregateRating: {
+              '@type': 'AggregateRating',
+              ratingValue: ratings.average,
+              reviewCount: ratings.count
+            },
+            review: reviews.slice(0, 10).map((rv) => ({
+              '@type': 'Review',
+              reviewRating: { '@type': 'Rating', ratingValue: rv.rating },
+              author: { '@type': 'Person', name: rv.author },
+              ...(rv.comment ? { reviewBody: rv.comment } : {})
+            }))
+          }
+        : {}),
       ...(showProducts
         ? {
             makesOffer: products.slice(0, 50).map((p) => ({
@@ -318,6 +405,7 @@ async function main() {
     })}`;
 
   const doShare = async () => {
+    beacon('share', activeRef);
     try {
       const nav = navigator as Navigator & { share?: (d: ShareData) => Promise<void> };
       if (typeof nav.share === 'function') {
@@ -337,6 +425,15 @@ async function main() {
   };
   document.getElementById('sfShare')?.addEventListener('click', doShare);
   document.getElementById('sfShare2')?.addEventListener('click', doShare);
+
+  // Anonymous analytics: one view per load, plus contact/product intent clicks.
+  document
+    .querySelectorAll('a[href^="tel:"], a[href^="mailto:"], a[href*="wa.me"]')
+    .forEach((el) => el.addEventListener('click', () => beacon('contact', activeRef)));
+  document
+    .querySelectorAll('.sf-product a.sf-btn-ghost')
+    .forEach((el) => el.addEventListener('click', () => beacon('product', activeRef)));
+  beacon('view', activeRef);
 }
 
 void main();

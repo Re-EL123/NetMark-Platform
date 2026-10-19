@@ -2999,3 +2999,42 @@ header {
     transition: none;
   }
 }
+
+/* ----------------------- storefront featured picker --------------------- */
+.sf-feat-pick {
+  display: grid;
+  gap: 8px;
+  max-height: 52vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.sf-feat-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.sf-feat-item:hover {
+  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+}
+.sf-feat-item input[type='checkbox'] {
+  width: auto;
+  margin: 0;
+}
+.sf-feat-item img,
+.sf-feat-ph {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex: none;
+  background: color-mix(in srgb, var(--text-primary) 8%, transparent);
+}
+.sf-feat-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}

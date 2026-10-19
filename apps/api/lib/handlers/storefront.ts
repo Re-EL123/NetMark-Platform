@@ -75,6 +75,24 @@ function siteBase(): string {
   return (process.env.PUBLIC_SITE_URL || 'https://netmark.re-el.co.za').replace(/\/+$/, '');
 }
 
+/** First name only — reviews are public, so we don't expose full names. */
+function displayName(name: string | null | undefined): string {
+  const n = String(name || '').trim();
+  if (!n) return 'Verified customer';
+  return n.split(/\s+/)[0].slice(0, 40);
+}
+
+const EVENT_TYPES = new Set(['view', 'contact', 'share', 'product']);
+
+async function resolveStore(sb: any, ref: string) {
+  let { data: store } = await sb.from('stores').select('*').eq('slug', ref).maybeSingle();
+  if (!store && /^[0-9a-f-]{36}$/i.test(ref)) {
+    const byId = await sb.from('stores').select('*').eq('id', ref).maybeSingle();
+    store = byId.data;
+  }
+  return store;
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
@@ -112,15 +130,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
   }
 
-  if (req.method !== 'GET') return res.status(405).json({ success: false, message: 'Method not allowed' });
   if (!ref) return res.status(400).json({ success: false, message: 'Missing store reference' });
 
-  // Resolve by slug first, then by id for robustness.
-  let { data: store } = await sb.from('stores').select('*').eq('slug', ref).maybeSingle();
-  if (!store && /^[0-9a-f-]{36}$/i.test(ref)) {
-    const byId = await sb.from('stores').select('*').eq('id', ref).maybeSingle();
-    store = byId.data;
+  // POST /api/storefront/:slug/event — best-effort, anonymous analytics counter.
+  if (String(slug[1] || '') === 'event') {
+    if (req.method !== 'POST') return res.status(405).json({ success: false, message: 'Method not allowed' });
+    if (!rateLimit(`storefront-event:${clientKey(req)}`, { windowMs: 60000, max: 300 })) return rateLimitFail(res);
+    const type = String((req.body || {}).type || '');
+    if (!EVENT_TYPES.has(type)) return res.status(400).json({ success: false, message: 'Unknown event type' });
+    const store = await resolveStore(sb, ref);
+    if (!store || store.is_active === false) return res.status(404).json({ success: false, message: 'Storefront not found' });
+    const settings = store.settings && typeof store.settings === 'object' ? store.settings : {};
+    const sf = settings.storefront && typeof settings.storefront === 'object' ? settings.storefront : {};
+    if (sf.enabled === false) return res.status(404).json({ success: false, message: 'This storefront is not available' });
+    const stats = settings.storefrontStats && typeof settings.storefrontStats === 'object' ? settings.storefrontStats : {};
+    const next = {
+      ...stats,
+      [type]: Number(stats[type] || 0) + 1,
+      lastEventAt: new Date().toISOString()
+    };
+    await sb.from('stores').update({ settings: { ...settings, storefrontStats: next } }).eq('id', store.id);
+    return res.status(200).json({ success: true });
   }
+
+  if (req.method !== 'GET') return res.status(405).json({ success: false, message: 'Method not allowed' });
+
+  const store = await resolveStore(sb, ref);
   if (!store || store.is_active === false) {
     return res.status(404).json({ success: false, message: 'Storefront not found' });
   }
@@ -166,6 +201,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // Reviews/ratings — degrade silently if the reviews table isn't present yet.
+  let ratings = { average: 0, count: 0 };
+  let reviews: any[] = [];
+  try {
+    const { data: rv } = await sb
+      .from('reviews')
+      .select('*')
+      .eq('store_id', store.id)
+      .order('created_at', { ascending: false })
+      .limit(60);
+    const all = (rv || []).filter((r: any) => Number(r.rating || 0) > 0);
+    if (all.length) {
+      const userIds = [...new Set(all.map((r: any) => r.user_id).filter(Boolean))];
+      const { data: us } = userIds.length
+        ? await sb.from('users').select('id,name').in('id', userIds)
+        : { data: [] as any[] };
+      const umap = new Map((us || []).map((u: any) => [u.id, u.name]));
+      const sum = all.reduce((a: number, r: any) => a + Number(r.rating || 0), 0);
+      ratings = { average: Math.round((sum / all.length) * 10) / 10, count: all.length };
+      reviews = all.slice(0, 30).map((r: any) => ({
+        rating: Number(r.rating || 0),
+        comment: str(r.comment, 800),
+        createdAt: r.created_at || null,
+        author: displayName(umap.get(r.user_id) as string)
+      }));
+    }
+  } catch {
+    /* reviews not available — storefront still renders */
+  }
+
   res.setHeader('Cache-Control', 'public, max-age=120, stale-while-revalidate=600');
   return res.status(200).json({
     success: true,
@@ -177,7 +242,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         url: `${siteBase()}/storefront/?s=${encodeURIComponent(store.slug || store.id)}`
       },
       storefront,
-      products
+      products,
+      ratings,
+      reviews
     }
   });
 }
