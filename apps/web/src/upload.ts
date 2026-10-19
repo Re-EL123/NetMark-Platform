@@ -213,6 +213,7 @@ export function wireUploaders(scope: ParentNode): void {
         setStatus('Uploaded', '');
         if (multiple) updateMultiple(group);
         else updateSingle(group);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
       } catch (err: any) {
         setStatus(err?.message || 'Upload failed', 'error');
       } finally {
@@ -234,6 +235,7 @@ export function wireUploaders(scope: ParentNode): void {
         if (multiple) updateMultiple(group);
         else updateSingle(group);
         setStatus('');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
         return;
       }
       const remove = (e.target as HTMLElement).closest('[data-upload-remove]');
@@ -242,6 +244,7 @@ export function wireUploaders(scope: ParentNode): void {
         const items = parseHidden(input, true).filter((it: any) => mediaUrl(it) !== url);
         input.value = JSON.stringify(items);
         updateMultiple(group);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
       }
     });
   });

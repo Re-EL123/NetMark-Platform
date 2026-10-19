@@ -1,9 +1,85 @@
 import { apiRequest } from './api';
-import { esc, formatDate } from './render';
-import { statCards, dataTable, emptyState, money, toast, openModal } from './ui';
+import { esc, formatDate, badge } from './render';
+import { statCards, emptyState, money, toast, openModal } from './ui';
 import { icon, iconify } from './icons';
 import { shareUrl, shareLink } from './referral';
 import { qrSvg } from './qr';
+
+function statusTone(status: string): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
+  const s = String(status || '').toLowerCase();
+  if (s === 'approved' || s === 'paid' || s === 'released') return 'success';
+  if (s === 'pending' || s === 'on_hold' || s === 'held') return 'warning';
+  if (s === 'reversed' || s === 'cancelled' || s === 'rejected') return 'danger';
+  return 'neutral';
+}
+
+function commissionTable(rows: any[]): string {
+  return `<div class="table-wrap"><table class="ref-table">
+    <thead><tr><th></th><th>When</th><th>Detail</th><th>Level</th><th>Amount</th><th>Status</th></tr></thead>
+    <tbody>${rows
+      .map((r, i) => {
+        const detail: [string, string][] = [
+          ['Source', esc(r.source || '—')],
+          ['Bonus type', esc(r.bonusType || '—')],
+          ['Reference', esc(r.refType ? `${r.refType}${r.refId ? ' · ' + String(r.refId).slice(0, 8) : ''}` : '—')],
+          ['Releases', r.releaseAt ? esc(formatDate(r.releaseAt)) : '—'],
+          ['Released', r.releasedAt ? esc(formatDate(r.releasedAt)) : '—'],
+          ['Description', esc(r.description || '—')]
+        ];
+        return `<tr class="ref-row" data-ref-toggle="${i}">
+            <td class="ref-caret">${icon('chevron-right')}</td>
+            <td>${esc(formatDate(r.createdAt))}</td>
+            <td>${esc(r.description || r.bonusType || r.source || '—')}</td>
+            <td>${r.level ? esc(String(r.level)) : '—'}</td>
+            <td>${money(r.amountZar || 0)}</td>
+            <td>${badge(r.status || '—', statusTone(r.status))}</td>
+          </tr>
+          <tr class="ref-detail" data-ref-detail="${i}" hidden>
+            <td></td>
+            <td colspan="5"><dl class="ref-detail-grid">${detail
+              .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`)
+              .join('')}</dl></td>
+          </tr>`;
+      })
+      .join('')}</tbody></table></div>`;
+}
+
+function shareSheet(url: string, text: string) {
+  const enc = encodeURIComponent;
+  const opts: [string, string, string][] = [
+    ['WhatsApp', `https://wa.me/?text=${enc(`${text} ${url}`)}`, 'message-circle'],
+    ['Facebook', `https://www.facebook.com/sharer/sharer.php?u=${enc(url)}`, 'share-2'],
+    ['X', `https://twitter.com/intent/tweet?text=${enc(text)}&url=${enc(url)}`, 'share-2'],
+    ['Telegram', `https://t.me/share/url?url=${enc(url)}&text=${enc(text)}`, 'send'],
+    ['Email', `mailto:?subject=${enc(text)}&body=${enc(`${text}\n\n${url}`)}`, 'mail'],
+    ['SMS', `sms:?&body=${enc(`${text} ${url}`)}`, 'phone']
+  ];
+  void openModal({
+    title: 'Share your link',
+    submitLabel: 'Done',
+    html: `<p class="empty" style="font-size:12px;margin-bottom:12px">Pick where to share — the message and your code are pre-filled.</p>
+      <div class="share-grid">
+        ${opts
+          .map(
+            ([label, href, ic]) =>
+              `<a class="share-opt" href="${esc(href)}" target="_blank" rel="noopener">${icon(ic)}<span>${esc(label)}</span></a>`
+          )
+          .join('')}
+        <button type="button" class="share-opt" id="shareCopy">${icon('copy')}<span>Copy link</span></button>
+      </div>`,
+    onMount: (body) => {
+      (body.querySelector('#shareCopy') as HTMLElement | null)?.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(url);
+          toast('Link copied to clipboard', 'success');
+        } catch {
+          toast(url, 'info');
+        }
+      });
+    },
+    onSubmit: () => undefined
+  });
+}
 
 function sum(rows: any[], status?: string) {
   return rows
@@ -52,7 +128,13 @@ export async function renderReferrals(c: HTMLElement) {
         <button class="btn btn-sm btn-ghost" id="qrSignup">${icon('qr-code')}<span>QR code</span></button>
         <button class="btn btn-sm btn-ghost" id="shareShop">${icon('shopping-bag')}<span>Share shop</span></button>
         <button class="btn btn-sm btn-ghost" id="copyShop">${icon('link-2')}<span>Copy shop link</span></button>
+        <button class="btn btn-sm btn-ghost" id="shareMore">${icon('share-2')}<span>More ways…</span></button>
       </div>
+      <ol class="how-steps">
+        <li><span class="how-num">1</span><div><strong>Share your link</strong><p>Send it by WhatsApp, QR code or social media.</p></div></li>
+        <li><span class="how-num">2</span><div><strong>They sign up</strong><p>Your code is attached automatically — they become your referral.</p></div></li>
+        <li><span class="how-num">3</span><div><strong>You earn</strong><p>Commission lands in your wallet on their orders and purchases.</p></div></li>
+      </ol>
     </div>
 
     ${statCards([
@@ -66,21 +148,21 @@ export async function renderReferrals(c: HTMLElement) {
       <h3>${icon('banknote')} Referral earnings</h3>
       ${
         rows.length
-          ? dataTable(
-              [
-                { key: 'createdAt', label: 'When', render: (r) => formatDate(r.createdAt) },
-                { key: 'description', label: 'Detail', render: (r) => esc(r.description || r.bonusType || r.source || '—') },
-                { key: 'level', label: 'Level', render: (r) => (r.level ? esc(String(r.level)) : '—') },
-                { key: 'amountZar', label: 'Amount', render: (r) => money(r.amountZar || 0) },
-                { key: 'status', label: 'Status', render: (r) => esc(r.status || '') }
-              ],
-              rows
-            )
+          ? `<p class="empty" style="font-size:12px;margin-bottom:8px">Tap a row for full detail.</p>${commissionTable(rows)}`
           : emptyState('No referral earnings yet. Share your link to get started.', 'share-2')
       }
     </div>`;
 
   iconify(c);
+
+  c.querySelectorAll('[data-ref-toggle]').forEach((row) => {
+    row.addEventListener('click', () => {
+      const detail = c.querySelector(`[data-ref-detail="${(row as HTMLElement).dataset.refToggle}"]`) as HTMLElement | null;
+      if (!detail) return;
+      detail.hidden = !detail.hidden;
+      row.classList.toggle('open', !detail.hidden);
+    });
+  });
 
   const copy = async (text: string) => {
     try {
@@ -111,4 +193,7 @@ export async function renderReferrals(c: HTMLElement) {
     shareLink(shopUrl, 'Shop on NetMark', 'Browse the NetMark marketplace')
   );
   (c.querySelector('#copyShop') as HTMLElement | null)?.addEventListener('click', () => copy(shopUrl));
+  (c.querySelector('#shareMore') as HTMLElement | null)?.addEventListener('click', () =>
+    shareSheet(signupUrl, `Join NetMark with my code${code ? ' ' + code : ''}`)
+  );
 }

@@ -238,10 +238,40 @@ async function referrals(c: HTMLElement) {
   iconify(heading);
 }
 
+function rankProgressHtml(me: any, ranks: any[]): string {
+  if (!ranks.length) return '';
+  const level = Number(me?.rankLevel || 0);
+  const next = ranks
+    .filter((r) => Number(r.level) > level)
+    .sort((a, b) => Number(a.level) - Number(b.level))[0];
+  if (!next) {
+    return `<div class="card"><h3>${icon('trending-up')} Rank progress</h3>
+      <p class="empty">You have reached the top rank${me?.rankName ? ` (${esc(me.rankName)})` : ''}.</p></div>`;
+  }
+  const bar = (label: string, current: number, target: number) => {
+    const pct = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 100;
+    return `<div class="progress-row">
+      <span class="progress-label">${label}</span>
+      <span class="progress"><span class="progress-fill" style="width:${pct}%"></span></span>
+      <span class="progress-value">${money(current)} / ${money(target)}</span>
+    </div>`;
+  };
+  return `<div class="card">
+    <h3>${icon('trending-up')} Rank progress — next: ${esc(next.name)}</h3>
+    <p class="empty">Promotions never expire. Grow your personal and group volume to reach the next rank.</p>
+    ${next.minPersonalBv > 0 ? bar('Personal BV', Number(me?.personalBv || 0), Number(next.minPersonalBv)) : ''}
+    ${next.minGroupBv > 0 ? bar('Group BV', Number(me?.groupBv || 0), Number(next.minGroupBv)) : ''}
+  </div>`;
+}
+
 async function team(c: HTMLElement) {
   c.innerHTML = '<p class="empty">Loading your network…</p>';
-  const mine = await apiRequest('/memberships');
+  const [mine, ranksRes] = await Promise.all([
+    apiRequest('/memberships'),
+    apiRequest('/memberships/ranks').catch(() => null)
+  ]);
   const memberships: any[] = (mine.success && mine.data) || [];
+  const ranks: any[] = (ranksRes?.success && ranksRes.data) || [];
   if (!memberships.length) {
     c.innerHTML = emptyState(
       'You are not part of a network yet. Link a company with a code (or enter one at sign-up) to join its downline.',
@@ -284,6 +314,7 @@ async function team(c: HTMLElement) {
           <button class="btn btn-sm" id="shareRecruit">${icon('share-2')}<span>Recruit members</span></button>
         </div>
       </div>
+      ${rankProgressHtml(me, ranks)}
       <div class="card">
         <h3>Your downline</h3>
         ${
@@ -768,6 +799,10 @@ async function storefront(c: HTMLElement) {
                   <span>${icon('star')} ${featuredCount} featured</span>
                 </div>
               </div>
+              <label class="nm-switch nm-switch-sm sf-store-toggle" title="${sf.enabled === false ? 'Storefront disabled — turn on to publish' : 'Storefront live — turn off to hide'}" data-tip="${sf.enabled === false ? 'Enable storefront' : 'Disable storefront'}" data-tip-pos="left">
+                <input type="checkbox" data-sf-enable="${esc(r.id)}" ${sf.enabled === false ? '' : 'checked'} aria-label="Toggle storefront visibility" />
+                <span class="nm-switch-track" aria-hidden="true"></span>
+              </label>
             </div>
             <div class="row-actions sf-actions">
               <button class="btn btn-sm" data-sf-open="${esc(r.id)}">${icon('external-link')}<span>Open</span></button>
@@ -775,7 +810,6 @@ async function storefront(c: HTMLElement) {
               <button class="btn btn-sm btn-ghost" data-sf-share="${esc(r.id)}">${icon('share-2')}<span>Share</span></button>
               <button class="btn btn-sm btn-ghost" data-sf-featured="${esc(r.id)}">${icon('star')}<span>Featured</span></button>
               <button class="btn btn-sm btn-ghost" data-sf-edit="${esc(r.id)}">${icon('pencil')}<span>Edit page</span></button>
-              <button class="btn btn-sm btn-ghost" data-sf-toggle="${esc(r.id)}">${icon('power')}<span>${sf.enabled === false ? 'Enable' : 'Disable'}</span></button>
             </div>
             ${!r.isActive ? '<p class="empty" style="margin-top:10px">This store is deactivated, so its storefront is hidden from visitors.</p>' : ''}
           </div>`;
@@ -809,14 +843,18 @@ async function storefront(c: HTMLElement) {
         if (r) void shareLink(storefrontLink(r.slug, refCode), r.name, `Browse ${r.name} online.`);
       };
     });
-    c.querySelectorAll('[data-sf-toggle]').forEach((el) => {
-      (el as HTMLElement).onclick = async () => {
-        const r = byId((el as HTMLElement).dataset.sfToggle!);
+    c.querySelectorAll('[data-sf-enable]').forEach((el) => {
+      (el as HTMLInputElement).onchange = async () => {
+        const input = el as HTMLInputElement;
+        const r = byId(input.dataset.sfEnable!);
         if (!r) return;
         const sf = sfConfig(r);
-        const next = { ...sf, enabled: sf.enabled === false };
+        const next = { ...sf, enabled: input.checked };
         const res = await apiRequest(`/stores/${r.id}`, { method: 'PUT', body: JSON.stringify({ settings: { storefront: next } }) });
-        if (!res.success) return toast(res.message || 'Could not update', 'error');
+        if (!res.success) {
+          input.checked = !input.checked;
+          return toast(res.message || 'Could not update', 'error');
+        }
         if (res.data) r.settings = res.data.settings;
         toast(next.enabled ? 'Storefront enabled' : 'Storefront disabled', 'success');
         render();
@@ -880,9 +918,10 @@ function editFeatured(r: any, done: () => void) {
     wide: true,
     submitLabel: 'Save featured',
     html: `<div id="sfFeatList"><p class="empty">Loading products…</p></div>
-      <p class="empty" style="font-size:12px;margin-top:10px">Featured products appear first on your storefront page.</p>`,
+      <p class="empty" style="font-size:12px;margin-top:10px"><strong id="sfFeatCount">0</strong> selected · tick the products to feature, then drag the rows to set the order they appear in.</p>`,
     onMount: async (body) => {
       box = body.querySelector('#sfFeatList') as HTMLElement;
+      const countEl = body.querySelector('#sfFeatCount') as HTMLElement | null;
       const res = await apiRequest(`/store-products?storeId=${encodeURIComponent(r.id)}&pageSize=200`);
       const rows: any[] = (res.success && res.data) || [];
       if (!box) return;
@@ -894,12 +933,53 @@ function editFeatured(r: any, done: () => void) {
         .map(
           (l) => `<label class="sf-feat-item">
             <input type="checkbox" value="${esc(l.id)}" ${selected.has(l.id) ? 'checked' : ''} />
+            <span class="sf-feat-grip" aria-hidden="true">${icon('menu')}</span>
             ${l.image ? `<img src="${esc(l.image)}" alt="" />` : '<span class="sf-feat-ph"></span>'}
             <span class="sf-feat-name">${esc(l.name)}</span>
             <span class="empty">${money(l.price)}</span>
           </label>`
         )
         .join('')}</div>`;
+      iconify(box);
+
+      const list = box.querySelector('.sf-feat-pick') as HTMLElement;
+      const syncCount = () => {
+        if (countEl) countEl.textContent = String(list.querySelectorAll('input:checked').length);
+      };
+      list.addEventListener('change', (e) => {
+        if ((e.target as HTMLElement).matches('input[type=checkbox]')) syncCount();
+      });
+
+      let dragEl: HTMLElement | null = null;
+      const rowAfter = (y: number) =>
+        Array.from(list.querySelectorAll<HTMLElement>('.sf-feat-item:not(.dragging)')).find((el) => {
+          const b = el.getBoundingClientRect();
+          return y < b.top + b.height / 2;
+        }) || null;
+      list.querySelectorAll<HTMLElement>('.sf-feat-item').forEach((item) => {
+        item.draggable = true;
+        item.addEventListener('dragstart', (e) => {
+          dragEl = item;
+          item.classList.add('dragging');
+          const dt = (e as DragEvent).dataTransfer;
+          if (dt) {
+            dt.effectAllowed = 'move';
+            dt.setData('text/plain', '');
+          }
+        });
+        item.addEventListener('dragend', () => {
+          item.classList.remove('dragging');
+          dragEl = null;
+        });
+      });
+      list.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (!dragEl) return;
+        const ref = rowAfter((e as DragEvent).clientY);
+        if (ref == null) list.appendChild(dragEl);
+        else list.insertBefore(dragEl, ref);
+      });
+      syncCount();
     },
     onSubmit: async () => {
       const ids = Array.from(box?.querySelectorAll('input[type=checkbox]:checked') || []).map((el) => (el as HTMLInputElement).value);
@@ -913,6 +993,45 @@ function editFeatured(r: any, done: () => void) {
   });
 }
 
+/** Lightweight live preview of the public storefront, fed by the edit form. */
+function sfPreview(host: HTMLElement, store: any): string {
+  const val = (n: string) => {
+    const el = host.querySelector(`[name="${n}"]`) as HTMLInputElement | HTMLTextAreaElement | null;
+    return (el?.value || '').trim();
+  };
+  const on = (n: string) => !!(host.querySelector(`[name="${n}"]`) as HTMLInputElement | null)?.checked;
+  const accent = val('themeColor') || '#e50914';
+  const logo = val('logo');
+  const banner = val('banner');
+  const tagline = val('tagline');
+  const about = val('about');
+  const cta = val('ctaLabel') || 'Contact us';
+  const contact = [
+    val('phone') ? `${icon('phone')} ${esc(val('phone'))}` : '',
+    val('whatsapp') ? `${icon('message-circle')} ${esc(val('whatsapp'))}` : '',
+    val('email') ? `${icon('mail')} ${esc(val('email'))}` : '',
+    val('address') ? `${icon('map-pin')} ${esc(val('address'))}` : '',
+    val('hours') ? `${icon('clock')} ${esc(val('hours'))}` : ''
+  ].filter(Boolean);
+  const socials = (['facebook', 'instagram', 'tiktok', 'x'] as const).filter((k) => val(k));
+
+  return `<div class="sfp" style="--sf-accent:${esc(accent)}">
+    <div class="sfp-hero"${banner ? ` style="background-image:linear-gradient(rgba(0,0,0,.5),rgba(0,0,0,.5)),url('${esc(banner)}')"` : ''}>
+      ${logo ? `<img class="sfp-logo" src="${esc(logo)}" alt="" />` : ''}
+      <h1>${esc(store?.name || 'Your store')}</h1>
+      ${tagline ? `<p class="sfp-tag">${esc(tagline)}</p>` : ''}
+      <span class="sfp-cta">${esc(cta)}</span>
+    </div>
+    <div class="sfp-body">
+      ${about ? `<p class="sfp-about">${esc(about)}</p>` : ''}
+      ${on('showProducts') ? `<div class="sfp-products">${'<span class="sfp-prod"></span>'.repeat(3)}</div>` : ''}
+      ${contact.length ? `<ul class="sfp-contact">${contact.map((c) => `<li>${c}</li>`).join('')}</ul>` : ''}
+      ${socials.length ? `<div class="sfp-socials">${socials.map((s) => `<span>${esc(s)}</span>`).join('')}</div>` : ''}
+      ${!tagline && !about && !contact.length ? '<p class="sfp-empty">Fill in the form to see a live preview.</p>' : ''}
+    </div>
+  </div>`;
+}
+
 function editStorefront(r: any, done: () => void) {
   const sf = sfConfig(r);
   void openModal({
@@ -921,8 +1040,8 @@ function editStorefront(r: any, done: () => void) {
     submitLabel: 'Save storefront',
     fields: [
       { name: 'secPublish', label: 'Publishing', type: 'section' },
-      { name: 'enabled', label: 'Publish storefront', type: 'checkbox', value: sf.enabled !== false, help: 'Turn off to hide the page from visitors.' },
-      { name: 'showProducts', label: 'Show products on the page', type: 'checkbox', value: sf.showProducts !== false },
+      { name: 'enabled', label: 'Publish storefront', type: 'switch', value: sf.enabled !== false, help: 'Turn off to hide the page from visitors.' },
+      { name: 'showProducts', label: 'Show products on the page', type: 'switch', value: sf.showProducts !== false },
       { name: 'tagline', label: 'Tagline', value: sf.tagline, placeholder: 'Fresh produce delivered daily', full: true },
       { name: 'about', label: 'About your store', type: 'textarea', rows: 4, value: sf.about, placeholder: 'Tell customers who you are and what you sell.', full: true },
 
@@ -946,10 +1065,33 @@ function editStorefront(r: any, done: () => void) {
       { name: 'x', label: 'X (Twitter) URL', value: sf.social?.x },
 
       { name: 'secSeo', label: 'Search engine listing', type: 'section' },
-      { name: 'metaTitle', label: 'SEO title', value: sf.metaTitle, placeholder: r.name, help: 'Shown in Google and link previews. Keep it under 60 characters.', full: true },
-      { name: 'metaDescription', label: 'SEO description', type: 'textarea', rows: 2, value: sf.metaDescription, placeholder: 'A one-sentence summary of what you sell.', help: 'Aim for about 150–160 characters.', full: true },
+      { name: 'metaTitle', label: 'SEO title', value: sf.metaTitle, placeholder: r.name, help: 'Shown in Google and link previews.', counter: 60, full: true },
+      { name: 'metaDescription', label: 'SEO description', type: 'textarea', rows: 2, value: sf.metaDescription, placeholder: 'A one-sentence summary of what you sell.', help: 'Aim for about 150–160 characters.', counter: 160, full: true },
       { name: 'metaKeywords', label: 'SEO keywords', value: sf.metaKeywords, placeholder: 'comma, separated, keywords', full: true }
     ],
+    onMount: (body, overlay) => {
+      (overlay.querySelector('.modal') as HTMLElement | null)?.classList.add('sf-edit-wide');
+      const fieldsCol = document.createElement('div');
+      fieldsCol.className = 'sf-edit-fields';
+      const previewCol = document.createElement('aside');
+      previewCol.className = 'sf-edit-preview';
+      const errBox = body.querySelector('.error-modal');
+      Array.from(body.children).forEach((ch) => {
+        if (ch !== errBox) fieldsCol.appendChild(ch);
+      });
+      const grid = document.createElement('div');
+      grid.className = 'sf-edit-grid';
+      grid.appendChild(fieldsCol);
+      grid.appendChild(previewCol);
+      body.appendChild(grid);
+      const refresh = () => {
+        previewCol.innerHTML = sfPreview(fieldsCol, r);
+        iconify(previewCol);
+      };
+      fieldsCol.addEventListener('input', refresh);
+      fieldsCol.addEventListener('change', refresh);
+      refresh();
+    },
     onSubmit: async (v) => {
       const next = {
         enabled: !!v.enabled,

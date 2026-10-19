@@ -93,7 +93,8 @@ export interface Field {
     | 'document'
     | 'gallery'
     | 'documents'
-    | 'section';
+    | 'section'
+    | 'switch';
   required?: boolean;
   value?: any;
   options?: { value: string; label: string }[];
@@ -108,9 +109,16 @@ export interface Field {
   accept?: string;
   kind?: UploadField['kind'];
   multiple?: boolean;
+  /** Show a live character counter (and the limit) under the input. */
+  counter?: number;
 }
 
 const UPLOAD_TYPES = ['image', 'video', 'file', 'document', 'gallery', 'documents'];
+
+function counterHtml(f: Field): string {
+  if (!f.counter) return '';
+  return `<span class="field-counter" data-counter-for="${esc(f.name)}" data-max="${f.counter}"></span>`;
+}
 
 function fieldHtml(f: Field): string {
   if (f.type === 'section') {
@@ -139,6 +147,16 @@ function fieldHtml(f: Field): string {
       ${f.help ? `<span class="empty" style="font-size:12px">${esc(f.help)}</span>` : ''}
     </div>`;
   }
+  if (f.type === 'switch') {
+    return `<div class="form-group">
+      <label class="nm-switch">
+        <input type="checkbox" ${common} ${value ? 'checked' : ''} />
+        <span class="nm-switch-track" aria-hidden="true"></span>
+        <span class="nm-switch-text">${esc(f.label)}</span>
+      </label>
+      ${f.help ? `<p class="empty" style="font-size:12px;margin-top:6px">${esc(f.help)}</p>` : ''}
+    </div>`;
+  }
   if (f.type === 'select') {
     const opts = (f.options || [])
       .map((o) => `<option value="${esc(o.value)}" ${String(o.value) === String(value) ? 'selected' : ''}>${esc(o.label)}</option>`)
@@ -149,13 +167,30 @@ function fieldHtml(f: Field): string {
   if (f.type === 'textarea') {
     return `<div class="form-group"><label for="f_${esc(f.name)}">${esc(f.label)}</label>
       <textarea ${common} rows="${f.rows || 3}" placeholder="${esc(f.placeholder || '')}" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);font-family:inherit">${esc(value)}</textarea>
-      ${f.help ? `<p class="empty" style="font-size:12px">${esc(f.help)}</p>` : ''}</div>`;
+      ${f.help ? `<p class="empty" style="font-size:12px">${esc(f.help)}</p>` : ''}${counterHtml(f)}</div>`;
   }
   return `<div class="form-group"><label for="f_${esc(f.name)}">${esc(f.label)}</label>
     <input type="${f.type || 'text'}" ${common} value="${esc(value)}"
       ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ''}
       ${f.step ? `step="${esc(f.step)}"` : ''} ${f.min !== undefined ? `min="${esc(f.min)}"` : ''} ${f.max !== undefined ? `max="${esc(f.max)}"` : ''} />
-    ${f.help ? `<p class="empty" style="font-size:12px">${esc(f.help)}</p>` : ''}</div>`;
+    ${f.help ? `<p class="empty" style="font-size:12px">${esc(f.help)}</p>` : ''}${counterHtml(f)}</div>`;
+}
+
+/** Keep any `counter` fields in sync with their input length. */
+function wireCounters(scope: HTMLElement, fields: Field[]): void {
+  for (const f of fields) {
+    if (!f.counter) continue;
+    const input = scope.querySelector(`[name="${f.name}"]`) as HTMLInputElement | HTMLTextAreaElement | null;
+    const out = scope.querySelector(`[data-counter-for="${f.name}"]`) as HTMLElement | null;
+    if (!input || !out) continue;
+    const update = () => {
+      const len = input.value.length;
+      out.textContent = `${len} / ${f.counter}`;
+      out.classList.toggle('over', len > (f.counter as number));
+    };
+    input.addEventListener('input', update);
+    update();
+  }
 }
 
 export interface ModalOptions {
@@ -195,6 +230,7 @@ export function openModal(opts: ModalOptions): Promise<void> {
     document.body.appendChild(overlay);
     iconify(overlay);
     wireUploaders(overlay);
+    wireCounters(overlay, fields);
     if (opts.onMount) {
       const body = overlay.querySelector('.modal-body') as HTMLElement | null;
       if (body) {
@@ -224,7 +260,7 @@ export function openModal(opts: ModalOptions): Promise<void> {
       for (const f of fields) {
         const el = form.querySelector(`[name="${f.name}"]`) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
         if (!el) continue;
-        if (f.type === 'checkbox') values[f.name] = (el as HTMLInputElement).checked;
+        if (f.type === 'checkbox' || f.type === 'switch') values[f.name] = (el as HTMLInputElement).checked;
         else if (f.type === 'number') values[f.name] = el.value === '' ? null : Number(el.value);
         else if (f.type === 'gallery' || f.type === 'documents') {
           try {
