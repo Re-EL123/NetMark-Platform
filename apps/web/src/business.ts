@@ -1,5 +1,5 @@
 import { apiRequest, submitPayFast } from './api';
-import { API_BASE_URL } from './config';
+import { STOREFRONT_BASE_URL } from './config';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { crudView } from './crud';
@@ -696,10 +696,9 @@ async function reports(c: HTMLElement) {
 }
 
 /* ------------------------------- storefront ---------------------------- */
-/** Public, server-rendered storefront URL (hosted by the API project at /s/<slug>). */
+/** Public, server-rendered storefront URL (branded storefront host at /s/<slug>). */
 function storefrontLink(slug: string, refCode?: string | null): string {
-  const apiBase = API_BASE_URL.replace(/\/api\/?$/, '');
-  const url = `${apiBase}/s/${encodeURIComponent(slug)}`;
+  const url = `${STOREFRONT_BASE_URL}/s/${encodeURIComponent(slug)}`;
   return refCode ? `${url}?ref=${encodeURIComponent(refCode)}` : url;
 }
 

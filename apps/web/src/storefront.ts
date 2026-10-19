@@ -1,5 +1,5 @@
 import './storefront.css';
-import { API_BASE_URL } from './config';
+import { API_BASE_URL, STOREFRONT_BASE_URL } from './config';
 import { captureReferral, getReferralCode } from './referralStore';
 
 /**
@@ -247,7 +247,7 @@ async function main() {
   activeRef = store.slug;
   // Canonical + share URL points at the server-rendered page so link previews
   // carry the store's meta regardless of which host renders this client.
-  const pageUrl = `${API_BASE_URL.replace(/\/api\/?$/, '')}/s/${encodeURIComponent(store.slug)}`;
+  const pageUrl = `${STOREFRONT_BASE_URL}/s/${encodeURIComponent(store.slug)}`;
   const refCode = getReferralCode();
   const shareUrl = refCode ? `${pageUrl}&ref=${encodeURIComponent(refCode)}` : pageUrl;
 
