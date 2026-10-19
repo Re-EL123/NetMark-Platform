@@ -228,12 +228,28 @@ export async function initPanel(opts: PanelOptions) {
 
   let flyout: HTMLElement | null = null;
   let flyoutFor: HTMLElement | null = null;
+  let flyoutTimer: any = null;
+
+  function cancelFlyoutHide() {
+    if (flyoutTimer) {
+      clearTimeout(flyoutTimer);
+      flyoutTimer = null;
+    }
+  }
+
   function hideFlyout() {
+    cancelFlyoutHide();
     if (flyout) {
       flyout.remove();
       flyout = null;
       flyoutFor = null;
     }
+  }
+
+  /** Brief grace period so the pointer can travel into the popup. */
+  function scheduleHideFlyout() {
+    cancelFlyoutHide();
+    flyoutTimer = setTimeout(hideFlyout, 180);
   }
 
   function setCollapsed(collapsed: boolean) {
@@ -257,11 +273,14 @@ export async function initPanel(opts: PanelOptions) {
   function showFlyout(a: HTMLElement) {
     const label = a.dataset.label || '';
     if (!label) return;
+    if (a === flyoutFor && flyout) return;
     hideFlyout();
     flyout = document.createElement('div');
     flyout.className = 'nav-flyout';
-    flyout.textContent = label;
+    flyout.setAttribute('role', 'button');
+    flyout.innerHTML = `${icon('arrow-right')}<span>${esc(label)}</span>`;
     document.body.appendChild(flyout);
+    iconify(flyout);
     const r = a.getBoundingClientRect();
     const top = Math.max(
       8,
@@ -270,15 +289,23 @@ export async function initPanel(opts: PanelOptions) {
     flyout.style.top = `${top}px`;
     flyout.style.left = `${r.right + 10}px`;
     flyoutFor = a;
+    flyout.addEventListener('mouseenter', cancelFlyoutHide);
+    flyout.addEventListener('mouseleave', scheduleHideFlyout);
+    flyout.addEventListener('click', () => {
+      window.location.hash = a.dataset.nav || '';
+      hideFlyout();
+    });
   }
 
   navEl.addEventListener('mouseover', (e) => {
     if (!appEl.classList.contains('sidebar-collapsed')) return;
     const a = (e.target as HTMLElement).closest('a[data-nav]') as HTMLElement | null;
-    if (!a || a === flyoutFor) return;
+    if (!a) return;
+    cancelFlyoutHide();
+    if (a === flyoutFor) return;
     showFlyout(a);
   });
-  navEl.addEventListener('mouseleave', hideFlyout);
+  navEl.addEventListener('mouseleave', scheduleHideFlyout);
   navEl.addEventListener('scroll', hideFlyout, { passive: true } as AddEventListenerOptions);
   window.addEventListener('resize', hideFlyout);
   window.addEventListener('scroll', hideFlyout, true);
