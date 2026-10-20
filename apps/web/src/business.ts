@@ -10,6 +10,7 @@ import { renderReferrals } from './referralsView';
 import { renderWallet } from './walletView';
 import { getMyReferralCode, shareLink, shareUrl } from './referral';
 import { qrSvg, downloadQrPng, downloadQrSvg } from './qr';
+import { checklistHtml, wireChecklist, STORE_OWNER_CHECKLIST } from './onboarding';
 
 function opts(values: string[]) {
   return values.map((v) => ({ value: v, label: titleCase(v) }));
@@ -40,7 +41,7 @@ initPanel({
   render: async (route, ctx) => {
     const c = ctx.container;
     ctx.titleEl.textContent = nav.find((n) => n.id === route)?.label || 'Business';
-    if (route === 'dashboard') return dashboard(c);
+    if (route === 'dashboard') return dashboard(c, ctx.navigate);
     if (route === 'stores') return stores(c);
     if (route === 'storefront') return storefront(c);
     if (route === 'store-market') return storeMarket(c);
@@ -62,17 +63,20 @@ async function myStores(): Promise<any[]> {
   return res.data || [];
 }
 
-async function dashboard(c: HTMLElement) {
-  const res = await apiRequest('/reports/overview');
-  if (!res.success) {
-    c.innerHTML = emptyState(res.message || 'Unable to load your dashboard.', 'alert-triangle');
+async function dashboard(c: HTMLElement, navigate: (route: string) => void = () => {}) {
+  const res = await apiRequest('/reports/overview').catch(() => null);
+  if (!res || !res.success) {
+    c.innerHTML = emptyState(res?.message || 'Unable to load your dashboard.', 'alert-triangle');
     return;
   }
   const d = res.data;
+  const checklist = await checklistHtml('storeOwner', STORE_OWNER_CHECKLIST);
   c.innerHTML = `
+    ${checklist}
     ${overviewStats(d)}
     ${renderOverviewCharts(d)}
     <div class="card"><p>Browse the company catalog, add products to your store with your own retail price, and manage orders.</p></div>`;
+  wireChecklist(c, 'storeOwner', navigate);
 }
 
 function stores(c: HTMLElement) {

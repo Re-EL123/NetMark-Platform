@@ -196,7 +196,26 @@ export async function initPanel(opts: PanelOptions) {
   const content = document.getElementById('content') as HTMLElement;
   const titleEl = document.getElementById('pageTitle') as HTMLElement;
 
-  const visible = opts.nav.filter((n) => !n.capability || can(n.capability));
+  const role = user?.role || '';
+  let navOverrides: Record<string, boolean> = {};
+  try {
+    const res = await apiRequest('/settings/navigation').catch(() => null);
+    const list = res?.success && Array.isArray(res.data) ? res.data : [];
+    for (const it of list) {
+      if (it.role) navOverrides[`${it.role}::${it.navKey}`] = it.visible !== false;
+      else navOverrides[it.navKey] = it.visible !== false;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  const visible = opts.nav.filter((n) => {
+    const k1 = `${role}::${n.id}`;
+    const k2 = n.id;
+    if (Object.prototype.hasOwnProperty.call(navOverrides, k1) && navOverrides[k1] === false) return false;
+    if (Object.prototype.hasOwnProperty.call(navOverrides, k2) && navOverrides[k2] === false) return false;
+    return !n.capability || can(n.capability);
+  });
 
   function navLink(n: NavItem): string {
     return `<a href="#${n.id}" data-nav="${n.id}" data-label="${esc(n.label)}">${icon(

@@ -7,6 +7,7 @@ import { icon, iconify } from './icons';
 import { overviewStats, renderOverviewCharts } from './dashboard';
 import { donutChart, barList, chartCard } from './charts';
 import { platformAdsHtml, resetDismissedAds, invalidateAds, type Ad } from './ads';
+import { commissionTable, wireCommissionTable } from './commissionsView';
 
 const ROLE_OPTIONS = [
   'platformAdmin',
@@ -71,6 +72,7 @@ const nav: NavItem[] = [
   { id: 'ads', label: 'Adverts', group: 'Platform', icon: 'megaphone' },
   { id: 'announcements', label: 'Announcements', group: 'Platform', icon: 'bell' },
   { id: 'audit', label: 'Audit Log', group: 'Platform', icon: 'shield-check' },
+  { id: 'navigation', label: 'Navigation', group: 'Platform', icon: 'menu' },
   { id: 'settings', label: 'Settings', group: 'Platform', icon: 'settings' }
 ];
 
@@ -112,6 +114,7 @@ initPanel({
     if (route === 'ads') return renderAds(c);
     if (route === 'announcements') return renderAnnouncements(c);
     if (route === 'audit') return renderAudit(c);
+    if (route === 'navigation') return renderNavigation(c);
     if (route === 'settings') return renderSettings(c);
   }
 });
@@ -1543,17 +1546,16 @@ function renderWallets(c: HTMLElement) {
 }
 
 /* ---------------------------- commissions ---------------------------- */
-function renderCommissions(c: HTMLElement) {
-  crudView(c, {
-    endpoint: '/commissions',
-    columns: [
-      { key: 'userId', label: 'User', render: (r) => esc((r.userId || '').slice(0, 8)) },
-      { key: 'amountZar', label: 'Amount (ZAR)', render: (r) => money(r.amountZar || 0) },
-      { key: 'bonusType', label: 'Bonus' },
-      { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
-      { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) }
-    ]
-  });
+async function renderCommissions(c: HTMLElement) {
+  c.innerHTML = '<p class="empty">Loading commissions…</p>';
+  const res = await apiRequest('/commissions').catch(() => null);
+  const rows: any[] = res?.success ? res.data || [] : [];
+  if (!rows.length) {
+    c.innerHTML = emptyState('No commissions recorded yet.', 'banknote');
+    return;
+  }
+  c.innerHTML = `<p class="empty" style="font-size:12px;margin-bottom:8px">Tap a row to see the full breakdown.</p>${commissionTable(rows, { showUser: true })}`;
+  wireCommissionTable(c);
 }
 
 /* ----------------------------- analytics ------------------------------ */
@@ -1763,6 +1765,68 @@ function renderFeatureFlags(c: HTMLElement) {
         }
       });
     }
+  });
+}
+
+/* ------------------------- navigation settings ------------------------- */
+async function renderNavigation(c: HTMLElement) {
+  c.innerHTML = '<p class="empty">Loading…</p>';
+  const res = await apiRequest('/settings/navigation');
+  const overrides = res?.success ? res.data || [] : [];
+  const navItems = [
+    { id: 'dashboard', label: 'Dashboard' },
+    { id: 'users', label: 'Users' },
+    { id: 'companies', label: 'Companies' },
+    { id: 'stores', label: 'Stores' },
+    { id: 'products', label: 'Products' },
+    { id: 'orders', label: 'Orders' },
+    { id: 'drivers', label: 'Drivers' },
+    { id: 'appointments', label: 'Appointments' },
+    { id: 'plans', label: 'Plans' },
+    { id: 'ranks', label: 'Ranks' },
+    { id: 'codes', label: 'Codes' },
+    { id: 'code-purchases', label: 'Code Purchases' },
+    { id: 'store-purchases', label: 'Store Purchases' },
+    { id: 'payouts', label: 'Payouts' },
+    { id: 'payout-batches', label: 'Payout Batches' },
+    { id: 'wallets', label: 'Wallets' },
+    { id: 'commissions', label: 'Commissions' },
+    { id: 'consent', label: 'Consent' },
+    { id: 'dsar', label: 'DSAR' },
+    { id: 'analytics', label: 'Analytics' },
+    { id: 'api-keys', label: 'API Keys' },
+    { id: 'webhooks', label: 'Webhooks' },
+    { id: 'feature-flags', label: 'Feature Flags' },
+    { id: 'reports', label: 'Reports' },
+    { id: 'ads', label: 'Adverts' },
+    { id: 'announcements', label: 'Announcements' },
+    { id: 'audit', label: 'Audit Log' },
+    { id: 'settings', label: 'Settings' }
+  ];
+  const roles = ['platformAdmin', 'owner', 'storeOwner', 'customer', 'driver'];
+  const rowsHtml = navItems
+    .map((n) => {
+      const chk = (role: string) => {
+        const ov = overrides.find((o: any) => (o.role === role && o.navKey === n.id));
+        const visible = ov ? ov.visible !== false : true;
+        return `<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" data-nav="${n.id}" data-role="${role}" ${visible ? 'checked' : ''}> ${role}</label>`;
+      };
+      return `<tr><td>${esc(n.label)}</td><td>${roles.map(chk).join(' ')}</td></tr>`;
+    })
+    .join('');
+  c.innerHTML = `<div class="card"><h3>Navigation Visibility</h3><p class="muted">Control which nav items are visible per role (platform admin only).</p>
+    <div class="table-wrap"><table><thead><tr><th>Nav Item</th><th>Roles</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>
+    <div class="toolbar" style="margin-top:12px"><button class="btn btn-sm" id="saveNav">Save</button></div></div>`;
+  document.getElementById('saveNav')?.addEventListener('click', async () => {
+    const items: any[] = [];
+    for (const n of navItems) {
+      for (const r of roles) {
+        const el = c.querySelector<HTMLInputElement>(`input[data-nav="${n.id}"][data-role="${r}"]`);
+        if (el) items.push({ navKey: n.id, role: r, visible: el.checked });
+      }
+    }
+    const res = await apiRequest('/settings/navigation', { method: 'PUT', body: JSON.stringify({ items }) });
+    if (res.success) toast('Navigation saved', 'success'); else toast(res.message || 'Failed', 'error');
   });
 }
 

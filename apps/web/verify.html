@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NetMark - Email Verification</title>
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <div class="container login-bg">
+    <div class="login-card login-animate" style="max-width:520px">
+      <img src="/netmark-logo.png" alt="NetMark" class="brand-logo">
+      <h1>Email Verification</h1>
+      <p class="subtitle" id="status">Verifying your email...</p>
+      <div id="msg" class="error" style="display:none"></div>
+      <button id="goLogin" class="btn" style="display:none">Go to Login</button>
+      <p class="footer"><a href="/">Back to Login</a></p>
+    </div>
+  </div>
+  <script type="module" src="/src/verify.ts"></script>
+</body>
+</html>

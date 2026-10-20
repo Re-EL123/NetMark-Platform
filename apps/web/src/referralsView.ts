@@ -1,48 +1,10 @@
 import { apiRequest } from './api';
-import { esc, formatDate, badge } from './render';
-import { statCards, emptyState, money, toast, openModal } from './ui';
+import { esc } from './render';
+import { statCards, emptyState, toast, openModal } from './ui';
 import { icon, iconify } from './icons';
 import { shareUrl, shareLink } from './referral';
 import { qrSvg } from './qr';
-
-function statusTone(status: string): 'success' | 'warning' | 'danger' | 'info' | 'neutral' {
-  const s = String(status || '').toLowerCase();
-  if (s === 'approved' || s === 'paid' || s === 'released') return 'success';
-  if (s === 'pending' || s === 'on_hold' || s === 'held') return 'warning';
-  if (s === 'reversed' || s === 'cancelled' || s === 'rejected') return 'danger';
-  return 'neutral';
-}
-
-function commissionTable(rows: any[]): string {
-  return `<div class="table-wrap"><table class="ref-table">
-    <thead><tr><th></th><th>When</th><th>Detail</th><th>Level</th><th>Amount</th><th>Status</th></tr></thead>
-    <tbody>${rows
-      .map((r, i) => {
-        const detail: [string, string][] = [
-          ['Source', esc(r.source || '—')],
-          ['Bonus type', esc(r.bonusType || '—')],
-          ['Reference', esc(r.refType ? `${r.refType}${r.refId ? ' · ' + String(r.refId).slice(0, 8) : ''}` : '—')],
-          ['Releases', r.releaseAt ? esc(formatDate(r.releaseAt)) : '—'],
-          ['Released', r.releasedAt ? esc(formatDate(r.releasedAt)) : '—'],
-          ['Description', esc(r.description || '—')]
-        ];
-        return `<tr class="ref-row" data-ref-toggle="${i}">
-            <td class="ref-caret">${icon('chevron-right')}</td>
-            <td>${esc(formatDate(r.createdAt))}</td>
-            <td>${esc(r.description || r.bonusType || r.source || '—')}</td>
-            <td>${r.level ? esc(String(r.level)) : '—'}</td>
-            <td>${money(r.amountZar || 0)}</td>
-            <td>${badge(r.status || '—', statusTone(r.status))}</td>
-          </tr>
-          <tr class="ref-detail" data-ref-detail="${i}" hidden>
-            <td></td>
-            <td colspan="5"><dl class="ref-detail-grid">${detail
-              .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`)
-              .join('')}</dl></td>
-          </tr>`;
-      })
-      .join('')}</tbody></table></div>`;
-}
+import { commissionTable, wireCommissionTable } from './commissionsView';
 
 function shareSheet(url: string, text: string) {
   const enc = encodeURIComponent;
@@ -145,24 +107,25 @@ export async function renderReferrals(c: HTMLElement) {
     ])}
 
     <div class="card">
+      <h3>${icon('file-text')} Income disclosure</h3>
+      <p class="muted">
+        Commissions are paid from product revenue only — never for recruiting. Retail overrides, margins and
+        bonuses follow the published commission plan. Amounts shown are before any applicable adjustments and
+        may be held for a review window before becoming available.
+      </p>
+    </div>
+
+    <div class="card">
       <h3>${icon('banknote')} Referral earnings</h3>
       ${
         rows.length
-          ? `<p class="empty" style="font-size:12px;margin-bottom:8px">Tap a row for full detail.</p>${commissionTable(rows)}`
+          ? `<p class="empty" style="font-size:12px;margin-bottom:8px">Tap a row for full detail.</p>${commissionTable(rows, { showUser: false })}`
           : emptyState('No referral earnings yet. Share your link to get started.', 'share-2')
       }
     </div>`;
 
   iconify(c);
-
-  c.querySelectorAll('[data-ref-toggle]').forEach((row) => {
-    row.addEventListener('click', () => {
-      const detail = c.querySelector(`[data-ref-detail="${(row as HTMLElement).dataset.refToggle}"]`) as HTMLElement | null;
-      if (!detail) return;
-      detail.hidden = !detail.hidden;
-      row.classList.toggle('open', !detail.hidden);
-    });
-  });
+  wireCommissionTable(c);
 
   const copy = async (text: string) => {
     try {

@@ -99,6 +99,7 @@ export default authed(async (req, res, ctx) => {
         return fail(res, limitMessage('codes', ent.maxCodes), 402);
       }
     }
+    const allowAll = (req.body as any)?.allowAllProducts !== undefined ? !!(req.body as any).allowAllProducts : true;
     const { data, error } = await sb
       .from('distributor_codes')
       .insert({
@@ -110,7 +111,9 @@ export default authed(async (req, res, ctx) => {
         price_zar: Number((req.body as any)?.priceZar || 0),
         is_for_sale: !!(req.body as any)?.isForSale,
         purchased: false,
-        is_active: true
+        is_active: true,
+        allow_all_products: allowAll,
+        product_filter_mode: allowAll ? 'all' : 'kit'
       })
       .select('*')
       .single();
@@ -147,6 +150,31 @@ export default authed(async (req, res, ctx) => {
     const { data: after } = await sb.from('distributor_codes').update(patch).eq('id', id).select('*').single();
     await recordAudit(req, { action: 'code.update', entityType: 'distributor_code', entityId: id, after: rowOut(after) });
     return ok(res, { data: rowOut(after) });
+  }
+
+  if (id && slug[1] === 'products' && req.method === 'GET') {
+    if (!canWrite) return fail(res, 'Forbidden', 403);
+    const { data: before } = await sb.from('distributor_codes').select('*').eq('id', id).maybeSingle();
+    if (!before) return fail(res, 'Not found', 404);
+    if (!canTouch(before)) return fail(res, 'Forbidden', 403);
+    const { data: links } = await sb.from('code_products').select('product_id').eq('code_id', id);
+    return ok(res, { data: { productIds: (links || []).map((l: any) => l.product_id) } });
+  }
+
+  if (id && slug[1] === 'products' && req.method === 'PUT') {
+    if (!canWrite) return fail(res, 'Forbidden', 403);
+    const { data: before } = await sb.from('distributor_codes').select('*').eq('id', id).maybeSingle();
+    if (!before) return fail(res, 'Not found', 404);
+    if (!canTouch(before)) return fail(res, 'Forbidden', 403);
+    const productIds = Array.isArray(req.body?.productIds) ? req.body.productIds : [];
+    await sb.from('code_products').delete().eq('code_id', id);
+    if (productIds.length) {
+      const rows = productIds.map((pid: string) => ({ code_id: id, product_id: pid }));
+      await sb.from('code_products').insert(rows);
+    }
+    await sb.from('distributor_codes').update({ allow_all_products: productIds.length === 0, product_filter_mode: productIds.length === 0 ? 'all' : 'kit' }).eq('id', id);
+    await recordAudit(req, { action: 'code.products.update', entityType: 'distributor_code', entityId: id, after: { productIds } });
+    return ok(res, { message: 'Updated' });
   }
 
   if (id && slug[1] === 'toggle' && req.method === 'POST') {

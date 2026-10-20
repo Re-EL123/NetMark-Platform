@@ -1,4 +1,4 @@
-import { authed, ok, fail, slugOf, getSupabase, rowOut } from '../http';
+import { authed, ok, fail, slugOf, getSupabase, rowOut, rowsOut } from '../http';
 import { recordAudit } from '../audit';
 
 const DEFAULT_PLATFORM = {
@@ -70,6 +70,40 @@ export default authed(async (req, res, ctx) => {
       company = (await readSetting('company', ctx.companyId, key))?.value || null;
     }
     return ok(res, { data: { platform, company } });
+  }
+
+  if (key === 'navigation' && req.method === 'GET') {
+    const sbn = getSupabase();
+    if (ctx.isPlatform) {
+      const { data } = await sbn.from('navigation_settings').select('*').eq('scope', 'platform').order('order_index', { ascending: true });
+      return ok(res, { data: rowsOut(data || []) });
+    }
+    const list: any[] = [];
+    const { data: g } = await sbn.from('navigation_settings').select('*').eq('scope', 'platform').is('role', null);
+    const { data: r } = await sbn.from('navigation_settings').select('*').eq('scope', 'platform').eq('role', ctx.role);
+    (g || []).forEach((x: any) => list.push(rowOut(x)));
+    (r || []).forEach((x: any) => list.push(rowOut(x)));
+    return ok(res, { data: list });
+  }
+
+  if (key === 'navigation' && req.method === 'PUT') {
+    if (!ctx.isPlatform) return fail(res, 'Only platform admins can configure navigation', 403);
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    const sbn = getSupabase();
+    await sbn.from('navigation_settings').delete().eq('scope', 'platform');
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (!it.navKey) continue;
+      await sbn.from('navigation_settings').insert({
+        scope: 'platform',
+        nav_key: it.navKey,
+        role: it.role || null,
+        visible: it.visible !== false,
+        order_index: i
+      });
+    }
+    await recordAudit(req, { action: 'settings.navigation.update', entityType: 'settings', entityId: 'navigation' });
+    return ok(res, { message: 'Navigation saved' });
   }
 
   if (req.method === 'PUT' || req.method === 'POST') {

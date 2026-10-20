@@ -5,6 +5,7 @@ import { verifySupabaseToken, loadUser } from '../middleware';
 import { capabilitiesFor } from '../permissions';
 import { rateLimit, rateLimitFail } from '../rateLimit';
 import { ensureMembership } from '../ranks';
+import { notifyEmail } from '../email';
 
 function clientKey(req: VercelRequest, suffix = '') {
   const ip = (req.headers['x-forwarded-for'] as string) || (req.headers['x-real-ip'] as string) || (req.socket as any)?.remoteAddress || 'unknown';
@@ -148,7 +149,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const { data: created, error: authErr } = await sb.auth.admin.createUser({
         email,
         password,
-        email_confirm: true,
+        email_confirm: false,
         user_metadata: { name }
       });
       if (authErr || !created?.user) {
@@ -201,6 +202,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (userErr) {
         console.error('register user insert error', userErr);
         return res.status(500).json({ success: false, message: 'Server error' });
+      }
+
+      try {
+        const token = randomUUID();
+        const expires = new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString();
+        await sb.from('user_email_verifications').insert({ user_id: uid, email, token, expires_at: expires });
+        const appUrl = process.env.APP_URL || 'https://netmark.re-el.co.za';
+        const link = `${appUrl.replace(/\/$/, '')}/verify.html?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
+        await notifyEmail(
+          email,
+          'Verify your email address',
+          `Hi ${name || ''},
+
+Please verify your email address by clicking the link below:
+${link}
+
+If you didn't create this account, you can ignore this email.`
+        );
+      } catch (e) {
+        console.error('email verification send error', e);
       }
 
       if (codeRow) {
@@ -264,6 +285,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(201).json({ success: true, data: { user: rowOut(user) } });
     } catch (err: any) {
       console.error('register error', err);
+      return res.status(500).json({ success: false, message: 'Server error' });
+    }
+  }
+
+  if (path === 'verify' && req.method === 'POST') {
+    try {
+      const sb = getSupabase();
+      const { token, email } = req.body || {};
+      if (!token || !email) return res.status(400).json({ success: false, message: 'Missing token or email' });
+      const { data: v } = await sb
+        .from('user_email_verifications')
+        .select('*')
+        .eq('email', email)
+        .eq('token', token)
+        .is('used_at', null)
+        .maybeSingle();
+      if (!v) return res.status(400).json({ success: false, message: 'Invalid or expired token' });
+      if (v.expires_at && new Date(v.expires_at) < new Date()) return res.status(400).json({ success: false, message: 'Token expired' });
+      await sb.from('users').update({ verification_status: 'verified' }).eq('id', v.user_id);
+      await sb.from('user_email_verifications').update({ used_at: new Date().toISOString() }).eq('id', v.id);
+      return res.status(200).json({ success: true, message: 'Email verified' });
+    } catch (e: any) {
+      return res.status(500).json({ success: false, message: 'Server error' });
+    }
+  }
+
+  if (path === 'verify' && req.method === 'GET') {
+    try {
+      const sb = getSupabase();
+      const token = (req.query.token as string) || '';
+      const email = (req.query.email as string) || '';
+      if (!token || !email) return res.status(400).json({ success: false, message: 'Missing token or email' });
+      const { data: v } = await sb
+        .from('user_email_verifications')
+        .select('*')
+        .eq('email', email)
+        .eq('token', token)
+        .is('used_at', null)
+        .maybeSingle();
+      if (!v) return res.status(400).json({ success: false, message: 'Invalid or expired token' });
+      if (v.expires_at && new Date(v.expires_at) < new Date()) return res.status(400).json({ success: false, message: 'Token expired' });
+      await sb.from('users').update({ verification_status: 'verified' }).eq('id', v.user_id);
+      await sb.from('user_email_verifications').update({ used_at: new Date().toISOString() }).eq('id', v.id);
+      return res.status(200).json({ success: true, message: 'Email verified' });
+    } catch (e: any) {
       return res.status(500).json({ success: false, message: 'Server error' });
     }
   }

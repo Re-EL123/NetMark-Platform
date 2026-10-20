@@ -49,6 +49,23 @@ export default authed(async (req, res, ctx) => {
     }
     // store owners and customers only ever see active products
     if (ctx.role === 'storeOwner' || ctx.role === 'customer') q = q.eq('is_active', true);
+
+    // If store owner has a code link with a product kit, restrict catalog
+    if (ctx.role === 'storeOwner') {
+      const { data: links } = await sb.from('company_links').select('code_id').eq('store_owner_id', ctx.userId).eq('is_active', true);
+      const codeIds = (links || []).map((l: any) => l.code_id).filter(Boolean);
+      if (codeIds.length) {
+        const { data: codes } = await sb.from('distributor_codes').select('*').in('id', codeIds);
+        const restricted = (codes || []).filter((c: any) => c.allow_all_products === false);
+        if (restricted.length) {
+          const { data: allowed } = await sb.from('code_products').select('product_id').in('code_id', restricted.map((c: any) => c.id));
+          const ids = [...new Set((allowed || []).map((a: any) => a.product_id))];
+          if (ids.length) q = q.in('id', ids);
+          else q = q.eq('id', '00000000-0000-0000-0000-000000000000');
+        }
+      }
+    }
+
     else if (req.query.isActive !== undefined) q = q.eq('is_active', String(req.query.isActive) === 'true');
     const result = await runList(q, list, { searchColumns: ['name', 'sku', 'description'] });
     return ok(res, { data: rowsOut(result.data), meta: { count: result.count, page: result.page, pageSize: result.pageSize } });

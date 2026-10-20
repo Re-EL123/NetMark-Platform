@@ -9,6 +9,8 @@ import { overviewStats, renderOverviewCharts } from './dashboard';
 import { getMyReferralCode, shareLink, shareUrl } from './referral';
 import { renderReferrals } from './referralsView';
 import { renderWallet } from './walletView';
+import { commissionTable, wireCommissionTable } from './commissionsView';
+import { checklistHtml, wireChecklist, OWNER_CHECKLIST } from './onboarding';
 
 const ROLE_OPTIONS = ['storeOwner', 'driver', 'customer'].map((r) => ({
   value: r,
@@ -47,7 +49,7 @@ initPanel({
   render: async (route, ctx) => {
     ctx.titleEl.textContent = nav.find((n) => n.id === route)?.label || 'Company Admin';
     const c = ctx.container;
-    if (route === 'dashboard') return dashboard(c);
+    if (route === 'dashboard') return dashboard(c, ctx.navigate);
     if (route === 'users') return users(c);
     if (route === 'stores') return stores(c);
     if (route === 'products') return products(c);
@@ -67,7 +69,7 @@ initPanel({
   }
 });
 
-async function dashboard(c: HTMLElement) {
+async function dashboard(c: HTMLElement, navigate: (route: string) => void = () => {}) {
   const [companyRes, reportRes] = await Promise.all([apiRequest('/companies'), apiRequest('/reports/overview')]);
   const company = companyRes.data?.[0];
   if (!reportRes.success) {
@@ -75,14 +77,17 @@ async function dashboard(c: HTMLElement) {
     return;
   }
   const d = reportRes.data;
+  const checklist = await checklistHtml('owner', OWNER_CHECKLIST);
   c.innerHTML = `
     ${company ? `<div class="card"><h2>${esc(company.name)}</h2><p>Company dashboard — manage your team, stores, products and orders.</p></div>` : ''}
+    ${checklist}
     ${overviewStats(d)}
     ${renderOverviewCharts(d)}
     <div class="card"><h3>${icon('package')} Top products</h3>${tableSimple(
       ['Product', 'Qty', 'Revenue'],
       (d.topProducts || []).map((p: any) => [esc(p.name), String(p.qty), money(p.revenue)])
     )}</div>`;
+  wireChecklist(c, 'owner', navigate);
 }
 
 function users(c: HTMLElement) {
@@ -474,6 +479,7 @@ function codes(c: HTMLElement) {
     toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>New code</span></button>`,
     actions: (r) =>
       act('share', r.id, 'Share') +
+      act('kit', r.id, 'Product kit') +
       act('edit', r.id, 'Edit') +
       act('toggle', r.id, r.isActive ? 'Disable' : 'Enable') +
       act('delete', r.id, 'Delete', 'danger'),
@@ -485,8 +491,19 @@ function codes(c: HTMLElement) {
             { name: 'code', label: 'Code', help: 'Leave blank to auto-generate' },
             ...marketFields(),
             { name: 'maxUses', label: 'Max uses', type: 'number', min: 1 },
-            { name: 'expiresAt', label: 'Expires', type: 'date' }
+            { name: 'expiresAt', label: 'Expires', type: 'date' },
+            { name: 'allowAllProducts', label: 'Allow access to ALL company products', type: 'switch', value: true, help: 'When off, select products for the kit.' },
+            { name: 'productIds', label: 'Product kit', type: 'select', options: [], multiple: true }
           ],
+          onMount: async (body) => {
+            const res = await apiRequest('/products?pageSize=1000').catch(() => null);
+            const products: any[] = res?.success ? res.data || [] : [];
+            const sel = body.querySelector('select[name="productIds"]') as HTMLSelectElement | null;
+            if (sel) {
+              sel.innerHTML = products.map((p: any) => `<option value="${esc(p.id)}">${esc(p.name || p.id.slice(0, 8))}</option>`).join('');
+              if ((window as any).wireFields) (window as any).wireFields(body, [{ name: 'productIds', label: 'Product kit', type: 'select', options: products.map((p: any) => ({ value: p.id, label: p.name })), multiple: true }]);
+            }
+          },
           onSubmit: async (v) => {
             const res = await apiRequest('/codes', { method: 'POST', body: JSON.stringify(v) });
             if (!res.success) throw new Error(res.message);
@@ -510,6 +527,34 @@ function codes(c: HTMLElement) {
               const res = await apiRequest(`/codes/${id}`, { method: 'PUT', body: JSON.stringify(v) });
               if (!res.success) throw new Error(res.message);
               toast('Code updated', 'success');
+              reload();
+            }
+          });
+        },
+        kit: async (id) => {
+          const [productsRes, kitRes] = await Promise.all([
+            apiRequest('/products?pageSize=1000').catch(() => null),
+            apiRequest(`/codes/${id}/products`).catch(() => null)
+          ]);
+          const products: any[] = productsRes?.success ? (productsRes.data || []) : [];
+          const selected = kitRes?.success && Array.isArray(kitRes.data?.productIds) ? kitRes.data.productIds : [];
+          openModal({
+            title: 'Select product kit for this code',
+            fields: [
+              { name: 'allowAll', label: 'Allow ALL company products', type: 'switch', value: selected.length === 0, help: 'Turn off to restrict to the selected products below.' },
+              { name: 'productIds', label: 'Products in kit', type: 'select', multiple: true, options: products.map((p: any) => ({ value: p.id, label: p.name || p.id.slice(0, 8) })), value: selected }
+            ],
+            submitLabel: 'Save kit',
+            onSubmit: async (v) => {
+              const allowAll = !!v.allowAll;
+              let ids: string[] = [];
+              if (!allowAll) {
+                if (Array.isArray(v.productIds)) ids = v.productIds;
+                else if (typeof v.productIds === 'string' && v.productIds) ids = v.productIds.split(',').map((s: string) => s.trim()).filter(Boolean);
+              }
+              const res = await apiRequest(`/codes/${id}/products`, { method: 'PUT', body: JSON.stringify({ productIds: ids }) });
+              if (!res.success) throw new Error(res.message);
+              toast('Product kit updated', 'success');
               reload();
             }
           });
@@ -843,17 +888,18 @@ async function wallet(c: HTMLElement) {
 }
 
 /* ------------------------------ commissions ---------------------------- */
-function commissions(c: HTMLElement) {
-  crudView(c, {
-    endpoint: '/commissions',
-    searchPlaceholder: 'Search commissions…',
-    columns: [
-      { key: 'orderId', label: 'Order', render: (r) => (r.orderId ? esc(String(r.orderId).slice(0, 8)) : '—') },
-      { key: 'amountZar', label: 'Amount (ZAR)', render: (r) => money(r.amountZar || 0) },
-      { key: 'bonusType', label: 'Type', render: (r) => titleCase(r.bonusType || 'sale') },
-      { key: 'status', label: 'Status', render: (r) => statusBadge(r.status) },
-      { key: 'createdAt', label: 'Earned', render: (r) => formatDate(r.createdAt) }
-    ],
-    empty: 'No commissions earned yet.'
-  });
+async function commissions(c: HTMLElement) {
+  c.innerHTML = '<p class="empty">Loading commissions…</p>';
+  const res = await apiRequest('/commissions').catch(() => null);
+  const rows: any[] = res?.success ? res.data || [] : [];
+  if (!rows.length) {
+    c.innerHTML = emptyState('No commissions earned yet.', 'banknote');
+    return;
+  }
+  const earned = rows.filter((r) => r.status !== 'reversed').reduce((t, r) => t + Number(r.amountZar || 0), 0);
+  c.innerHTML = `
+    <p class="empty" style="font-size:12px;margin-bottom:8px">Tap a row to see how each amount was calculated.</p>
+    ${statCards([{ label: 'Total earned (ZAR)', value: earned, format: 'money', icon: 'banknote', tone: 'success' }])}
+    ${commissionTable(rows, { showOrder: true })}`;
+  wireCommissionTable(c);
 }
