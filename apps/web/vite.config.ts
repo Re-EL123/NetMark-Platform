@@ -15,6 +15,12 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         register: resolve(__dirname, 'register.html'),
+        verify: resolve(__dirname, 'verify.html'),
+        terms: resolve(__dirname, 'terms.html'),
+        privacy: resolve(__dirname, 'privacy.html'),
+        faq: resolve(__dirname, 'faq.html'),
+        support: resolve(__dirname, 'support.html'),
+        feedback: resolve(__dirname, 'feedback.html'),
         platform: resolve(__dirname, 'platform/index.html'),
         owner: resolve(__dirname, 'owner/index.html'),
         business: resolve(__dirname, 'business/index.html'),
