@@ -334,7 +334,7 @@ function inject(html: string, head: string, body: string): string {
     .replace(/<script type="application\/ld\+json" id="sf-jsonld">[\s\S]*?<\/script>/gi, '');
   out = out.replace(/<head([^>]*)>/i, `<head$1>\n    ${head}`);
   out = out.replace(
-    /<div id="sf-root">[\s\S]*?<\/div>(\s*<script)/i,
+    /<div id="sf-root">[\s\S]*?<\/div>(\s*(?:<script|<\/body>))/i,
     `<div id="sf-root">${body}</div>$1`
   );
   return out;
