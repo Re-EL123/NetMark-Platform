@@ -492,16 +492,18 @@ function codes(c: HTMLElement) {
             ...marketFields(),
             { name: 'maxUses', label: 'Max uses', type: 'number', min: 1 },
             { name: 'expiresAt', label: 'Expires', type: 'date' },
-            { name: 'allowAllProducts', label: 'Allow access to ALL company products', type: 'switch', value: true, help: 'When off, select products for the kit.' },
-            { name: 'productIds', label: 'Product kit', type: 'select', options: [], multiple: true }
+            { name: 'allowAllProducts', label: 'Allow access to ALL company products', type: 'switch', value: true, help: 'Turn off to create a product kit with multiple products.' },
+            { name: 'productIds', label: 'Product kit (select multiple)', type: 'select', options: [], multiple: true }
           ],
           onMount: async (body) => {
             const res = await apiRequest('/products?pageSize=1000').catch(() => null);
             const products: any[] = res?.success ? res.data || [] : [];
             const sel = body.querySelector('select[name="productIds"]') as HTMLSelectElement | null;
             if (sel) {
+              sel.setAttribute('multiple', 'multiple');
+              sel.setAttribute('size', Math.min(8, Math.max(4, products.length || 4)).toString());
               sel.innerHTML = products.map((p: any) => `<option value="${esc(p.id)}">${esc(p.name || p.id.slice(0, 8))}</option>`).join('');
-              if ((window as any).wireFields) (window as any).wireFields(body, [{ name: 'productIds', label: 'Product kit', type: 'select', options: products.map((p: any) => ({ value: p.id, label: p.name })), multiple: true }]);
+              if ((window as any).wireFields) (window as any).wireFields(body, [{ name: 'productIds', label: 'Product kit (select multiple)', type: 'select', options: products.map((p: any) => ({ value: p.id, label: p.name })), multiple: true }]);
             }
           },
           onSubmit: async (v) => {
@@ -528,7 +530,7 @@ function codes(c: HTMLElement) {
               { name: 'maxUses', label: 'Max uses', type: 'number', min: 1, value: row.maxUses },
               { name: 'expiresAt', label: 'Expires', type: 'date', value: row.expiresAt ? row.expiresAt.split('T')[0] : '' },
               { name: 'allowAllProducts', label: 'Allow access to ALL company products', type: 'switch', value: row.allowAllProducts !== false },
-              { name: 'productIds', label: 'Product kit', type: 'select', multiple: true, options: [] }
+              { name: 'productIds', label: 'Product kit (select multiple)', type: 'select', multiple: true, options: [] }
             ],
             onMount: async (body) => {
               const [productsRes, kitRes] = await Promise.all([
@@ -539,6 +541,8 @@ function codes(c: HTMLElement) {
               const selected = kitRes?.success && Array.isArray(kitRes.data?.productIds) ? kitRes.data.productIds : [];
               const sel = body.querySelector('select[name="productIds"]') as HTMLSelectElement | null;
               if (sel) {
+                sel.setAttribute('multiple', 'multiple');
+                sel.setAttribute('size', Math.min(10, Math.max(4, products.length || 4)).toString());
                 sel.innerHTML = products.map((p: any) => `<option value="${esc(p.id)}">${esc(p.name || p.id.slice(0, 8))}</option>`).join('');
                 Array.from(sel.options).forEach((o) => { if (selected.includes(o.value)) o.selected = true; });
               }
@@ -562,10 +566,10 @@ function codes(c: HTMLElement) {
           const products: any[] = productsRes?.success ? (productsRes.data || []) : [];
           const selected = kitRes?.success && Array.isArray(kitRes.data?.productIds) ? kitRes.data.productIds : [];
           openModal({
-            title: 'Select product kit for this code',
+            title: 'Edit product kit for this code',
             fields: [
-              { name: 'allowAll', label: 'Allow ALL company products', type: 'switch', value: selected.length === 0, help: 'Turn off to restrict to the selected products below.' },
-              { name: 'productIds', label: 'Products in kit', type: 'select', multiple: true, options: products.map((p: any) => ({ value: p.id, label: p.name || p.id.slice(0, 8) })), value: selected }
+              { name: 'allowAll', label: 'Allow ALL company products', type: 'switch', value: selected.length === 0, help: 'Turn off to select multiple products for this kit.' },
+              { name: 'productIds', label: 'Product kit (select multiple)', type: 'select', multiple: true, options: products.map((p: any) => ({ value: p.id, label: p.name || p.id.slice(0, 8) })), value: selected }
             ],
             submitLabel: 'Save kit',
             onSubmit: async (v) => {
