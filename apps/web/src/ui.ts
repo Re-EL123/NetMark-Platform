@@ -2,6 +2,7 @@ import { esc } from './render';
 import { icon, iconify } from './icons';
 import { sparkline } from './charts';
 import { uploadFieldHtml, wireUploaders, type UploadField } from './upload';
+import { wireAddressFields } from './address';
 
 export type ToastType = 'info' | 'success' | 'error';
 
@@ -115,6 +116,8 @@ export interface Field {
   counter?: number;
   /** Static unit shown inside the control (%, days, ZAR, km…). */
   suffix?: string;
+  /** Enhance with Photon address autocomplete + "use my location". */
+  address?: boolean;
 }
 
 const UPLOAD_TYPES = ['image', 'video', 'file', 'document', 'gallery', 'documents'];
@@ -175,7 +178,7 @@ function fieldHtml(f: Field): string {
       <select ${common}>${markup}</select>${f.help ? `<p class="empty" style="font-size:12px">${esc(f.help)}</p>` : ''}</div>`;
   }
   if (f.type === 'textarea') {
-    return `<div class="form-group"><label for="f_${esc(f.name)}">${esc(f.label)}</label>
+    return `<div class="form-group${f.address ? ' addr-group' : ''}"${f.address ? ' data-address' : ''}><label for="f_${esc(f.name)}">${esc(f.label)}</label>
       <textarea ${common} rows="${f.rows || 3}" placeholder="${esc(f.placeholder || '')}" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);font-family:inherit">${esc(value)}</textarea>
       ${f.help ? `<p class="empty" style="font-size:12px">${esc(f.help)}</p>` : ''}${counterHtml(f)}</div>`;
   }
@@ -191,8 +194,9 @@ function fieldHtml(f: Field): string {
   const input = `<input type="${type}" ${common} value="${esc(value)}"
       ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ''}
       ${f.step ? `step="${esc(f.step)}"` : ''} ${f.min !== undefined ? `min="${esc(f.min)}"` : ''} ${f.max !== undefined ? `max="${esc(f.max)}"` : ''} />`;
-  return `<div class="form-group"><label for="f_${esc(f.name)}">${esc(f.label)}</label>
-    ${f.suffix ? `<span class="input-group">${input}<span class="input-suffix">${esc(f.suffix)}</span></span>` : input}
+  const wrapped = f.suffix ? `<span class="input-group">${input}<span class="input-suffix">${esc(f.suffix)}</span></span>` : input;
+  return `<div class="form-group${f.address ? ' addr-group' : ''}"${f.address ? ' data-address' : ''}><label for="f_${esc(f.name)}">${esc(f.label)}</label>
+    ${wrapped}
     ${f.help ? `<p class="empty" style="font-size:12px">${esc(f.help)}</p>` : ''}${counterHtml(f)}</div>`;
 }
 
@@ -233,6 +237,14 @@ function wireColorFields(scope: HTMLElement, fields: Field[]): void {
 /** Render a list of fields as plain HTML (used outside `openModal` too). */
 export function fieldsHtml(fields: Field[]): string {
   return fields.map(fieldHtml).join('');
+}
+
+/** Attach every interactive behaviour a rendered field list needs. */
+export function wireFields(host: HTMLElement, fields: Field[] = []): void {
+  wireUploaders(host);
+  wireCounters(host, fields);
+  wireColorFields(host, fields);
+  wireAddressFields(host);
 }
 
 /** Read the current values of a rendered field list back into an object. */
@@ -312,6 +324,7 @@ export function openModal(opts: ModalOptions): Promise<void> {
     wireUploaders(overlay);
     wireCounters(overlay, fields);
     wireColorFields(overlay, fields);
+    wireAddressFields(overlay);
     if (opts.onMount) {
       const body = overlay.querySelector('.modal-body') as HTMLElement | null;
       if (body) {

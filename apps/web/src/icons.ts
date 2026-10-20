@@ -102,7 +102,8 @@ import {
   MessageCircle,
   Copy,
   QrCode,
-  Palette
+  Palette,
+  Crosshair
 } from 'lucide';
 
 /**
@@ -213,7 +214,8 @@ const REGISTRY: Record<string, any> = {
   MessageCircle,
   Copy,
   QrCode,
-  Palette
+  Palette,
+  Crosshair
 };
 /**
  * Produce a placeholder element. `iconify()` later swaps it for the real SVG.

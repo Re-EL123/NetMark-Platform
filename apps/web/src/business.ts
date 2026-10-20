@@ -94,7 +94,7 @@ function stores(c: HTMLElement) {
           fields: [
             { name: 'name', label: 'Store name', required: true },
             { name: 'logo', label: 'Store logo', type: 'image', folder: 'stores' },
-            { name: 'address', label: 'Address' }
+            { name: 'address', label: 'Address', address: true }
           ],
           onSubmit: async (v) => {
             const res = await apiRequest('/stores', { method: 'POST', body: JSON.stringify(v) });
@@ -110,7 +110,7 @@ function stores(c: HTMLElement) {
             fields: [
               { name: 'name', label: 'Store name', value: rows.find((r) => r.id === id)?.name },
               { name: 'logo', label: 'Store logo', type: 'image', folder: 'stores', value: rows.find((r) => r.id === id)?.logo },
-              { name: 'address', label: 'Address', value: rows.find((r) => r.id === id)?.address }
+              { name: 'address', label: 'Address', address: true, value: rows.find((r) => r.id === id)?.address }
             ],
             onSubmit: async (v) => {
               await apiRequest(`/stores/${id}`, { method: 'PUT', body: JSON.stringify(v) });
@@ -1056,7 +1056,7 @@ function editStorefront(r: any, done: () => void) {
       { name: 'phone', label: 'Phone', type: 'tel', value: sf.phone },
       { name: 'whatsapp', label: 'WhatsApp number', type: 'tel', value: sf.whatsapp, help: 'Include country code, e.g. +27…' },
       { name: 'email', label: 'Email', type: 'email', value: sf.email },
-      { name: 'address', label: 'Address', value: sf.address || r.address },
+      { name: 'address', label: 'Address', address: true, value: sf.address || r.address },
       { name: 'hours', label: 'Opening hours', value: sf.hours, placeholder: 'Mon–Fri 8:00–17:00' },
 
       { name: 'secSocial', label: 'Social links', type: 'section' },

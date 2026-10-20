@@ -2,9 +2,9 @@ import { apiRequest, submitPayFast } from './api';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { crudView } from './crud';
-import { openModal, confirmDialog, toast, money, titleCase, emptyState, statCards, act, wire, tableSimple, Field, fieldsHtml, readFields } from './ui';
+import { openModal, confirmDialog, toast, money, titleCase, emptyState, statCards, act, wire, tableSimple, Field, fieldsHtml, readFields, wireFields } from './ui';
 import { icon, iconify } from './icons';
-import { uploadFieldHtml, wireUploaders } from './upload';
+import { uploadFieldHtml } from './upload';
 import { overviewStats, renderOverviewCharts } from './dashboard';
 import { getMyReferralCode, shareLink, shareUrl } from './referral';
 import { renderReferrals } from './referralsView';
@@ -186,7 +186,7 @@ async function storeModal(row: any, reload: () => void) {
     fields: [
       { name: 'name', label: 'Store name', required: true, value: row?.name },
       { name: 'logo', label: 'Store logo', type: 'image', folder: 'stores', value: row?.logo },
-      { name: 'address', label: 'Address', value: row?.address }
+      { name: 'address', label: 'Address', address: true, value: row?.address }
     ],
     onSubmit: async (v) => {
       const res = row
@@ -641,7 +641,7 @@ async function settings(c: HTMLElement) {
 
   const fields: Field[] = [
     { name: 'name', label: 'Company name', value: company?.name },
-    { name: 'address', label: 'Business address', value: s.address },
+    { name: 'address', label: 'Business address', address: true, value: s.address },
     { name: 'phone', label: 'Contact phone', type: 'tel', value: s.phone, placeholder: '+27…' },
     { name: 'deliveryFee', label: 'Delivery fee', type: 'number', step: '0.01', min: 0, suffix: 'ZAR', value: s.deliveryFee ?? '' },
     { name: 'deliveryRadiusKm', label: 'Delivery radius', type: 'number', min: 0, suffix: 'km', value: s.deliveryRadiusKm ?? '' }
@@ -654,7 +654,7 @@ async function settings(c: HTMLElement) {
     `<button class="btn btn-sm" type="submit">${icon('send')}<span>Submit for approval</span></button>`;
   host.appendChild(form);
   iconify(form);
-  wireUploaders(form);
+  wireFields(form, fields);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const values = readFields(form, fields);

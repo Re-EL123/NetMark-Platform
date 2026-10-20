@@ -2,7 +2,7 @@ import { apiRequest } from './api';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { crudView } from './crud';
-import { openModal, confirmDialog, toast, money, titleCase, emptyState, statCards, dataTable, act, wire, tableSimple, Field, fieldsHtml, readFields } from './ui';
+import { openModal, confirmDialog, toast, money, titleCase, emptyState, statCards, dataTable, act, wire, tableSimple, Field, fieldsHtml, readFields, wireFields } from './ui';
 import { icon, iconify } from './icons';
 import { overviewStats, renderOverviewCharts } from './dashboard';
 import { donutChart, barList, chartCard } from './charts';
@@ -510,7 +510,7 @@ async function storeModal(row: any, reload: () => void) {
       { name: 'name', label: 'Store name', required: true, value: row?.name },
       { name: 'logo', label: 'Store logo', type: 'image', folder: 'stores', value: row?.logo },
       { name: 'banner', label: 'Store banner', type: 'image', folder: 'stores', value: row?.banner },
-      { name: 'address', label: 'Address', value: row?.address },
+      { name: 'address', label: 'Address', address: true, value: row?.address },
       { name: 'companyId', label: 'Company', type: 'select', options: [{ value: '', label: 'None' }, ...companies], value: row?.companyId || '' }
     ],
     onSubmit: async (v) => {
@@ -1113,6 +1113,7 @@ async function renderSettings(c: HTMLElement) {
     fieldsHtml(fields) + `<button class="btn btn-sm" type="submit">${icon('check')}<span>Save settings</span></button>`;
   host.appendChild(form);
   iconify(form);
+  wireFields(form, fields);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const r = await apiRequest('/settings', {
@@ -1161,6 +1162,7 @@ async function renderPlatformCommission(c: HTMLElement) {
 
   (host.querySelector('#platformCommissionForm') as HTMLElement).appendChild(form);
   iconify(form);
+  wireFields(form, fields);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const value = readFields(form, fields);

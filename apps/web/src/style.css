@@ -3428,6 +3428,107 @@ header {
   background: var(--dark);
 }
 
+/* ------------------------ address autocomplete -------------------------- */
+.addr-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.addr-locate {
+  flex: none;
+  margin: 0;
+}
+
+.addr-locate.busy svg.lucide {
+  animation: nm-spin 1s linear infinite;
+}
+
+.addr-status {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.addr-status.error {
+  color: var(--danger);
+}
+
+.addr-group.addr-confirmed textarea,
+.addr-group.addr-confirmed input:not([type='hidden']) {
+  border-color: var(--success);
+}
+
+.addr-group.addr-error textarea,
+.addr-group.addr-error input:not([type='hidden']) {
+  border-color: var(--danger);
+}
+
+.addr-suggest {
+  position: absolute;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  max-height: 288px;
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-dropdown);
+}
+
+.addr-suggest-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.addr-suggest-item:hover {
+  background: var(--netmark-red-soft);
+}
+
+.addr-suggest-item svg.lucide {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-top: 2px;
+  color: var(--text-secondary);
+}
+
+.addr-suggest-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.addr-suggest-main {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.addr-suggest-sub {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+@keyframes nm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* =====================================================================
    Storefront editor with live preview
    ===================================================================== */

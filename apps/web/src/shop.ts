@@ -274,7 +274,7 @@ async function checkoutGroup(groupLines: CartLine[], ctx: any) {
   await openModal({
     title: 'Checkout',
     fields: [
-      { name: 'address', label: 'Delivery address', type: 'textarea', required: true },
+      { name: 'address', label: 'Delivery address', type: 'textarea', required: true, address: true },
       { name: 'notes', label: 'Notes', type: 'textarea' },
       { name: 'orderType', label: 'Type', type: 'select', options: [{ value: 'delivery', label: 'Delivery' }, { value: 'pickup', label: 'Pickup' }], value: 'delivery' },
       { name: 'payNow', label: 'Pay now with PayFast', type: 'checkbox', value: true }
