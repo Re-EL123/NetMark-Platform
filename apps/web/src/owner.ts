@@ -28,6 +28,7 @@ const nav: NavItem[] = [
   { id: 'drivers', label: 'Drivers', group: 'Organisation', icon: 'truck' },
   { id: 'appointments', label: 'Appointments', group: 'Organisation', icon: 'calendar-clock' },
   { id: 'products', label: 'Products', group: 'Catalog', icon: 'package' },
+  { id: 'kits', label: 'Product Kits', group: 'Catalog', icon: 'boxes' },
   { id: 'listings', label: 'Store Listings', group: 'Catalog', capability: 'products.read', icon: 'boxes' },
   { id: 'codes', label: 'Codes', group: 'Catalog', icon: 'ticket-percent' },
   { id: 'purchases', label: 'Purchase Orders', group: 'Sales', capability: 'orders.read', icon: 'shopping-bag' },
@@ -53,6 +54,7 @@ initPanel({
     if (route === 'users') return users(c);
     if (route === 'stores') return stores(c);
     if (route === 'products') return products(c);
+    if (route === 'kits') return productKits(c);
     if (route === 'listings') return listings(c);
     if (route === 'purchases') return purchases(c);
     if (route === 'orders') return orders(c);
@@ -930,3 +932,57 @@ async function commissions(c: HTMLElement) {
     ${commissionTable(rows, { showOrder: true })}`;
   wireCommissionTable(c);
 }
+
+
+
+
+async function productKits(c: HTMLElement) {
+  crudView(c, {
+    endpoint: '/codes?action=kits',
+    columns: [
+      { key: 'name', label: 'Name' },
+      { key: 'createdAt', label: 'Created', render: (v: any) => (v ? new Date(v).toLocaleDateString() : '-') }
+    ],
+    actions: (r: any) => `<button class="btn btn-sm" data-act="items" data-id="${r.id}">Manage items</button>`
+  });
+  setTimeout(() => {
+    c.querySelectorAll('[data-act="items"]').forEach((btn) => {
+      btn.addEventListener('click', () => manageKit((btn as HTMLElement).dataset.id!));
+    });
+  }, 200);
+}
+
+async function manageKit(id: string) {
+  const [prod, items] = await Promise.all([
+    apiRequest('/products?pageSize=1000'),
+    apiRequest(`/kits/${id}/items`)
+  ]);
+  const products = prod?.success ? prod.data || [] : [];
+  const selected = items?.success && Array.isArray(items.data?.productIds) ? items.data.productIds : [];
+  openModal({
+    title: 'Kit products',
+    fields: [
+      { name: 'productIds', label: 'Products in kit (select multiple)', type: 'select', multiple: true, options: products.map((p: any) => ({ value: p.id, label: p.name })) }
+    ],
+    onMount: (body) => {
+      const sel = body.querySelector('select[name="productIds"]') as HTMLSelectElement | null;
+      if (sel) {
+        sel.setAttribute('multiple', 'multiple');
+        sel.setAttribute('size', String(Math.min(12, Math.max(6, products.length || 6))));
+        Array.from(sel.options).forEach((o) => {
+          if (selected.includes((o as HTMLOptionElement).value)) (o as HTMLOptionElement).selected = true;
+        });
+      }
+    },
+    submitLabel: 'Save',
+    onSubmit: async (v) => {
+      let ids: string[] = [];
+      if (Array.isArray(v.productIds)) ids = v.productIds;
+      else if (typeof v.productIds === 'string' && v.productIds) ids = v.productIds.split(',').filter(Boolean);
+      const r2 = await apiRequest(`/kits/${id}/items`, { method: 'PUT', body: JSON.stringify({ productIds: ids }) });
+      if (!r2.success) throw new Error(r2.message);
+      toast('Kit updated', 'success');
+    }
+  });
+}
+

@@ -99,7 +99,7 @@ export default authed(async (req, res, ctx) => {
         return fail(res, limitMessage('codes', ent.maxCodes), 402);
       }
     }
-    const allowAll = (req.body as any)?.allowAllProducts !== undefined ? !!(req.body as any).allowAllProducts : true;
+    const allowAll = (req.body as any)?.allowAllProducts !== undefined ? !!(req.body as any).allowAllProducts : !(req.body as any)?.kitId && !Array.isArray(req.body?.productIds);
     const { data, error } = await sb
       .from('distributor_codes')
       .insert({
@@ -179,7 +179,7 @@ export default authed(async (req, res, ctx) => {
     const { data: before } = await sb.from('distributor_codes').select('*').eq('id', id).maybeSingle();
     if (!before) return fail(res, 'Not found', 404);
     if (!canTouch(before)) return fail(res, 'Forbidden', 403);
-    const productIds = Array.isArray(req.body?.productIds) ? req.body.productIds : [];
+    const body = (req as any).body || {}; const productIds = Array.isArray(body.productIds) ? body.productIds : [];
     await sb.from('code_products').delete().eq('code_id', id);
     if (productIds.length) {
       const rows = productIds.map((pid: string) => ({ code_id: id, product_id: pid }));
@@ -188,6 +188,54 @@ export default authed(async (req, res, ctx) => {
     await sb.from('distributor_codes').update({ allow_all_products: productIds.length === 0, product_filter_mode: productIds.length === 0 ? 'all' : 'kit' }).eq('id', id);
     await recordAudit(req, { action: 'code.products.update', entityType: 'distributor_code', entityId: id, after: { productIds } });
     return ok(res, { message: 'Updated' });
+  }
+
+  if (slug.length === 0 && req.method === 'GET' && req.query.action === 'kits') {
+    if (!canWrite) return fail(res, 'Forbidden', 403);
+    const targetCompany = ctx.isPlatform ? (req.query.companyId as string) || null : ctx.companyId;
+    if (!targetCompany) return ok(res, { data: [] });
+    const { data: kits } = await sb.from('product_kits').select('*').eq('company_id', targetCompany).order('created_at', { ascending: false });
+    return ok(res, { data: kits || [] });
+  }
+
+  if (slug.length === 0 && req.method === 'POST' && req.query.action === 'kits') {
+    if (!canWrite) return fail(res, 'Forbidden', 403);
+    const targetCompany = ctx.isPlatform ? (req.body?.companyId as string) || null : ctx.companyId;
+    if (!targetCompany) return fail(res, 'Company required');
+    const { name, description } = req.body || {};
+    if (!name) return fail(res, 'Name required');
+    const { data } = await sb.from('product_kits').insert({ company_id: targetCompany, name, description }).select('*').single();
+    return ok(res, { data }, 201);
+  }
+
+  if (id && slug[1] === 'kit' && req.method === 'PUT') {
+    if (!canWrite) return fail(res, 'Forbidden', 403);
+    const { data: before } = await sb.from('distributor_codes').select('*').eq('id', id).maybeSingle();
+    if (!before) return fail(res, 'Not found', 404);
+    if (!canTouch(before)) return fail(res, 'Forbidden', 403);
+    const kitId = req.body?.kitId || null;
+    const body = (req as any).body || {}; const productIds = Array.isArray(body.productIds) ? body.productIds : [];
+    await sb.from('code_products').delete().eq('code_id', id);
+    if (kitId) {
+      const { data: items } = await sb.from('product_kit_items').select('product_id').eq('kit_id', kitId);
+      const ids = (items || []).map((i: any) => i.product_id);
+      if (ids.length) {
+        const rows = ids.map((pid: string) => ({ code_id: id, product_id: pid }));
+        await sb.from('code_products').insert(rows);
+      }
+    } else if (productIds.length) {
+      const rows = productIds.map((pid: string) => ({ code_id: id, product_id: pid }));
+      await sb.from('code_products').insert(rows);
+    }
+    await sb.from('distributor_codes').update({ allow_all_products: (kitId ? false : productIds.length === 0), product_filter_mode: (kitId || productIds.length) ? 'kit' : 'all' }).eq('id', id);
+    await recordAudit(req, { action: 'code.kit.link', entityType: 'distributor_code', entityId: id, after: { kitId, productIds } });
+    return ok(res, { message: 'Updated' });
+  }
+
+  if (id && slug[1] === 'kit' && req.method === 'GET') {
+    if (!canWrite) return fail(res, 'Forbidden', 403);
+    const { data: items } = await sb.from('code_products').select('product_id').eq('code_id', id);
+    return ok(res, { data: { productIds: (items || []).map((i: any) => i.product_id) } });
   }
 
   if (id && slug[1] === 'toggle' && req.method === 'POST') {
@@ -211,3 +259,23 @@ export default authed(async (req, res, ctx) => {
 
   return fail(res, 'Not found', 404);
 });
+
+export async function handleKitItems(req: any, res: any, ctx: any, slug: string[]) {
+  const sb = getSupabase();
+  if (!(ctx.isPlatform || hasPermission(ctx.role, "codes.write"))) return fail(res, 'Forbidden', 403);
+  const kitId = slug[0];
+  if (req.method === 'GET') {
+    const { data: items } = await sb.from('product_kit_items').select('product_id').eq('kit_id', kitId);
+    return ok(res, { data: { productIds: (items || []).map((i: any) => i.product_id) } });
+  }
+  if (req.method === 'PUT') {
+    const body = (req as any).body || {}; const productIds = Array.isArray(body.productIds) ? body.productIds : [];
+    await sb.from('product_kit_items').delete().eq('kit_id', kitId);
+    if (productIds.length) {
+      const rows = productIds.map((pid: string) => ({ kit_id: kitId, product_id: pid }));
+      await sb.from('product_kit_items').insert(rows);
+    }
+    return ok(res, { message: 'Updated' });
+  }
+  return fail(res, 'Not found', 404);
+}
