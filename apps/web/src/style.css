@@ -4077,23 +4077,47 @@ header {
   padding: 0;
   display: grid;
   gap: 6px;
-  max-height: 320px;
+}
+
+.pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 340px;
   overflow-y: auto;
-  padding-right: 4px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
 }
 
-label.chk-item {
-  user-select: none;
+.pick-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-primary);
+  transition: background 0.12s ease;
 }
 
-label.chk-item input[type='checkbox'] {
-  margin-top: 2px;
-  flex: 0 0 auto;
-}
-
-label.chk-item:has(input:checked) {
-  border-color: var(--brand);
+.pick-item:hover {
   background: var(--netmark-red-soft);
+}
+
+.pick-item input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+
+.pick-item:has(input:checked) {
+  background: var(--netmark-red-soft);
+  font-weight: 600;
 }
 
 .chk-item {

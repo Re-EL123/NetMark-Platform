@@ -172,11 +172,11 @@ function fieldHtml(f: Field): string {
       : String(f.value || '').split(',').map((s) => s.trim()).filter(Boolean);
     const items = opts
       .map(
-        (o) => `<label class="chk-item"><input type="checkbox" name="${esc(f.name)}" value="${esc(o.value)}" ${selectedVals.includes(String(o.value)) ? 'checked' : ''}> <span>${esc(o.label)}</span></label>`
+        (o) => `<label class="pick-item"><input type="checkbox" name="${esc(f.name)}" value="${esc(o.value)}" ${selectedVals.includes(String(o.value)) ? 'checked' : ''}> <span>${esc(o.label)}</span></label>`
       )
       .join('');
     return `<div class="form-group"><label>${esc(f.label)}</label>
-      <div class="chk-list">${items || '<p class="empty" style="font-size:12px">No options available.</p>'}</div>
+      <div class="pick-list">${items || '<p class="empty" style="font-size:12px">No options available.</p>'}</div>
       ${f.help ? `<p class="empty" style="font-size:12px">${esc(f.help)}</p>` : ''}</div>`;
   }
   if (f.type === 'select') {
