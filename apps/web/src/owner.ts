@@ -498,7 +498,7 @@ function codes(c: HTMLElement) {
             { name: 'allowAllProducts', label: 'Allow access to ALL company products', type: 'switch', value: true, help: 'Switch off if using a kit.' }
           ],
           onMount: async (body) => {
-            const kitRes = await apiRequest('/codes?action=kits').catch(() => null);
+            const kitRes = await apiRequest('/kits').catch(() => null);
             const kits = kitRes?.success ? kitRes.data || [] : [];
             const kitSel = body.querySelector('select[name="kitId"]') as HTMLSelectElement | null;
             if (kitSel) {
@@ -532,7 +532,7 @@ function codes(c: HTMLElement) {
               { name: 'allowAllProducts', label: 'Allow access to ALL company products', type: 'switch', value: row.allowAllProducts !== false }
             ],
             onMount: async (body) => {
-              const kitRes = await apiRequest('/codes?action=kits').catch(() => null);
+              const kitRes = await apiRequest('/kits').catch(() => null);
               const kits = kitRes?.success ? kitRes.data || [] : [];
               const kitSel = body.querySelector('select[name="kitId"]') as HTMLSelectElement | null;
               if (kitSel) {
@@ -548,7 +548,7 @@ function codes(c: HTMLElement) {
           });
         },
         kit: async (id) => {
-          const kitRes = await apiRequest('/codes?action=kits').catch(() => null);
+          const kitRes = await apiRequest('/kits').catch(() => null);
           const kits = kitRes?.success ? kitRes.data || [] : [];
           openModal({
             title: 'Link product kit to this code',
@@ -923,18 +923,34 @@ async function commissions(c: HTMLElement) {
 
 async function productKits(c: HTMLElement) {
   crudView(c, {
-    endpoint: '/codes?action=kits',
+    endpoint: '/kits',
     columns: [
       { key: 'name', label: 'Name' },
       { key: 'createdAt', label: 'Created', render: (v: any) => (v ? new Date(v).toLocaleDateString() : '-') }
     ],
-    actions: (r: any) => `<button class="btn btn-sm" data-act="items" data-id="${r.id}">Manage items</button>`
+    toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>New kit</span></button>`,
+    actions: (r: any) => `<button class="btn btn-sm" data-act="items" data-id="${r.id}">Manage items</button>`,
+    bind: (root: HTMLElement, reload: () => void) => {
+      (root.querySelector('[data-new]') as HTMLElement | null)?.addEventListener('click', () => {
+        openModal({
+          title: 'New product kit',
+          fields: [
+            { name: 'name', label: 'Name', required: true },
+            { name: 'description', label: 'Description', type: 'textarea' }
+          ],
+          onSubmit: async (v) => {
+            const r2 = await apiRequest('/kits', { method: 'POST', body: JSON.stringify(v) });
+            if (!r2.success) throw new Error(r2.message);
+            toast('Kit created', 'success');
+            reload();
+          }
+        });
+      });
+      root.querySelectorAll('[data-act="items"]').forEach((btn) => {
+        btn.addEventListener('click', () => manageKit((btn as HTMLElement).dataset.id!));
+      });
+    }
   });
-  setTimeout(() => {
-    c.querySelectorAll('[data-act="items"]').forEach((btn) => {
-      btn.addEventListener('click', () => manageKit((btn as HTMLElement).dataset.id!));
-    });
-  }, 200);
 }
 
 async function manageKit(id: string) {

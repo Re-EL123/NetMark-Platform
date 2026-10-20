@@ -211,24 +211,6 @@ export default authed(async (req, res, ctx) => {
     return ok(res, { message: 'Updated' });
   }
 
-  if (slug.length === 0 && req.method === 'GET' && req.query.action === 'kits') {
-    if (!canWrite) return fail(res, 'Forbidden', 403);
-    const targetCompany = ctx.isPlatform ? (req.query.companyId as string) || null : ctx.companyId;
-    if (!targetCompany) return ok(res, { data: [] });
-    const { data: kits } = await sb.from('product_kits').select('*').eq('company_id', targetCompany).order('created_at', { ascending: false });
-    return ok(res, { data: kits || [] });
-  }
-
-  if (slug.length === 0 && req.method === 'POST' && req.query.action === 'kits') {
-    if (!canWrite) return fail(res, 'Forbidden', 403);
-    const targetCompany = ctx.isPlatform ? (req.body?.companyId as string) || null : ctx.companyId;
-    if (!targetCompany) return fail(res, 'Company required');
-    const { name, description } = req.body || {};
-    if (!name) return fail(res, 'Name required');
-    const { data } = await sb.from('product_kits').insert({ company_id: targetCompany, name, description }).select('*').single();
-    return ok(res, { data }, 201);
-  }
-
   if (id && slug[1] === 'kit' && req.method === 'PUT') {
     if (!canWrite) return fail(res, 'Forbidden', 403);
     const { data: before } = await sb.from('distributor_codes').select('*').eq('id', id).maybeSingle();
@@ -280,23 +262,3 @@ export default authed(async (req, res, ctx) => {
 
   return fail(res, 'Not found', 404);
 });
-
-export async function handleKitItems(req: any, res: any, ctx: any, slug: string[]) {
-  const sb = getSupabase();
-  if (!(ctx.isPlatform || hasPermission(ctx.role, "codes.write"))) return fail(res, 'Forbidden', 403);
-  const kitId = slug[0];
-  if (req.method === 'GET') {
-    const { data: items } = await sb.from('product_kit_items').select('product_id').eq('kit_id', kitId);
-    return ok(res, { data: { productIds: (items || []).map((i: any) => i.product_id) } });
-  }
-  if (req.method === 'PUT') {
-    const body = (req as any).body || {}; const productIds = Array.isArray(body.productIds) ? body.productIds : [];
-    await sb.from('product_kit_items').delete().eq('kit_id', kitId);
-    if (productIds.length) {
-      const rows = productIds.map((pid: string) => ({ kit_id: kitId, product_id: pid }));
-      await sb.from('product_kit_items').insert(rows);
-    }
-    return ok(res, { message: 'Updated' });
-  }
-  return fail(res, 'Not found', 404);
-}

@@ -27,16 +27,16 @@ export function crudView(container: HTMLElement, cfg: CrudConfig) {
 
   async function draw() {
     container.innerHTML = '<p class="empty">Loading…</p>';
-    const params = new URLSearchParams({
-      page: String(state.page),
-      pageSize: String(cfg.pageSize || 25)
-    });
+    const [base, existing] = cfg.endpoint.split('?');
+    const params = new URLSearchParams(existing || '');
+    params.set('page', String(state.page));
+    params.set('pageSize', String(cfg.pageSize || 25));
     if (state.search) params.set('search', state.search);
     for (const [k, v] of Object.entries(state.filters)) if (v) params.set(k, v);
 
     let res: any;
     try {
-      res = await apiRequest(`${cfg.endpoint}?${params.toString()}`);
+      res = await apiRequest(`${base}?${params.toString()}`);
     } catch (err: any) {
       container.innerHTML = `<div class="card"><p class="empty">Failed to load: ${esc(err?.message || 'error')}</p></div>`;
       return;

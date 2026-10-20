@@ -15,7 +15,8 @@ import drivers from '../lib/handlers/drivers';
 import appointments from '../lib/handlers/appointments';
 import payments from '../lib/handlers/payments';
 import reports from '../lib/handlers/reports';
-import codes, { handleKitItems } from '../lib/handlers/codes';
+import codes from '../lib/handlers/codes';
+import productKits from '../lib/handlers/productKits';
 import deliveries from '../lib/handlers/deliveries';
 import admin from '../lib/handlers/admin';
 import settings from '../lib/handlers/settings';
@@ -79,6 +80,7 @@ const handlers: Record<string, Handler> = {
   reviews,
   uploads,
   ads,
+  'kits': productKits,
   storefront
 };export default async function handler(req: VercelRequest, res: VercelResponse) {
   // The vercel.json rewrite sends every /api/* request here while preserving
@@ -103,10 +105,6 @@ const handlers: Record<string, Handler> = {
   }
 
   const [domain, ...rest] = parts;
-  if (domain === 'kits') {
-    // @ts-ignore
-    return handleKitItems(req, res, (req as any).ctx || {}, rest);
-  }
   const domainHandler = handlers[domain];
 
   if (!domainHandler) {
