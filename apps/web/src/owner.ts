@@ -33,7 +33,7 @@ const nav: NavItem[] = [
   { id: 'codes', label: 'Codes', group: 'Catalog', icon: 'ticket-percent' },
   { id: 'purchases', label: 'Purchase Orders', group: 'Sales', capability: 'orders.read', icon: 'shopping-bag' },
   { id: 'orders', label: 'Orders', group: 'Sales', icon: 'receipt' },
-  { id: 'referrals', label: 'Referrals', group: 'Growth', capability: 'referrals.read', icon: 'share-2' },
+  { id: 'referrals', label: 'Referrals & Network', group: 'Growth', capability: 'referrals.read', icon: 'share-2' },
   { id: 'billing', label: 'Billing', group: 'Finance', icon: 'credit-card' },
   { id: 'wallet', label: 'Wallet', group: 'Finance', icon: 'wallet' },
   { id: 'commissions', label: 'Commissions', group: 'Finance', icon: 'banknote' },
@@ -134,7 +134,23 @@ async function userModal(row: any, reload: () => void) {
     { name: 'profileImage', label: 'Profile photo', type: 'image', folder: 'users', value: row?.profileImage },
     { name: 'role', label: 'Role', type: 'select', options: ROLE_OPTIONS, value: row?.role || 'customer' }
   ];
-  if (!row) fields.push({ name: 'password', label: 'Password', type: 'password', help: 'Leave blank to auto-generate' });
+  if (!row) {
+    fields.push({ name: 'password', label: 'Password', type: 'password', help: 'Leave blank to auto-generate' });
+    const roster = await apiRequest('/users?pageSize=500').catch(() => null);
+    const members: any[] = roster?.success ? roster.data || [] : [];
+    const sponsorOpts = [{ value: '', label: '— None (direct sign-up) —' }].concat(
+      members
+        .filter((m: any) => m.role !== 'driver')
+        .map((m: any) => ({ value: m.id, label: `${m.name} (${titleCase(m.role)})` }))
+    );
+    fields.push({
+      name: 'sponsorId',
+      label: 'Sponsor',
+      type: 'select',
+      options: sponsorOpts,
+      help: 'Who recruited this member. Sets their place in your referral network.'
+    });
+  }
   await openModal({
     title: row ? 'Edit team member' : 'Add team member',
     fields,

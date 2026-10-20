@@ -5,6 +5,7 @@ import { hasPermission, ROLES } from '../permissions';
 import { recordAudit } from '../audit';
 import { rateLimit, rateLimitFail } from '../rateLimit';
 import { entitlementsForCtx, withinLimit, limitMessage } from '../planLimits';
+import { ensureMembership } from '../ranks';
 
 function tempPassword() {
   return 'Nm-' + crypto.randomBytes(6).toString('base64url') + '!9';
@@ -39,7 +40,7 @@ export default authed(async (req, res, ctx) => {
 
   if (slug.length === 0 && req.method === 'POST') {
     if (!canWrite) return fail(res, 'Forbidden', 403);
-    const { name, email, phone, password, role, companyId, status } = req.body || {};
+    const { name, email, phone, password, role, companyId, status, sponsorId } = req.body || {};
     if (!name || !email) return fail(res, 'Name and email are required');
     const targetRole = role || 'customer';
     if (!ROLES.includes(targetRole)) return fail(res, 'Invalid role');
@@ -48,6 +49,16 @@ export default authed(async (req, res, ctx) => {
       return fail(res, 'You cannot create a user with that role', 403);
     }
     if (!ctx.isPlatform && !targetCompany) return fail(res, 'No company scope');
+
+    // Optional sponsor: the member who recruited this user. Must be in the same
+    // company (a company cannot sponsor across tenant boundaries).
+    let sponsor: string | null = null;
+    if (sponsorId) {
+      const { data: sponsorRow } = await sb.from('users').select('id, company_id').eq('id', sponsorId).maybeSingle();
+      if (!sponsorRow) return fail(res, 'Sponsor not found');
+      if (targetCompany && sponsorRow.company_id !== targetCompany) return fail(res, 'Sponsor must belong to the same company');
+      sponsor = sponsorRow.id;
+    }
 
     if (targetCompany) {
       const ent = await entitlementsForCtx(sb, ctx);
@@ -88,11 +99,19 @@ export default authed(async (req, res, ctx) => {
         company_id: targetCompany,
         tenant_id: tenantId,
         status: status || 'active',
+        distributor_id: sponsor,
         verification_status: ctx.isPlatform ? 'verified' : 'pending'
       })
       .select('*')
       .single();
     if (error) return fail(res, 'Could not create user record');
+    if (sponsor && targetCompany) {
+      try {
+        await ensureMembership(sb, { companyId: targetCompany, userId: user.id, sponsorId: sponsor, tenantId });
+      } catch (memberErr) {
+        console.error('user create membership error', memberErr);
+      }
+    }
     await recordAudit(req, { action: 'user.create', entityType: 'user', entityId: user.id, companyId: targetCompany, after: rowOut(user) });
     if (targetRole === 'driver') {
       await sb.from('drivers').insert({ user_id: user.id, company_id: targetCompany, status: 'pending' });

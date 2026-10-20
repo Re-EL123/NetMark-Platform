@@ -250,16 +250,19 @@ If you didn't create this account, you can ignore this email.`
         }
 
         // A signup code that names a company recruits the new member into that
-        // company's downline, sponsored by whoever issued the code.
-        try {
-          await ensureMembership(sb, {
-            companyId: codeRow.company_id,
-            userId: uid,
-            sponsorId: codeRow.distributor_id || null,
-            tenantId: resolvedTenantId
-          });
-        } catch (memberErr) {
-          console.error('register membership error', memberErr);
+        // company's downline, sponsored by whoever issued the code. Personal
+        // codes (no company) only set global attribution above.
+        if (codeRow.company_id) {
+          try {
+            await ensureMembership(sb, {
+              companyId: codeRow.company_id,
+              userId: uid,
+              sponsorId: codeRow.distributor_id || null,
+              tenantId: resolvedTenantId
+            });
+          } catch (memberErr) {
+            console.error('register membership error', memberErr);
+          }
         }
       }
 

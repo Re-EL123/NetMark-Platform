@@ -5,6 +5,7 @@ import { esc, statusBadge, badge, formatDate } from './render';
 import { openModal, confirmDialog, toast, money, titleCase, emptyState, tableSimple } from './ui';
 import { icon } from './icons';
 import { getMyReferralCode, shareLink, shareUrl } from './referral';
+import { renderReferrals } from './referralsView';
 
 interface CartLine {
   productId: string;
@@ -34,6 +35,7 @@ const nav: NavItem[] = [
   { id: 'orders', label: 'My Orders', group: 'Account', icon: 'receipt' },
   { id: 'appointments', label: 'Appointments', group: 'Account', icon: 'calendar-clock' },
   { id: 'autoship', label: 'Autoship', group: 'Account', icon: 'refresh-cw' },
+  { id: 'referrals', label: 'Referrals & Network', group: 'Account', icon: 'share-2' },
   { id: 'privacy', label: 'Data & Consent', group: 'Account', icon: 'shield' },
   { id: 'profile', label: 'Profile', group: 'Account', icon: 'user' }
 ];
@@ -51,6 +53,7 @@ initPanel({
     if (route === 'orders') return orders(c, ctx);
     if (route === 'appointments') return appointments(c);
     if (route === 'autoship') return autoship(c, ctx);
+    if (route === 'referrals') return renderReferrals(c);
     if (route === 'privacy') return privacy(c, ctx);
     if (route === 'profile') return profile(c, ctx);
   }

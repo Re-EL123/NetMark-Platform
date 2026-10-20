@@ -26,9 +26,11 @@ export default authed(async (req, res, ctx) => {
   }
 
   if (slug[0] === 'mine' && req.method === 'GET') {
-    // Every signed-in user gets a personal referral code on demand. Sharing it
-    // attributes new signups to them and pays them on the purchases those
-    // people make.
+    // owner / storeOwner / customer each get a personal referral code on demand.
+    // Drivers are not part of the referral network.
+    if (!['owner', 'storeOwner', 'customer'].includes(ctx.role) && !ctx.isPlatform) {
+      return fail(res, 'Referrals are not available for your role', 403);
+    }
     let { data: code } = await sb
       .from('distributor_codes')
       .select('*')
@@ -39,6 +41,18 @@ export default authed(async (req, res, ctx) => {
       .maybeSingle();
 
     if (!code) {
+      // Company owners are capped by their plan's maxCodes; personal
+      // (company-less) referrers always get exactly one auto code.
+      if (ctx.companyId) {
+        const ent = await entitlementsForCtx(sb, ctx);
+        const { count } = await sb
+          .from('distributor_codes')
+          .select('id', { count: 'exact', head: true })
+          .eq('company_id', ctx.companyId);
+        if (!withinLimit(ent.maxCodes, count || 0)) {
+          return fail(res, limitMessage('codes', ent.maxCodes), 402);
+        }
+      }
       const { data: created } = await sb
         .from('distributor_codes')
         .insert({

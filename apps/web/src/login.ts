@@ -1,5 +1,10 @@
 import { supabase } from './supabase';
 import { apiRequest } from './api';
+import { captureReferral } from './referralStore';
+
+// A visitor who lands on the login page with ?ref= still needs that code kept
+// so it survives through to registration.
+captureReferral();
 
 const loginForm = document.getElementById('loginForm') as HTMLFormElement;
 const errorDiv = document.getElementById('error') as HTMLDivElement;

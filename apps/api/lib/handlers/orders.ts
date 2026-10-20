@@ -57,7 +57,7 @@ export default authed(async (req, res, ctx) => {
 
   // POST /orders
   if (slug.length === 0 && req.method === 'POST') {
-    const { storeId: bodyStoreId, items, address, notes, orderType, distributorId } = req.body || {};
+    const { storeId: bodyStoreId, items, address, notes, orderType, distributorId, distributorCode } = req.body || {};
     if (!Array.isArray(items) || !items.length) return fail(res, 'Order must contain at least one item');
 
     // Resolve the chosen store up front so we can verify each listed product is
@@ -129,13 +129,28 @@ export default authed(async (req, res, ctx) => {
     // (legacy products without a company) then the buyer's company.
     const companyId = productCompanyId || store?.company_id || ctx.companyId || null;
 
-    // Distributor attribution: explicit override for staff, otherwise fall back
-    // to the customer's referring distributor, then to the store's distributor.
+    // Distributor attribution. Priority:
+    //   1. platform staff explicit distributorId override
+    //   2. an explicit referral code passed on the order
+    //   3. the buyer's own referring distributor (users.distributor_id)
+    //   4. the store's distributor
+    //   5. an owner placing the order is themselves the company referrer
     let distributor = null;
     if (ctx.isPlatform && distributorId) {
       distributor = distributorId;
-    } else {
-      // Owner can be referrer if orders come from their customers
+    }
+    if (!distributor && distributorCode) {
+      const { data: codeRow } = await sb
+        .from('distributor_codes')
+        .select('distributor_id, is_active, expires_at')
+        .eq('code', String(distributorCode).toUpperCase())
+        .maybeSingle();
+      const valid = codeRow && codeRow.is_active !== false && (!codeRow.expires_at || new Date(codeRow.expires_at) >= new Date());
+      if (valid && codeRow.distributor_id && codeRow.distributor_id !== ctx.userId) {
+        distributor = codeRow.distributor_id;
+      }
+    }
+    if (!distributor) {
       const { data: me } = await sb.from('users').select('distributor_id').eq('id', ctx.userId).maybeSingle();
       distributor = me?.distributor_id || store?.distributor_id || null;
       if (!distributor && ctx.role === 'owner') distributor = ctx.userId; // company as referrer fallback

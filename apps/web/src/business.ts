@@ -357,7 +357,7 @@ async function team(c: HTMLElement) {
     if (share)
       (share as HTMLElement).onclick = async () => {
         const code = await getMyReferralCode();
-        await shareLink(shareUrl('register', code), me?.companyName || 'NetMark', `Join my ${me?.companyName || 'NetMark'} team`);
+        await shareLink(shareUrl('register.html', code), me?.companyName || 'NetMark', `Join my ${me?.companyName || 'NetMark'} team`);
       };
   };
 
