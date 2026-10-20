@@ -278,7 +278,9 @@ function renderBody(d: StorefrontData, url: string): string {
     <header class="sf-header">
       <a class="sf-brand" href="${esc(url)}">${sf.logo ? `<img src="${esc(sf.logo)}" alt="${esc(name)} logo" />` : '<span class="sf-brand-dot"></span>'}<span>${esc(name)}</span></a>
       <nav>${navLinks}</nav>
+      <button class="sf-burger" id="sfBurger" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="sfMobileNav"><span></span><span></span><span></span></button>
     </header>
+    <div class="sf-mobile-nav" id="sfMobileNav" hidden><nav>${navLinks}</nav></div>
     <section class="sf-hero sf-hero-${esc(sf.heroStyle)}"${heroBg}>
       <div class="sf-hero-inner">
         ${
@@ -331,7 +333,10 @@ function inject(html: string, head: string, body: string): string {
     .replace(/<link\b[^>]*rel=["']?canonical["']?[^>]*>/gi, '')
     .replace(/<script type="application\/ld\+json" id="sf-jsonld">[\s\S]*?<\/script>/gi, '');
   out = out.replace(/<head([^>]*)>/i, `<head$1>\n    ${head}`);
-  out = out.replace(/<div id="sf-root">[\s\S]*?<\/div>/i, `<div id="sf-root">${body}</div>`);
+  out = out.replace(
+    /<div id="sf-root">[\s\S]*?<\/div>(\s*<script)/i,
+    `<div id="sf-root">${body}</div>$1`
+  );
   return out;
 }
 

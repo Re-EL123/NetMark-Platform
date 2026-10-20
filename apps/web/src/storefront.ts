@@ -380,7 +380,13 @@ async function main() {
       </a>
       <nav>${navLinks}</nav>
       <button class="sf-share" id="sfShare" type="button">Share</button>
+      <button class="sf-burger" id="sfBurger" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="sfMobileNav">
+        <span></span><span></span><span></span>
+      </button>
     </header>
+    <div class="sf-mobile-nav" id="sfMobileNav" hidden>
+      <nav>${navLinks}</nav>
+    </div>
 
     <section class="sf-hero sf-hero-${escAttr(sf.heroStyle)}"${heroBg}>
       <div class="sf-hero-inner">${heroInner}</div>
@@ -575,6 +581,34 @@ async function main() {
   document.getElementById('sfShare')?.addEventListener('click', doShare);
   document.getElementById('sfShare2')?.addEventListener('click', doShare);
 
+  /* --------------------------- mobile nav menu ---------------------------- */
+  const burger = document.getElementById('sfBurger') as HTMLButtonElement | null;
+  const mobileNav = document.getElementById('sfMobileNav') as HTMLElement | null;
+  const closeMenu = () => {
+    if (!burger || !mobileNav) return;
+    burger.setAttribute('aria-expanded', 'false');
+    burger.classList.remove('sf-burger-open');
+    mobileNav.classList.remove('sf-mobile-nav-open');
+    mobileNav.hidden = true;
+  };
+  if (burger && mobileNav) {
+    burger.addEventListener('click', () => {
+      const open = burger.getAttribute('aria-expanded') === 'true';
+      if (open) return closeMenu();
+      burger.setAttribute('aria-expanded', 'true');
+      burger.classList.add('sf-burger-open');
+      mobileNav.hidden = false;
+      mobileNav.classList.add('sf-mobile-nav-open');
+    });
+    mobileNav.querySelectorAll('a').forEach((a) => a.addEventListener('click', closeMenu));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeMenu();
+    });
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 640) closeMenu();
+    });
+  }
+
   /* ------------------------------ quick view ------------------------------ */
   const byId = new Map(products.map((p) => [p.id, p]));
   const quick = document.getElementById('sfQuick') as HTMLElement | null;
@@ -658,7 +692,7 @@ async function main() {
 
   /* ------------------------------ scroll spy ------------------------------ */
   const spy = () => {
-    const links = root.querySelectorAll<HTMLAnchorElement>('.sf-header nav a[href^="#"]');
+    const links = root.querySelectorAll<HTMLAnchorElement>('nav a[href^="#"]');
     const pos = window.scrollY + 120;
     let current = '';
     links.forEach((a) => {
