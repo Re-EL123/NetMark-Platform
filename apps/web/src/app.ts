@@ -184,6 +184,12 @@ export async function initPanel(opts: PanelOptions) {
         </header>
         <div id="adBanner" class="ad-banner-slot"></div>
         <div class="content" id="content"></div>
+        <footer class="app-footer">
+          <div class="footer-inner">
+            <span>© ${new Date().getFullYear()} NetMark</span>
+            <div class="footer-links"><a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a> · <a href="/faq.html">FAQ</a> · <a href="/support.html">Support</a> · <a href="/feedback.html">Feedback</a></div>
+          </div>
+        </footer>
       </div>
     </div>`;
 
