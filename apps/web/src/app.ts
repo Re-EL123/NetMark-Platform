@@ -172,8 +172,10 @@ export async function initPanel(opts: PanelOptions) {
           </button>
         </div>
       </aside>
+      <div class="panel-backdrop" id="panelBackdrop" hidden></div>
       <div class="main">
         <header>
+          <button id="panelBurger" class="panel-burger" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="sidebar"><span></span><span></span><span></span></button>
           <h1 id="pageTitle">${esc(opts.title)}</h1>
           <div class="user-meta">
             <button id="helpBtn" class="icon-btn" data-tip="Take the tour" title="Take the tour">${icon('compass')}<span class="icon-glow"></span></button>
@@ -345,6 +347,37 @@ export async function initPanel(opts: PanelOptions) {
     setCollapsed(localStorage.getItem(COLLAPSE_KEY) === '1');
     sidebarToggle.addEventListener('click', () => setCollapsed(!appEl.classList.contains('sidebar-collapsed')));
   }
+
+  // Mobile: the sidebar becomes a slide-in drawer driven by a header burger.
+  const panelBurger = document.getElementById('panelBurger') as HTMLButtonElement | null;
+  const panelBackdrop = document.getElementById('panelBackdrop') as HTMLElement | null;
+  const closeMobileNav = () => {
+    appEl.classList.remove('nav-open');
+    if (panelBurger) panelBurger.setAttribute('aria-expanded', 'false');
+    if (panelBackdrop) panelBackdrop.hidden = true;
+    document.body.classList.remove('nav-locked');
+  };
+  const openMobileNav = () => {
+    appEl.classList.add('nav-open');
+    if (panelBurger) panelBurger.setAttribute('aria-expanded', 'true');
+    if (panelBackdrop) panelBackdrop.hidden = false;
+    document.body.classList.add('nav-locked');
+  };
+  if (panelBurger) {
+    panelBurger.addEventListener('click', () =>
+      appEl.classList.contains('nav-open') ? closeMobileNav() : openMobileNav()
+    );
+  }
+  panelBackdrop?.addEventListener('click', closeMobileNav);
+  navEl.addEventListener('click', (e) => {
+    if ((e.target as HTMLElement).closest('a[data-nav]')) closeMobileNav();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMobileNav();
+  });
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 720) closeMobileNav();
+  });
 
   function currentRoute(): string {
     const hash = window.location.hash.replace('#', '');
