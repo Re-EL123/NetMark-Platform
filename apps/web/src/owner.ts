@@ -2,7 +2,7 @@ import { apiRequest, submitPayFast } from './api';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { crudView } from './crud';
-import { openModal, confirmDialog, toast, money, titleCase, emptyState, statCards, act, wire, tableSimple, Field } from './ui';
+import { openModal, confirmDialog, toast, money, titleCase, emptyState, statCards, act, wire, tableSimple, Field, fieldsHtml, readFields } from './ui';
 import { icon, iconify } from './icons';
 import { uploadFieldHtml, wireUploaders } from './upload';
 import { overviewStats, renderOverviewCharts } from './dashboard';
@@ -252,8 +252,8 @@ async function productModal(row: any, reload: () => void) {
     title: row ? 'Edit product' : 'New product',
     fields: [
       { name: 'name', label: 'Name', required: true, value: row?.name },
-      { name: 'price', label: 'Company price', type: 'number', step: '0.01', value: row?.price ?? 0, help: 'Wholesale price store owners buy at.' },
-      { name: 'stock', label: 'Stock', type: 'number', value: row?.stock ?? 0 },
+      { name: 'price', label: 'Company price', type: 'number', step: '0.01', min: 0, value: row?.price ?? 0, help: 'Wholesale price store owners buy at.' },
+      { name: 'stock', label: 'Stock', type: 'number', min: 0, value: row?.stock ?? 0 },
       { name: 'category', label: 'Category', value: row?.category },
       { name: 'sku', label: 'SKU', value: row?.sku },
       { name: 'description', label: 'Description', type: 'textarea', value: row?.description },
@@ -484,7 +484,7 @@ function codes(c: HTMLElement) {
           fields: [
             { name: 'code', label: 'Code', help: 'Leave blank to auto-generate' },
             ...marketFields(),
-            { name: 'maxUses', label: 'Max uses', type: 'number' },
+            { name: 'maxUses', label: 'Max uses', type: 'number', min: 1 },
             { name: 'expiresAt', label: 'Expires', type: 'date' }
           ],
           onSubmit: async (v) => {
@@ -549,7 +549,7 @@ function payouts(c: HTMLElement) {
           title: 'New payout',
           fields: [
             { name: 'driverId', label: 'Driver', type: 'select', options: drivers },
-            { name: 'amount', label: 'Amount', type: 'number', step: '0.01', required: true },
+            { name: 'amount', label: 'Amount', type: 'number', step: '0.01', min: 0, required: true },
             { name: 'method', label: 'Method', type: 'select', options: opts(['eft', 'cash', 'wallet']) },
             { name: 'periodStart', label: 'Period start', type: 'date' },
             { name: 'periodEnd', label: 'Period end', type: 'date' },
@@ -642,36 +642,28 @@ async function settings(c: HTMLElement) {
   const fields: Field[] = [
     { name: 'name', label: 'Company name', value: company?.name },
     { name: 'address', label: 'Business address', value: s.address },
-    { name: 'phone', label: 'Contact phone', value: s.phone },
-    { name: 'deliveryFee', label: 'Delivery fee', type: 'number', step: '0.01', value: s.deliveryFee ?? '' },
-    { name: 'deliveryRadiusKm', label: 'Delivery radius (km)', type: 'number', value: s.deliveryRadiusKm ?? '' }
+    { name: 'phone', label: 'Contact phone', type: 'tel', value: s.phone, placeholder: '+27…' },
+    { name: 'deliveryFee', label: 'Delivery fee', type: 'number', step: '0.01', min: 0, suffix: 'ZAR', value: s.deliveryFee ?? '' },
+    { name: 'deliveryRadiusKm', label: 'Delivery radius', type: 'number', min: 0, suffix: 'km', value: s.deliveryRadiusKm ?? '' }
   ];
   const host = document.getElementById('settingsForm')!;
   const form = document.createElement('form');
   form.innerHTML =
     uploadFieldHtml({ name: 'logo', label: 'Company logo', kind: 'image', folder: 'companies', value: company?.logo }) +
-    fields
-      .map(
-        (f) =>
-          `<div class="form-group"><label>${esc(f.label)}</label><input name="${f.name}" type="${f.type || 'text'}" value="${esc(f.value ?? '')}" ${f.step ? `step="${f.step}"` : ''}></div>`
-      )
-      .join('') + `<button class="btn btn-sm" type="submit">${icon('send')}<span>Submit for approval</span></button>`;
+    fieldsHtml(fields) +
+    `<button class="btn btn-sm" type="submit">${icon('send')}<span>Submit for approval</span></button>`;
   host.appendChild(form);
   iconify(form);
   wireUploaders(form);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const settingsValue: any = {};
-    for (const f of fields) {
-      if (f.name === 'name') continue;
-      const el = form.querySelector(`[name="${f.name}"]`) as HTMLInputElement;
-      settingsValue[f.name] = f.type === 'number' ? (el.value === '' ? null : Number(el.value)) : el.value;
-    }
-    const name = (form.querySelector('[name="name"]') as HTMLInputElement)?.value || '';
+    const values = readFields(form, fields);
+    const name = values.name || '';
+    delete values.name;
     const logo = (form.querySelector('[name="logo"]') as HTMLInputElement)?.value || '';
     const r = await apiRequest('/company-changes', {
       method: 'POST',
-      body: JSON.stringify({ changes: { name, logo, settings: settingsValue } })
+      body: JSON.stringify({ changes: { name, logo, settings: values } })
     });
     toast(r.success ? 'Submitted for approval' : r.message || 'Failed', r.success ? 'success' : 'error');
     if (r.success) settings(c);
@@ -691,24 +683,26 @@ async function commissionCard(c: HTMLElement) {
     <div id="commissionFields"></div>`;
   c.appendChild(host);
 
-  const fields = [
-    { name: 'l1Percent', label: 'Level 1 (%)', value: comm.l1Percent ?? 10 },
-    { name: 'l2Percent', label: 'Level 2 (%)', value: comm.l2Percent ?? 4 },
-    { name: 'l3Percent', label: 'Level 3 (%)', value: comm.l3Percent ?? 1 },
-    { name: 'purchaseReferralPercent', label: 'Code / store purchase referral (%)', value: comm.purchaseReferralPercent ?? 10 },
-    { name: 'holdDays', label: 'Hold period (days)', value: comm.holdDays ?? 7 }
+  const fields: Field[] = [
+    { name: 'l1Percent', label: 'Level 1', type: 'number', step: '0.5', min: 0, max: 100, suffix: '%', value: comm.l1Percent ?? 10 },
+    { name: 'l2Percent', label: 'Level 2', type: 'number', step: '0.5', min: 0, max: 100, suffix: '%', value: comm.l2Percent ?? 4 },
+    { name: 'l3Percent', label: 'Level 3', type: 'number', step: '0.5', min: 0, max: 100, suffix: '%', value: comm.l3Percent ?? 1 },
+    {
+      name: 'purchaseReferralPercent',
+      label: 'Code / store purchase referral',
+      type: 'number',
+      step: '0.5',
+      min: 0,
+      max: 100,
+      suffix: '%',
+      value: comm.purchaseReferralPercent ?? 10
+    },
+    { name: 'holdDays', label: 'Hold period', type: 'number', min: 0, suffix: 'days', value: comm.holdDays ?? 7 }
   ];
 
   const form = document.createElement('form');
   form.innerHTML =
-    fields
-      .map(
-        (f) =>
-          `<div class="form-group"><label>${esc(f.label)}</label><input name="${f.name}" type="number" step="0.5" value="${esc(
-            f.value
-          )}"></div>`
-      )
-      .join('') +
+    fieldsHtml(fields) +
     `<p class="muted">Chain total capped at ${esc(comm.maxTotalPercent ?? 15)}% · platform hard cap ${esc(
       comm.capPercent ?? 25
     )}%</p>
@@ -718,11 +712,7 @@ async function commissionCard(c: HTMLElement) {
   iconify(form);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const value: any = {};
-    for (const f of fields) {
-      value[f.name] = Number((form.querySelector(`[name="${f.name}"]`) as HTMLInputElement).value) || 0;
-    }
-    const r = await apiRequest('/settings/commission', { method: 'PUT', body: JSON.stringify({ value }) });
+    const r = await apiRequest('/settings/commission', { method: 'PUT', body: JSON.stringify({ value: readFields(form, fields) }) });
     toast(r.success ? 'Commission updated' : r.message || 'Failed', r.success ? 'success' : 'error');
   });
 }

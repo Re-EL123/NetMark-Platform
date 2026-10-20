@@ -2,8 +2,8 @@ import { apiRequest } from './api';
 import { initPanel, NavItem } from './app';
 import { esc, statusBadge, badge, formatDate } from './render';
 import { crudView } from './crud';
-import { openModal, confirmDialog, toast, money, titleCase, emptyState, statCards, dataTable, act, wire, tableSimple, Field } from './ui';
-import { icon } from './icons';
+import { openModal, confirmDialog, toast, money, titleCase, emptyState, statCards, dataTable, act, wire, tableSimple, Field, fieldsHtml, readFields } from './ui';
+import { icon, iconify } from './icons';
 import { overviewStats, renderOverviewCharts } from './dashboard';
 import { donutChart, barList, chartCard } from './charts';
 import { platformAdsHtml, resetDismissedAds, invalidateAds, type Ad } from './ads';
@@ -19,6 +19,27 @@ const ROLE_OPTIONS = [
 function opts(values: string[]) {
   return values.map((v) => ({ value: v, label: titleCase(v) }));
 }
+
+const CURRENCY_OPTIONS = [
+  ['ZAR', 'R'],
+  ['USD', '$'],
+  ['EUR', '€'],
+  ['GBP', '£'],
+  ['NGN', '₦'],
+  ['KES', 'KSh'],
+  ['GHS', 'GH₵'],
+  ['BWP', 'P'],
+  ['NAD', 'N$'],
+  ['AED', 'د.إ'],
+  ['AUD', 'A$'],
+  ['CAD', 'C$'],
+  ['INR', '₹']
+].map(([code, symbol]) => ({ value: code, label: `${code} (${symbol})` }));
+
+const VEHICLE_TYPE_OPTIONS = ['motorbike', 'car', 'van', 'bakkie', 'bicycle', 'truck'].map((v) => ({
+  value: v,
+  label: titleCase(v)
+}));
 
 const nav: NavItem[] = [
   { id: 'dashboard', label: 'Dashboard', group: 'Overview', icon: 'layout-dashboard' },
@@ -328,12 +349,26 @@ function renderCompanies(c: HTMLElement) {
 
 async function companyModal(row: any, reload: () => void) {
   const owners = [{ value: '', label: 'None' }, ...(await loadOwners())];
+  // Plan is a slug (e.g. "standard"); offer the real plans when the table exists,
+  // otherwise fall back to a free-text field.
+  let planField: Field = { name: 'plan', label: 'Plan', value: row?.plan || 'standard' };
+  const plansRes = await apiRequest('/plans').catch(() => null);
+  const planRows: any[] = plansRes?.success && Array.isArray(plansRes.data) ? plansRes.data : [];
+  if (planRows.length) {
+    planField = {
+      name: 'plan',
+      label: 'Plan',
+      type: 'select',
+      options: planRows.map((p) => ({ value: String(p.slug || p.id), label: `${p.name}${p.baseFeeZar ? ` — ${money(p.baseFeeZar)}/mo` : ''}` })),
+      value: row?.plan || 'standard'
+    };
+  }
   await openModal({
     title: row ? 'Edit company' : 'New company',
     fields: [
       { name: 'name', label: 'Company name', required: true, value: row?.name },
       { name: 'logo', label: 'Company logo', type: 'image', folder: 'companies', value: row?.logo },
-      { name: 'plan', label: 'Plan', value: row?.plan || 'standard' },
+      planField,
       { name: 'ownerId', label: 'Owner', type: 'select', options: owners, value: row?.ownerId || '' }
     ],
     onSubmit: async (v) => {
@@ -539,8 +574,8 @@ async function productModal(row: any, reload: () => void) {
     title: row ? 'Edit product' : 'New product',
     fields: [
       { name: 'name', label: 'Name', required: true, value: row?.name },
-      { name: 'price', label: 'Price', type: 'number', step: '0.01', value: row?.price ?? 0 },
-      { name: 'stock', label: 'Stock', type: 'number', value: row?.stock ?? 0 },
+      { name: 'price', label: 'Price', type: 'number', step: '0.01', min: 0, value: row?.price ?? 0 },
+      { name: 'stock', label: 'Stock', type: 'number', min: 0, value: row?.stock ?? 0 },
       { name: 'category', label: 'Category', value: row?.category },
       { name: 'sku', label: 'SKU', value: row?.sku },
       { name: 'description', label: 'Description', type: 'textarea', value: row?.description },
@@ -706,9 +741,9 @@ async function driverModal(row: any, reload: () => void) {
     title: `Driver — ${row.user?.name || row.id.slice(0, 8)}`,
     fields: [
       { name: 'profileImage', label: 'Driver photo', type: 'image', folder: 'drivers', value: row.profileImage },
-      { name: 'vehicleType', label: 'Vehicle type', value: row.vehicleType },
-      { name: 'vehicleNumber', label: 'Vehicle number', value: row.vehicleNumber },
-      { name: 'vehicleModel', label: 'Vehicle model', value: row.vehicleModel },
+      { name: 'vehicleType', label: 'Vehicle type', type: 'select', options: VEHICLE_TYPE_OPTIONS, value: row.vehicleType },
+      { name: 'vehicleNumber', label: 'Vehicle number', value: row.vehicleNumber, placeholder: 'e.g. CA 123-456' },
+      { name: 'vehicleModel', label: 'Vehicle model', value: row.vehicleModel, placeholder: 'e.g. Honda Wave' },
       { name: 'licenseNumber', label: 'Licence number', value: row.licenseNumber },
       { name: 'licenseExpiry', label: 'Licence expiry', type: 'date', value: row.licenseExpiry ? String(row.licenseExpiry).slice(0, 10) : '' },
       { name: 'documents', label: 'Documents', type: 'documents', folder: 'drivers', value: row.documents, help: 'Licence, ID and vehicle papers.' }
@@ -773,7 +808,7 @@ function renderCodes(c: HTMLElement) {
           title: 'New referral code',
           fields: [
             { name: 'code', label: 'Code', help: 'Leave blank to auto-generate' },
-            { name: 'maxUses', label: 'Max uses', type: 'number' },
+            { name: 'maxUses', label: 'Max uses', type: 'number', min: 1 },
             { name: 'expiresAt', label: 'Expires', type: 'date' }
           ],
           onSubmit: async (v) => {
@@ -819,7 +854,7 @@ function renderPayouts(c: HTMLElement) {
           title: 'New payout',
           fields: [
             { name: 'driverId', label: 'Driver', type: 'select', options: drivers },
-            { name: 'amount', label: 'Amount', type: 'number', step: '0.01', required: true },
+            { name: 'amount', label: 'Amount', type: 'number', step: '0.01', min: 0, required: true },
             { name: 'method', label: 'Method', type: 'select', options: opts(['eft', 'cash', 'instant']) },
             { name: 'periodStart', label: 'Period start', type: 'date' },
             { name: 'periodEnd', label: 'Period end', type: 'date' }
@@ -950,7 +985,7 @@ function adModal(row: Ad | null | undefined, reload: () => void) {
         value: row?.mediaUrl,
         help: 'Upload a file, or switch Media type to "External link" and paste a URL below.'
       },
-      { name: 'linkUrl', label: 'Link URL', value: row?.linkUrl, help: 'Where the call-to-action button points.' },
+      { name: 'linkUrl', label: 'Link URL', type: 'url', value: row?.linkUrl, placeholder: 'https://…', help: 'Where the call-to-action button points.' },
       { name: 'ctaLabel', label: 'Button label', value: row?.ctaLabel, placeholder: 'Learn more' },
       {
         name: 'audience',
@@ -1060,14 +1095,14 @@ async function renderSettings(c: HTMLElement) {
 
   const fields: Field[] = [
     { name: 'platformName', label: 'Platform name', value: s.platformName },
-    { name: 'supportEmail', label: 'Support email', type: 'email', value: s.supportEmail },
-    { name: 'currency', label: 'Currency code', value: s.currency || 'ZAR' },
-    { name: 'currencySymbol', label: 'Currency symbol', value: s.currencySymbol || 'R' },
-    { name: 'deliveryFee', label: 'Delivery fee', type: 'number', step: '0.01', value: s.deliveryFee ?? 0 },
-    { name: 'commissionPercent', label: 'Commission %', type: 'number', value: s.commissionPercent ?? 0 },
-    { name: 'driverCommissionPercent', label: 'Driver share %', type: 'number', value: s.driverCommissionPercent ?? 80 },
-    { name: 'minOrderAmount', label: 'Minimum order', type: 'number', value: s.minOrderAmount ?? 0 },
-    { name: 'deliveryRadiusKm', label: 'Delivery radius (km)', type: 'number', value: s.deliveryRadiusKm ?? 15 },
+    { name: 'supportEmail', label: 'Support email', type: 'email', value: s.supportEmail, placeholder: 'support@example.com' },
+    { name: 'currency', label: 'Currency', type: 'select', options: CURRENCY_OPTIONS, value: s.currency || 'ZAR' },
+    { name: 'currencySymbol', label: 'Currency symbol', value: s.currencySymbol || 'R', help: 'One or two characters, e.g. R or ₦.' },
+    { name: 'deliveryFee', label: 'Delivery fee', type: 'number', step: '0.01', min: 0, suffix: s.currencySymbol || 'ZAR', value: s.deliveryFee ?? 0 },
+    { name: 'commissionPercent', label: 'Platform commission', type: 'number', min: 0, max: 100, suffix: '%', value: s.commissionPercent ?? 0 },
+    { name: 'driverCommissionPercent', label: 'Driver share', type: 'number', min: 0, max: 100, suffix: '%', value: s.driverCommissionPercent ?? 80 },
+    { name: 'minOrderAmount', label: 'Minimum order', type: 'number', step: '0.01', min: 0, suffix: s.currencySymbol || 'ZAR', value: s.minOrderAmount ?? 0 },
+    { name: 'deliveryRadiusKm', label: 'Delivery radius', type: 'number', min: 0, suffix: 'km', value: s.deliveryRadiusKm ?? 15 },
     { name: 'maintenanceMode', label: 'Maintenance mode', type: 'checkbox', value: s.maintenanceMode === true },
     { name: 'allowRegistrations', label: 'Allow registrations', type: 'checkbox', value: s.allowRegistrations !== false }
   ];
@@ -1075,22 +1110,15 @@ async function renderSettings(c: HTMLElement) {
   const host = document.getElementById('settingsForm')!;
   const form = document.createElement('form');
   form.innerHTML =
-    fields
-      .map((f) => {
-        if (f.type === 'checkbox')
-          return `<div class="form-group" style="display:flex;gap:10px;align-items:center"><input type="checkbox" name="${f.name}" id="s_${f.name}" ${f.value ? 'checked' : ''} style="width:auto"><label for="s_${f.name}" style="margin:0">${esc(f.label)}</label></div>`;
-        return `<div class="form-group"><label for="s_${f.name}">${esc(f.label)}</label><input id="s_${f.name}" name="${f.name}" type="${f.type || 'text'}" value="${esc(f.value)}" ${f.step ? `step="${f.step}"` : ''}></div>`;
-      })
-      .join('') + `<button class="btn btn-sm" type="submit">${icon('check')}<span>Save settings</span></button>`;
+    fieldsHtml(fields) + `<button class="btn btn-sm" type="submit">${icon('check')}<span>Save settings</span></button>`;
   host.appendChild(form);
+  iconify(form);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const value: any = {};
-    for (const f of fields) {
-      const el = form.querySelector(`[name="${f.name}"]`) as HTMLInputElement;
-      value[f.name] = f.type === 'checkbox' ? el.checked : f.type === 'number' ? Number(el.value) : el.value;
-    }
-    const r = await apiRequest('/settings', { method: 'PUT', body: JSON.stringify({ scope: 'platform', key: 'general', value }) });
+    const r = await apiRequest('/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ scope: 'platform', key: 'general', value: readFields(form, fields) })
+    });
     if (r.success) toast('Settings saved', 'success');
     else toast(r.message || 'Failed', 'error');
   });
@@ -1109,34 +1137,34 @@ async function renderPlatformCommission(c: HTMLElement) {
     <div id="platformCommissionForm"></div>`;
   c.appendChild(host);
 
-  const fields = [
-    { name: 'l1Percent', label: 'Level 1 (%)', value: s.l1Percent ?? 10 },
-    { name: 'l2Percent', label: 'Level 2 (%)', value: s.l2Percent ?? 4 },
-    { name: 'l3Percent', label: 'Level 3 (%)', value: s.l3Percent ?? 1 },
-    { name: 'maxTotalPercent', label: 'Max chain total (%)', value: s.maxTotalPercent ?? 15 },
-    { name: 'capPercent', label: 'Hard platform cap (%)', value: s.capPercent ?? 25 },
-    { name: 'purchaseReferralPercent', label: 'Code / store purchase referral (%)', value: s.purchaseReferralPercent ?? 10 },
-    { name: 'holdDays', label: 'Hold period (days)', value: s.holdDays ?? 7 }
+  const fields: Field[] = [
+    { name: 'l1Percent', label: 'Level 1', type: 'number', step: '0.5', min: 0, max: 100, suffix: '%', value: s.l1Percent ?? 10 },
+    { name: 'l2Percent', label: 'Level 2', type: 'number', step: '0.5', min: 0, max: 100, suffix: '%', value: s.l2Percent ?? 4 },
+    { name: 'l3Percent', label: 'Level 3', type: 'number', step: '0.5', min: 0, max: 100, suffix: '%', value: s.l3Percent ?? 1 },
+    { name: 'maxTotalPercent', label: 'Max chain total', type: 'number', step: '0.5', min: 0, max: 100, suffix: '%', value: s.maxTotalPercent ?? 15 },
+    { name: 'capPercent', label: 'Hard platform cap', type: 'number', step: '0.5', min: 0, max: 100, suffix: '%', value: s.capPercent ?? 25 },
+    {
+      name: 'purchaseReferralPercent',
+      label: 'Code / store purchase referral',
+      type: 'number',
+      step: '0.5',
+      min: 0,
+      max: 100,
+      suffix: '%',
+      value: s.purchaseReferralPercent ?? 10
+    },
+    { name: 'holdDays', label: 'Hold period', type: 'number', min: 0, suffix: 'days', value: s.holdDays ?? 7 }
   ];
 
   const form = document.createElement('form');
-  form.innerHTML =
-    fields
-      .map(
-        (f) =>
-          `<div class="form-group"><label>${esc(f.label)}</label><input name="${f.name}" type="number" step="0.5" value="${esc(
-            f.value
-          )}"></div>`
-      )
-      .join('') + `<button class="btn btn-sm" type="submit">${icon('check')}<span>Save commission</span></button>`;
+  form.innerHTML = fieldsHtml(fields) + `<button class="btn btn-sm" type="submit">${icon('check')}<span>Save commission</span></button>`;
 
   (host.querySelector('#platformCommissionForm') as HTMLElement).appendChild(form);
+  iconify(form);
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const value: any = {};
-    for (const f of fields) {
-      value[f.name] = Number((form.querySelector(`[name="${f.name}"]`) as HTMLInputElement).value) || 0;
-    }
+    const value = readFields(form, fields);
+    for (const k of Object.keys(value)) if (value[k] === null) value[k] = 0;
     const r = await apiRequest('/settings/commission', {
       method: 'PUT',
       body: JSON.stringify({ scope: 'platform', key: 'commission', value })
@@ -1316,12 +1344,26 @@ function rankFields(r: any = {}): Field[] {
     { name: 'name', label: 'Name', value: r.name, required: true },
     { name: 'slug', label: 'Slug', value: r.slug, help: 'Lowercase identifier, e.g. crown-ambassador' },
     { name: 'level', label: 'Level', type: 'number', value: String(r.level ?? 0), help: 'Higher = more senior' },
-    { name: 'minPersonalBv', label: 'Min personal BV (lifetime)', type: 'number', value: String(r.minPersonalBv ?? 0) },
-    { name: 'minGroupBv', label: 'Min group BV (lifetime)', type: 'number', value: String(r.minGroupBv ?? 0) },
-    { name: 'minPersonalPeriodBv', label: 'Min personal BV per month (bonus)', type: 'number', value: String(r.minPersonalPeriodBv ?? 0) },
-    { name: 'retailOverridePercent', label: 'Retail override %', type: 'number', value: String(r.retailOverridePercent ?? 0) },
-    { name: 'monthlyBonusZar', label: 'Monthly bonus (ZAR)', type: 'number', value: String(r.monthlyBonusZar ?? 0) },
-    { name: 'leadershipPoolPercent', label: 'Leadership pool %', type: 'number', value: String(r.leadershipPoolPercent ?? 0) },
+    { name: 'minPersonalBv', label: 'Min personal BV (lifetime)', type: 'number', min: 0, value: String(r.minPersonalBv ?? 0) },
+    { name: 'minGroupBv', label: 'Min group BV (lifetime)', type: 'number', min: 0, value: String(r.minGroupBv ?? 0) },
+    {
+      name: 'minPersonalPeriodBv',
+      label: 'Min personal BV per month (bonus)',
+      type: 'number',
+      min: 0,
+      value: String(r.minPersonalPeriodBv ?? 0)
+    },
+    { name: 'retailOverridePercent', label: 'Retail override', type: 'number', min: 0, max: 100, suffix: '%', value: String(r.retailOverridePercent ?? 0) },
+    { name: 'monthlyBonusZar', label: 'Monthly bonus', type: 'number', min: 0, suffix: 'ZAR', value: String(r.monthlyBonusZar ?? 0) },
+    {
+      name: 'leadershipPoolPercent',
+      label: 'Leadership pool',
+      type: 'number',
+      min: 0,
+      max: 100,
+      suffix: '%',
+      value: String(r.leadershipPoolPercent ?? 0)
+    },
     { name: 'sortOrder', label: 'Sort order', type: 'number', value: String(r.sortOrder ?? 0) }
   ];
 }
@@ -1627,7 +1669,7 @@ function renderWebhooks(c: HTMLElement) {
         await openModal({
           title: 'New webhook',
           fields: [
-            { name: 'url', label: 'HTTPS URL', required: true },
+            { name: 'url', label: 'HTTPS URL', type: 'url', required: true, placeholder: 'https://…' },
             { name: 'events', label: 'Events', value: '*', help: 'Comma-separated, e.g. order.created,order.completed or *' }
           ],
           onSubmit: async (v: any) => {
@@ -1690,7 +1732,7 @@ function renderFeatureFlags(c: HTMLElement) {
           fields: [
             { name: 'key', label: 'Key', required: true },
             { name: 'description', label: 'Description' },
-            { name: 'rolloutPercent', label: 'Rollout %', type: 'number', value: '100' }
+            { name: 'rolloutPercent', label: 'Rollout', type: 'number', min: 0, max: 100, suffix: '%', value: '100' }
           ],
           onSubmit: async (v) => {
             const res = await apiRequest('/feature-flags', {
@@ -1740,7 +1782,7 @@ function renderPayoutBatches(c: HTMLElement) {
         await openModal({
           title: 'New payout batch (EFT)',
           fields: [
-            { name: 'totalZar', label: 'Total (ZAR)', type: 'number', step: '0.01', required: true }
+            { name: 'totalZar', label: 'Total (ZAR)', type: 'number', step: '0.01', min: 0, required: true }
           ],
           onSubmit: async (v) => {
             const res = await apiRequest('/payouts', { method: 'POST', body: JSON.stringify(v) });

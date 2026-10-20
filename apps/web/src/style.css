@@ -3346,6 +3346,88 @@ header {
   font-weight: 600;
 }
 
+/* -------------------------- colour picker field ------------------------- */
+.color-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.color-field input[type='text'] {
+  flex: 1;
+  min-width: 0;
+}
+
+.color-swatch {
+  width: 42px;
+  height: 42px;
+  flex: none;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.color-swatch::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-swatch::-webkit-color-swatch {
+  border: none;
+  border-radius: 4px;
+}
+
+.color-swatch::-moz-color-swatch {
+  border: none;
+  border-radius: 4px;
+}
+
+/* --------------------------- input with a unit -------------------------- */
+.input-group {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  overflow: hidden;
+}
+
+.input-group:focus-within {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--netmark-red-soft);
+}
+
+.input-group input {
+  flex: 1;
+  width: auto;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  min-width: 0;
+  box-shadow: none;
+}
+
+.input-group input:focus {
+  box-shadow: none;
+}
+
+.input-suffix {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  background: var(--grey-100);
+  border-left: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+[data-theme='dark'] .input-suffix {
+  background: var(--dark);
+}
+
 /* =====================================================================
    Storefront editor with live preview
    ===================================================================== */

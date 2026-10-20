@@ -58,7 +58,7 @@ export async function renderWallet(c: HTMLElement) {
     btn.onclick = async () => {
       await openModal({
         title: 'Request withdrawal',
-        fields: [{ name: 'amountZar', label: 'Amount (ZAR)', type: 'number', step: '0.01', required: true }],
+        fields: [{ name: 'amountZar', label: 'Amount', type: 'number', step: '0.01', min: 0.01, suffix: 'ZAR', required: true }],
         onSubmit: async (v) => {
           const r = await apiRequest('/wallets/withdraw', { method: 'POST', body: JSON.stringify(v) });
           if (!r.success) throw new Error(r.message);

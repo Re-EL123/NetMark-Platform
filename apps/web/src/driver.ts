@@ -5,6 +5,11 @@ import { openModal, toast, money, statCards, tableSimple } from './ui';
 import { icon } from './icons';
 import { chartCard, donutChart, barChart, ChartPoint } from './charts';
 
+const VEHICLE_TYPE_OPTIONS = ['Motorbike', 'Car', 'Van', 'Bakkie', 'Bicycle', 'Truck'].map((v) => ({
+  value: v.toLowerCase(),
+  label: v
+}));
+
 function addressOf(value: any): string {
   if (!value) return '';
   if (typeof value === 'string') return value;
@@ -288,7 +293,7 @@ async function profile(c: HTMLElement) {
       title: 'Edit vehicle details',
       fields: [
         { name: 'profileImage', label: 'Profile photo', type: 'image', folder: 'drivers', value: driver.profileImage },
-        { name: 'vehicleType', label: 'Vehicle type', value: driver.vehicleType },
+        { name: 'vehicleType', label: 'Vehicle type', type: 'select', options: VEHICLE_TYPE_OPTIONS, value: driver.vehicleType },
         { name: 'vehicleNumber', label: 'Vehicle number', value: driver.vehicleNumber },
         { name: 'vehicleModel', label: 'Vehicle model', value: driver.vehicleModel },
         { name: 'licenseNumber', label: 'Licence number', value: driver.licenseNumber },

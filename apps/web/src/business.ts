@@ -420,6 +420,7 @@ async function catalog(c: HTMLElement) {
             label: 'Your selling price',
             type: 'number',
             step: '0.01',
+            min: 0,
             value: product?.price,
             help: `Company price ${money(product?.price)} — set a higher price to earn a margin.`
           },
@@ -468,7 +469,7 @@ function listings(c: HTMLElement) {
           openModal({
             title: `Retail price — ${row?.name || ''}`,
             fields: [
-              { name: 'price', label: 'Your retail price', type: 'number', step: '0.01', value: row?.price, help: `Company price ${money(row?.basePrice)}` },
+              { name: 'price', label: 'Your retail price', type: 'number', step: '0.01', min: 0, value: row?.price, help: `Company price ${money(row?.basePrice)}` },
               {
                 name: 'mode',
                 label: 'Sourcing',
@@ -1048,7 +1049,7 @@ function editStorefront(r: any, done: () => void) {
       { name: 'secBrand', label: 'Branding & call to action', type: 'section' },
       { name: 'logo', label: 'Logo', type: 'image', folder: 'stores', value: sf.logo || r.logo },
       { name: 'banner', label: 'Banner image', type: 'image', folder: 'stores', value: sf.banner || r.banner, help: 'Wide image shown behind the top of the page.' },
-      { name: 'themeColor', label: 'Accent colour', value: sf.themeColor || '#e50914', placeholder: '#e50914' },
+      { name: 'themeColor', label: 'Accent colour', type: 'color', value: sf.themeColor || '#e50914', help: 'Used for the hero and buttons on your page.' },
       { name: 'ctaLabel', label: 'Main button label', value: sf.ctaLabel, placeholder: 'Order on WhatsApp' },
 
       { name: 'secContact', label: 'Contact details', type: 'section' },
@@ -1059,10 +1060,10 @@ function editStorefront(r: any, done: () => void) {
       { name: 'hours', label: 'Opening hours', value: sf.hours, placeholder: 'Mon–Fri 8:00–17:00' },
 
       { name: 'secSocial', label: 'Social links', type: 'section' },
-      { name: 'facebook', label: 'Facebook URL', value: sf.social?.facebook },
-      { name: 'instagram', label: 'Instagram URL', value: sf.social?.instagram },
-      { name: 'tiktok', label: 'TikTok URL', value: sf.social?.tiktok },
-      { name: 'x', label: 'X (Twitter) URL', value: sf.social?.x },
+      { name: 'facebook', label: 'Facebook URL', type: 'url', value: sf.social?.facebook, placeholder: 'https://facebook.com/…' },
+      { name: 'instagram', label: 'Instagram URL', type: 'url', value: sf.social?.instagram, placeholder: 'https://instagram.com/…' },
+      { name: 'tiktok', label: 'TikTok URL', type: 'url', value: sf.social?.tiktok, placeholder: 'https://tiktok.com/…' },
+      { name: 'x', label: 'X (Twitter) URL', type: 'url', value: sf.social?.x, placeholder: 'https://x.com/…' },
 
       { name: 'secSeo', label: 'Search engine listing', type: 'section' },
       { name: 'metaTitle', label: 'SEO title', value: sf.metaTitle, placeholder: r.name, help: 'Shown in Google and link previews.', counter: 60, full: true },

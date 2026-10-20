@@ -94,7 +94,9 @@ export interface Field {
     | 'gallery'
     | 'documents'
     | 'section'
-    | 'switch';
+    | 'switch'
+    | 'color'
+    | 'url';
   required?: boolean;
   value?: any;
   options?: { value: string; label: string }[];
@@ -111,6 +113,8 @@ export interface Field {
   multiple?: boolean;
   /** Show a live character counter (and the limit) under the input. */
   counter?: number;
+  /** Static unit shown inside the control (%, days, ZAR, km…). */
+  suffix?: string;
 }
 
 const UPLOAD_TYPES = ['image', 'video', 'file', 'document', 'gallery', 'documents'];
@@ -158,22 +162,98 @@ function fieldHtml(f: Field): string {
     </div>`;
   }
   if (f.type === 'select') {
-    const opts = (f.options || [])
+    const opts = (f.options || []).slice();
+    // Keep a stored value that is no longer in the list so saving never
+    // silently rewrites it to the first option.
+    if (value !== '' && !opts.some((o) => String(o.value) === String(value))) {
+      opts.unshift({ value: String(value), label: `${String(value)} (current)` });
+    }
+    const markup = opts
       .map((o) => `<option value="${esc(o.value)}" ${String(o.value) === String(value) ? 'selected' : ''}>${esc(o.label)}</option>`)
       .join('');
     return `<div class="form-group"><label for="f_${esc(f.name)}">${esc(f.label)}</label>
-      <select ${common}>${opts}</select>${f.help ? `<p class="empty" style="font-size:12px">${esc(f.help)}</p>` : ''}</div>`;
+      <select ${common}>${markup}</select>${f.help ? `<p class="empty" style="font-size:12px">${esc(f.help)}</p>` : ''}</div>`;
   }
   if (f.type === 'textarea') {
     return `<div class="form-group"><label for="f_${esc(f.name)}">${esc(f.label)}</label>
       <textarea ${common} rows="${f.rows || 3}" placeholder="${esc(f.placeholder || '')}" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text-primary);font-family:inherit">${esc(value)}</textarea>
       ${f.help ? `<p class="empty" style="font-size:12px">${esc(f.help)}</p>` : ''}${counterHtml(f)}</div>`;
   }
-  return `<div class="form-group"><label for="f_${esc(f.name)}">${esc(f.label)}</label>
-    <input type="${f.type || 'text'}" ${common} value="${esc(value)}"
+  if (f.type === 'color') {
+    return `<div class="form-group"><label for="f_${esc(f.name)}">${esc(f.label)}</label>
+      <span class="color-field">
+        <input type="color" class="color-swatch" data-color-swatch="${esc(f.name)}" value="${esc(normalizeHex(value))}" aria-label="Colour picker" tabindex="-1" />
+        <input type="text" ${common} value="${esc(value)}" placeholder="#e50914" spellcheck="false" />
+      </span>
+      ${f.help ? `<p class="empty" style="font-size:12px">${esc(f.help)}</p>` : ''}</div>`;
+  }
+  const type = f.type || 'text';
+  const input = `<input type="${type}" ${common} value="${esc(value)}"
       ${f.placeholder ? `placeholder="${esc(f.placeholder)}"` : ''}
-      ${f.step ? `step="${esc(f.step)}"` : ''} ${f.min !== undefined ? `min="${esc(f.min)}"` : ''} ${f.max !== undefined ? `max="${esc(f.max)}"` : ''} />
+      ${f.step ? `step="${esc(f.step)}"` : ''} ${f.min !== undefined ? `min="${esc(f.min)}"` : ''} ${f.max !== undefined ? `max="${esc(f.max)}"` : ''} />`;
+  return `<div class="form-group"><label for="f_${esc(f.name)}">${esc(f.label)}</label>
+    ${f.suffix ? `<span class="input-group">${input}<span class="input-suffix">${esc(f.suffix)}</span></span>` : input}
     ${f.help ? `<p class="empty" style="font-size:12px">${esc(f.help)}</p>` : ''}${counterHtml(f)}</div>`;
+}
+
+const HEX_RE = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+function normalizeHex(value: any): string {
+  const m = HEX_RE.exec(String(value || '').trim());
+  if (!m) return '#000000';
+  const hex = m[1];
+  if (hex.length === 3) {
+    return (
+      '#' +
+      hex
+        .split('')
+        .map((ch) => ch + ch)
+        .join('')
+    );
+  }
+  return '#' + hex.toLowerCase();
+}
+
+/** Keep each colour field's swatch and hex text box in sync. */
+function wireColorFields(scope: HTMLElement, fields: Field[]): void {
+  for (const f of fields) {
+    if (f.type !== 'color') continue;
+    const text = scope.querySelector(`[name="${f.name}"]`) as HTMLInputElement | null;
+    const swatch = scope.querySelector(`[data-color-swatch="${f.name}"]`) as HTMLInputElement | null;
+    if (!text || !swatch) continue;
+    swatch.addEventListener('input', () => {
+      text.value = swatch.value;
+    });
+    text.addEventListener('input', () => {
+      if (HEX_RE.test(text.value.trim())) swatch.value = normalizeHex(text.value);
+    });
+  }
+}
+
+/** Render a list of fields as plain HTML (used outside `openModal` too). */
+export function fieldsHtml(fields: Field[]): string {
+  return fields.map(fieldHtml).join('');
+}
+
+/** Read the current values of a rendered field list back into an object. */
+export function readFields(host: HTMLElement, fields: Field[]): Record<string, any> {
+  const values: Record<string, any> = {};
+  for (const f of fields) {
+    if (f.type === 'section') continue;
+    const el = host.querySelector(`[name="${f.name}"]`) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
+    if (!el) continue;
+    if (f.type === 'checkbox' || f.type === 'switch') values[f.name] = (el as HTMLInputElement).checked;
+    else if (f.type === 'number') values[f.name] = el.value === '' ? null : Number(el.value);
+    else if (f.type === 'gallery' || f.type === 'documents') {
+      try {
+        const parsed = JSON.parse(el.value || '[]');
+        values[f.name] = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        values[f.name] = [];
+      }
+    } else values[f.name] = el.value;
+  }
+  return values;
 }
 
 /** Keep any `counter` fields in sync with their input length. */
@@ -231,6 +311,7 @@ export function openModal(opts: ModalOptions): Promise<void> {
     iconify(overlay);
     wireUploaders(overlay);
     wireCounters(overlay, fields);
+    wireColorFields(overlay, fields);
     if (opts.onMount) {
       const body = overlay.querySelector('.modal-body') as HTMLElement | null;
       if (body) {
