@@ -147,6 +147,19 @@ export default authed(async (req, res, ctx) => {
     if (b.expiresAt !== undefined) patch.expires_at = b.expiresAt || null;
     if (b.priceZar !== undefined) patch.price_zar = Number(b.priceZar || 0);
     if (b.isForSale !== undefined) patch.is_for_sale = !!b.isForSale;
+    if (b.allowAllProducts !== undefined) {
+      patch.allow_all_products = !!b.allowAllProducts;
+      patch.product_filter_mode = b.allowAllProducts ? 'all' : 'kit';
+    }
+    if (b.productIds !== undefined && Array.isArray(b.productIds)) {
+      await sb.from('code_products').delete().eq('code_id', id);
+      if (b.productIds.length) {
+        const rows = b.productIds.map((pid: string) => ({ code_id: id, product_id: pid }));
+        await sb.from('code_products').insert(rows);
+      }
+      patch.allow_all_products = b.productIds.length === 0;
+      patch.product_filter_mode = b.productIds.length === 0 ? 'all' : 'kit';
+    }
     const { data: after } = await sb.from('distributor_codes').update(patch).eq('id', id).select('*').single();
     await recordAudit(req, { action: 'code.update', entityType: 'distributor_code', entityId: id, after: rowOut(after) });
     return ok(res, { data: rowOut(after) });

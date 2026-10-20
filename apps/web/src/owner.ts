@@ -522,7 +522,30 @@ function codes(c: HTMLElement) {
           if (!row) return;
           openModal({
             title: `Edit code ${row.code}`,
-            fields: [...marketFields(row)],
+            fields: [
+              { name: 'code', label: 'Code', help: 'Leave blank to auto-generate' },
+              ...marketFields(row),
+              { name: 'maxUses', label: 'Max uses', type: 'number', min: 1, value: row.maxUses },
+              { name: 'expiresAt', label: 'Expires', type: 'date', value: row.expiresAt ? row.expiresAt.split('T')[0] : '' },
+              { name: 'allowAllProducts', label: 'Allow access to ALL company products', type: 'switch', value: row.allowAllProducts !== false },
+              { name: 'productIds', label: 'Product kit', type: 'select', multiple: true, options: [] }
+            ],
+            onMount: async (body) => {
+              const [productsRes, kitRes] = await Promise.all([
+                apiRequest('/products?pageSize=1000').catch(() => null),
+                apiRequest(`/codes/${id}/products`).catch(() => null)
+              ]);
+              const products: any[] = productsRes?.success ? (productsRes.data || []) : [];
+              const selected = kitRes?.success && Array.isArray(kitRes.data?.productIds) ? kitRes.data.productIds : [];
+              const sel = body.querySelector('select[name="productIds"]') as HTMLSelectElement | null;
+              if (sel) {
+                sel.innerHTML = products.map((p: any) => `<option value="${esc(p.id)}">${esc(p.name || p.id.slice(0, 8))}</option>`).join('');
+                Array.from(sel.options).forEach((o) => { if (selected.includes(o.value)) o.selected = true; });
+              }
+              // sync switch
+              const sw = body.querySelector('.switch input[name="allowAllProducts"]') as HTMLInputElement | null;
+              if (sw) sw.checked = selected.length === 0 && row.allowAllProducts !== false;
+            },
             onSubmit: async (v) => {
               const res = await apiRequest(`/codes/${id}`, { method: 'PUT', body: JSON.stringify(v) });
               if (!res.success) throw new Error(res.message);
