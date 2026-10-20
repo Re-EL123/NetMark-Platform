@@ -954,16 +954,10 @@ async function productKits(c: HTMLElement) {
 }
 
 async function manageKit(id: string) {
-  const [prod, items] = await Promise.all([
-    apiRequest('/products?pageSize=1000'),
-    apiRequest(`/kits/${id}/items`)
-  ]);
-  const products = prod?.success ? prod.data || [] : [];
-  const selected = items?.success && Array.isArray(items.data?.productIds) ? items.data.productIds : [];
   openModal({
     title: 'Kit products',
     fields: [
-      { name: 'productIds', label: 'Select products in this kit', type: 'checkboxes', options: products.map((p: any) => ({ value: p.id, label: p.name })), value: selected }
+      { name: 'productIds', label: 'Select products in this kit', type: 'checkboxes', options: [], value: [] }
     ],
     submitLabel: 'Save',
     onSubmit: async (v) => {
@@ -972,6 +966,24 @@ async function manageKit(id: string) {
       const r2 = await apiRequest(`/kits/${id}/items`, { method: 'PUT', body: JSON.stringify({ productIds: ids }) });
       if (!r2.success) throw new Error(r2.message);
       toast('Kit updated', 'success');
+    },
+    onMount: async (body) => {
+      const list = body.querySelector('.pick-list') as HTMLElement | null;
+      if (list) list.innerHTML = '<p class="empty" style="font-size:12px">Loading products…</p>';
+      const [prod, items] = await Promise.all([
+        apiRequest('/products?pageSize=1000').catch(() => null),
+        apiRequest(`/kits/${id}/items`).catch(() => null)
+      ]);
+      const products = prod?.success ? prod.data || [] : [];
+      const selected: string[] = items?.success && Array.isArray(items.data?.productIds) ? items.data.productIds : [];
+      if (!list) return;
+      if (!products.length) {
+        list.innerHTML = '<p class="empty" style="font-size:12px">No products available.</p>';
+        return;
+      }
+      list.innerHTML = products
+        .map((p: any) => `<label class="pick-item"><input type="checkbox" name="productIds" value="${esc(p.id)}" ${selected.includes(p.id) ? 'checked' : ''}> <span>${esc(p.name)}</span></label>`)
+        .join('');
     }
   });
 }
