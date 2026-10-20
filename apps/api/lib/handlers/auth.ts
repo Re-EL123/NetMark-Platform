@@ -308,6 +308,11 @@ If you didn't create this account, you can ignore this email.`
       if (v.expires_at && new Date(v.expires_at) < new Date()) return res.status(400).json({ success: false, message: 'Token expired' });
       await sb.from('users').update({ verification_status: 'verified' }).eq('id', v.user_id);
       await sb.from('user_email_verifications').update({ used_at: new Date().toISOString() }).eq('id', v.id);
+      // Confirm the address in Supabase Auth too — otherwise signInWithPassword
+      // still rejects the account with "Email not confirmed".
+      await sb.auth.admin.updateUserById(v.user_id, { email_confirm: true }).catch((e: any) => {
+        console.error('verify auth confirm error', e);
+      });
       return res.status(200).json({ success: true, message: 'Email verified' });
     } catch (e: any) {
       return res.status(500).json({ success: false, message: 'Server error' });
@@ -331,7 +336,37 @@ If you didn't create this account, you can ignore this email.`
       if (v.expires_at && new Date(v.expires_at) < new Date()) return res.status(400).json({ success: false, message: 'Token expired' });
       await sb.from('users').update({ verification_status: 'verified' }).eq('id', v.user_id);
       await sb.from('user_email_verifications').update({ used_at: new Date().toISOString() }).eq('id', v.id);
+      // Confirm the address in Supabase Auth too — otherwise signInWithPassword
+      // still rejects the account with "Email not confirmed".
+      await sb.auth.admin.updateUserById(v.user_id, { email_confirm: true }).catch((e: any) => {
+        console.error('verify auth confirm error', e);
+      });
       return res.status(200).json({ success: true, message: 'Email verified' });
+    } catch (e: any) {
+      return res.status(500).json({ success: false, message: 'Server error' });
+    }
+  }
+
+  // Heals accounts that verified through our custom email flow before this
+  // endpoint started confirming the address in Supabase Auth. Safe to call
+  // repeatedly — it only acts when our own record already says verified.
+  if (path === 'reconfirm' && req.method === 'POST') {
+    if (!rateLimit(clientKey(req, 'reconfirm'), { windowMs: 300000, max: 20 })) return rateLimitFail(res);
+    try {
+      const sb = getSupabase();
+      const email = String((req.body || {}).email || '').trim();
+      if (!email) return res.status(400).json({ success: false, message: 'Missing email' });
+      const { data: u } = await sb
+        .from('users')
+        .select('id, verification_status')
+        .eq('email', email)
+        .maybeSingle();
+      if (!u) return res.status(404).json({ success: false, message: 'Account not found' });
+      if (u.verification_status !== 'verified') {
+        return res.status(400).json({ success: false, message: 'This account has not been verified yet' });
+      }
+      await sb.auth.admin.updateUserById(u.id, { email_confirm: true });
+      return res.status(200).json({ success: true, message: 'Email confirmed' });
     } catch (e: any) {
       return res.status(500).json({ success: false, message: 'Server error' });
     }

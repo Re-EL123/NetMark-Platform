@@ -44,7 +44,21 @@ loginForm.addEventListener('submit', async (e) => {
   const password = (document.getElementById('password') as HTMLInputElement).value;
 
   try {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    let { error } = await supabase.auth.signInWithPassword({ email, password });
+
+    // Older accounts verified through our custom flow without confirming the
+    // address in Supabase Auth. Heal that transparently, then retry once.
+    if (error && /not confirmed/i.test(error.message)) {
+      try {
+        await apiRequest('/auth/reconfirm', {
+          method: 'POST',
+          body: JSON.stringify({ email })
+        });
+        ({ error } = await supabase.auth.signInWithPassword({ email, password }));
+      } catch {
+        // fall through to the original error
+      }
+    }
     if (error) throw new Error(error.message);
 
     const res = await apiRequest('/auth/me');
