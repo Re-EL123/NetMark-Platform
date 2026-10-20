@@ -1,4 +1,4 @@
-# NetMark Platform
+## NetMark Platform
 
 A full platform for network marketing built as a monorepo.
 
