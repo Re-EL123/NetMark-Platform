@@ -963,7 +963,7 @@ async function manageKit(id: string) {
   openModal({
     title: 'Kit products',
     fields: [
-      { name: 'productIds', label: 'Products in kit (select multiple)', type: 'select', multiple: true, options: products.map((p: any) => ({ value: p.id, label: p.name })), value: selected }
+      { name: 'productIds', label: 'Select products in this kit', type: 'checkboxes', options: products.map((p: any) => ({ value: p.id, label: p.name })), value: selected }
     ],
     submitLabel: 'Save',
     onSubmit: async (v) => {

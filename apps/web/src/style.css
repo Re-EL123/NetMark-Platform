@@ -4077,6 +4077,23 @@ header {
   padding: 0;
   display: grid;
   gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+label.chk-item {
+  user-select: none;
+}
+
+label.chk-item input[type='checkbox'] {
+  margin-top: 2px;
+  flex: 0 0 auto;
+}
+
+label.chk-item:has(input:checked) {
+  border-color: var(--brand);
+  background: var(--netmark-red-soft);
 }
 
 .chk-item {

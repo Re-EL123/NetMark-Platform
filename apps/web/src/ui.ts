@@ -88,6 +88,7 @@ export interface Field {
     | 'select'
     | 'textarea'
     | 'checkbox'
+    | 'checkboxes'
     | 'image'
     | 'video'
     | 'file'
@@ -163,6 +164,20 @@ function fieldHtml(f: Field): string {
       </label>
       ${f.help ? `<p class="empty" style="font-size:12px;margin-top:6px">${esc(f.help)}</p>` : ''}
     </div>`;
+  }
+  if (f.type === 'checkboxes') {
+    const opts = f.options || [];
+    const selectedVals = Array.isArray(f.value)
+      ? f.value.map(String)
+      : String(f.value || '').split(',').map((s) => s.trim()).filter(Boolean);
+    const items = opts
+      .map(
+        (o) => `<label class="chk-item"><input type="checkbox" name="${esc(f.name)}" value="${esc(o.value)}" ${selectedVals.includes(String(o.value)) ? 'checked' : ''}> <span>${esc(o.label)}</span></label>`
+      )
+      .join('');
+    return `<div class="form-group"><label>${esc(f.label)}</label>
+      <div class="chk-list">${items || '<p class="empty" style="font-size:12px">No options available.</p>'}</div>
+      ${f.help ? `<p class="empty" style="font-size:12px">${esc(f.help)}</p>` : ''}</div>`;
   }
   if (f.type === 'select') {
     const opts = (f.options || []).slice();
@@ -263,6 +278,10 @@ export function readFields(host: HTMLElement, fields: Field[]): Record<string, a
     const el = host.querySelector(`[name="${f.name}"]`) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
     if (!el) continue;
     if (f.type === 'checkbox' || f.type === 'switch') values[f.name] = (el as HTMLInputElement).checked;
+    else if (f.type === 'checkboxes') {
+      const checked = Array.from(host.querySelectorAll<HTMLInputElement>(`input[name="${f.name}"]:checked`)).map((c) => c.value);
+      values[f.name] = checked;
+    }
     else if (f.type === 'number') values[f.name] = el.value === '' ? null : Number(el.value);
     else if (f.type === 'select' && f.multiple) {
       const sel = el as HTMLSelectElement;
@@ -367,6 +386,9 @@ export function openModal(opts: ModalOptions): Promise<void> {
         const el = form.querySelector(`[name="${f.name}"]`) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
         if (!el) continue;
         if (f.type === 'checkbox' || f.type === 'switch') values[f.name] = (el as HTMLInputElement).checked;
+        else if (f.type === 'checkboxes') {
+          values[f.name] = Array.from(form.querySelectorAll<HTMLInputElement>(`input[name="${f.name}"]:checked`)).map((c) => c.value);
+        }
         else if (f.type === 'number') values[f.name] = el.value === '' ? null : Number(el.value);
         else if (f.type === 'gallery' || f.type === 'documents') {
           try {
