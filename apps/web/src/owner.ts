@@ -963,23 +963,12 @@ async function manageKit(id: string) {
   openModal({
     title: 'Kit products',
     fields: [
-      { name: 'productIds', label: 'Products in kit (select multiple)', type: 'select', multiple: true, options: products.map((p: any) => ({ value: p.id, label: p.name })) }
+      { name: 'productIds', label: 'Products in kit (select multiple)', type: 'select', multiple: true, options: products.map((p: any) => ({ value: p.id, label: p.name })), value: selected }
     ],
-    onMount: (body) => {
-      const sel = body.querySelector('select[name="productIds"]') as HTMLSelectElement | null;
-      if (sel) {
-        sel.setAttribute('multiple', 'multiple');
-        sel.setAttribute('size', String(Math.min(12, Math.max(6, products.length || 6))));
-        Array.from(sel.options).forEach((o) => {
-          if (selected.includes((o as HTMLOptionElement).value)) (o as HTMLOptionElement).selected = true;
-        });
-      }
-    },
     submitLabel: 'Save',
     onSubmit: async (v) => {
-      let ids: string[] = [];
-      if (Array.isArray(v.productIds)) ids = v.productIds;
-      else if (typeof v.productIds === 'string' && v.productIds) ids = v.productIds.split(',').filter(Boolean);
+      const ids: string[] = Array.isArray(v.productIds) ? v.productIds : [];
+      if (!ids.length) throw new Error('Select at least one product for this kit.');
       const r2 = await apiRequest(`/kits/${id}/items`, { method: 'PUT', body: JSON.stringify({ productIds: ids }) });
       if (!r2.success) throw new Error(r2.message);
       toast('Kit updated', 'success');

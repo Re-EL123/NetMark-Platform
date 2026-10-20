@@ -1,4 +1,4 @@
-import { authed, ok, fail, slugOf, getSupabase, rowOut } from '../http';
+import { authed, ok, fail, slugOf, getSupabase, rowOut, rowsOut } from '../http';
 import { hasPermission } from '../permissions';
 import { recordAudit } from '../audit';
 
@@ -36,7 +36,7 @@ export default authed(async (req, res, ctx) => {
     if (req.method === 'GET') {
       if (!targetCompany) return ok(res, { data: [] });
       const { data } = await sb.from('product_kits').select('*').eq('company_id', targetCompany).order('created_at', { ascending: false });
-      return ok(res, { data: data || [] });
+      return ok(res, { data: rowsOut(data || []) });
     }
     if (req.method === 'POST') {
       if (!targetCompany) return fail(res, 'Company required');

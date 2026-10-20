@@ -166,16 +166,24 @@ function fieldHtml(f: Field): string {
   }
   if (f.type === 'select') {
     const opts = (f.options || []).slice();
+    const isMulti = !!f.multiple;
+    const selectedVals = isMulti
+      ? (Array.isArray(f.value) ? f.value.map(String) : String(f.value || '').split(',').map((s) => s.trim()).filter(Boolean))
+      : [];
     // Keep a stored value that is no longer in the list so saving never
     // silently rewrites it to the first option.
-    if (value !== '' && !opts.some((o) => String(o.value) === String(value))) {
+    if (!isMulti && value !== '' && !opts.some((o) => String(o.value) === String(value))) {
       opts.unshift({ value: String(value), label: `${String(value)} (current)` });
     }
     const markup = opts
-      .map((o) => `<option value="${esc(o.value)}" ${String(o.value) === String(value) ? 'selected' : ''}>${esc(o.label)}</option>`)
+      .map((o) => {
+        const sel = isMulti ? selectedVals.includes(String(o.value)) : String(o.value) === String(value);
+        return `<option value="${esc(o.value)}" ${sel ? 'selected' : ''}>${esc(o.label)}</option>`;
+      })
       .join('');
+    const multiAttrs = isMulti ? `multiple size="${Math.min(12, Math.max(5, opts.length || 5))}"` : '';
     return `<div class="form-group"><label for="f_${esc(f.name)}">${esc(f.label)}</label>
-      <select ${common}>${markup}</select>${f.help ? `<p class="empty" style="font-size:12px">${esc(f.help)}</p>` : ''}</div>`;
+      <select ${common} ${multiAttrs}>${markup}</select>${isMulti ? '<p class="empty" style="font-size:12px">Hold Ctrl/Cmd (⌘) to select multiple.</p>' : ''}${f.help ? `<p class="empty" style="font-size:12px">${esc(f.help)}</p>` : ''}</div>`;
   }
   if (f.type === 'textarea') {
     return `<div class="form-group${f.address ? ' addr-group' : ''}"${f.address ? ' data-address' : ''}><label for="f_${esc(f.name)}">${esc(f.label)}</label>
@@ -256,6 +264,10 @@ export function readFields(host: HTMLElement, fields: Field[]): Record<string, a
     if (!el) continue;
     if (f.type === 'checkbox' || f.type === 'switch') values[f.name] = (el as HTMLInputElement).checked;
     else if (f.type === 'number') values[f.name] = el.value === '' ? null : Number(el.value);
+    else if (f.type === 'select' && f.multiple) {
+      const sel = el as HTMLSelectElement;
+      values[f.name] = Array.from(sel.selectedOptions).map((o) => o.value);
+    }
     else if (f.type === 'gallery' || f.type === 'documents') {
       try {
         const parsed = JSON.parse(el.value || '[]');
