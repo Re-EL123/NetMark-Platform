@@ -3894,3 +3894,287 @@ header {
 [data-theme='dark'] .share-opt:hover {
   background: var(--dark);
 }
+
+/* =====================================================================
+   Responsive hardening
+   ------------------------------------------------------------------
+   Consolidated mobile rules that fix horizontal overflow and tighten
+   spacing on phones. Kept last in the file so it wins over the older
+   one-off media blocks without having to edit them individually.
+   ===================================================================== */
+
+/* Nothing should ever force the whole page wider than the viewport. Applied
+   to the scroll containers rather than html/body so `position: sticky` on the
+   header and sidebar keeps working. */
+.main,
+.content {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.main,
+.content,
+.card {
+  min-width: 0;
+}
+
+/* Long words / URLs / emails wrap instead of stretching a card. */
+.card p,
+.card h3,
+.detail-grid dd,
+.stat .stat-label,
+.code-block {
+  overflow-wrap: anywhere;
+}
+
+/* Charts: the 320px track was wider than a 360px phone's content box. */
+.chart-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+}
+
+/* ------------------------------- <= 1024px ----------------------------- */
+@media (max-width: 1024px) {
+  .chart-grid {
+    gap: 16px;
+  }
+}
+
+/* ------------------------------- <= 900px ------------------------------ */
+@media (max-width: 900px) {
+  /* The storefront live-preview column gets full width before tablets. */
+  .sf-edit-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sf-edit-preview {
+    position: static;
+  }
+}
+
+/* ------------------------------- <= 720px ------------------------------ */
+@media (max-width: 720px) {
+  /* Top rail: brand + footer stay on one line, nav scrolls horizontally. */
+  .sidebar {
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  }
+
+  .sidebar nav a,
+  .app.sidebar-collapsed .sidebar nav a {
+    border-radius: 999px;
+  }
+
+  /* Tables scroll inside their wrapper rather than pushing the page wide. */
+  .table-wrap {
+    margin: 0 -6px;
+    padding: 0 6px;
+  }
+
+  .ref-table {
+    min-width: 520px;
+  }
+
+  .ref-detail td {
+    padding: 0 8px 10px;
+  }
+
+  .ref-detail-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 14px;
+  }
+
+  /* Two-column editor/preview stacks; preview no longer sticky. */
+  .sf-edit-grid {
+    gap: 18px;
+  }
+
+  /* Network rank progress drops the fixed label column: label + value share
+     the top line and the bar spans underneath. */
+  .progress-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'label value'
+      'bar bar';
+    gap: 4px 10px;
+  }
+
+  .progress-label {
+    grid-area: label;
+    display: block;
+  }
+
+  .progress {
+    grid-area: bar;
+  }
+
+  .progress-value {
+    grid-area: value;
+    text-align: right;
+  }
+
+  /* Store cards: let the toggle sit on its own row on narrow screens. */
+  .sf-store-head {
+    flex-wrap: wrap;
+  }
+
+  .sf-store-toggle {
+    margin-left: 0;
+    order: 3;
+  }
+
+  /* Address autocomplete wraps the locate button under the field. */
+  .addr-controls {
+    flex-wrap: wrap;
+  }
+
+  .addr-status {
+    flex-basis: 100%;
+  }
+
+  /* Share sheet: 3 columns is too tight, use 2. */
+  .share-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Featured picker rows keep the grip but shrink. */
+  .sf-feat-item {
+    gap: 10px;
+    padding: 9px 10px;
+  }
+
+  /* Modals take the full screen height they need. */
+  .modal-overlay {
+    padding: 10px;
+    align-items: flex-start;
+  }
+
+  .modal,
+  .modal.wide,
+  .modal.sf-edit-wide {
+    max-width: 100%;
+    border-radius: var(--radius-md);
+  }
+
+  .modal-header {
+    padding: 14px 16px;
+  }
+
+  .modal-body,
+  .modal.sf-edit-wide .modal-body {
+    padding: 16px;
+    max-height: calc(100dvh - 150px);
+  }
+
+  .modal-footer {
+    padding: 12px 16px;
+    flex-wrap: wrap;
+  }
+
+  .modal-footer .btn {
+    flex: 1 1 auto;
+  }
+
+  /* Buttons and inputs get comfortable tap targets. */
+  .btn-sm {
+    padding: 10px 14px;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    font-size: 16px; /* prevents iOS zoom-on-focus */
+  }
+
+  .row-actions,
+  .sf-actions {
+    gap: 6px;
+  }
+}
+
+/* ------------------------------- <= 520px ------------------------------ */
+@media (max-width: 520px) {
+  header h1 {
+    font-size: 16px;
+  }
+
+  .card {
+    padding: 16px;
+    border-radius: var(--radius-md);
+  }
+
+  .content {
+    padding: 12px;
+  }
+
+  /* Stats go single column only when there are few; 2-up stays readable. */
+  .stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .stat {
+    padding: 12px;
+  }
+
+  /* Detail grids collapse to a single column. */
+  .detail-grid,
+  .ref-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sfp-products {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .share-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .color-field {
+    flex-wrap: nowrap;
+  }
+
+  .addr-suggest {
+    max-height: 240px;
+  }
+
+  /* Full-bleed action buttons read better on tiny screens. */
+  .toolbar {
+    gap: 8px;
+  }
+
+  .toolbar input,
+  .toolbar select,
+  .toolbar .btn,
+  .toolbar .btn-sm {
+    flex: 1 1 100%;
+  }
+
+  .how-steps li {
+    gap: 10px;
+  }
+}
+
+/* ------------------------------- <= 380px ------------------------------ */
+@media (max-width: 380px) {
+  .stats {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .sidebar nav a,
+  .app.sidebar-collapsed .sidebar nav a {
+    padding: 8px 10px;
+    font-size: 12.5px;
+  }
+
+  .modal-body,
+  .modal.sf-edit-wide .modal-body {
+    padding: 13px;
+  }
+}
