@@ -99,7 +99,8 @@ export default authed(async (req, res, ctx) => {
         return fail(res, limitMessage('codes', ent.maxCodes), 402);
       }
     }
-    const allowAll = (req.body as any)?.allowAllProducts !== undefined ? !!(req.body as any).allowAllProducts : !(req.body as any)?.kitId && !Array.isArray(req.body?.productIds);
+    const kitId = (req.body as any)?.kitId || null;
+    const allowAll = kitId ? false : ((req.body as any)?.allowAllProducts !== undefined ? !!(req.body as any).allowAllProducts : true);
     const { data, error } = await sb
       .from('distributor_codes')
       .insert({
@@ -122,6 +123,15 @@ export default authed(async (req, res, ctx) => {
       return fail(res, 'Could not create code');
     }
     await recordAudit(req, { action: 'code.create', entityType: 'distributor_code', entityId: data.id, after: rowOut(data) });
+    if (data && (req.body as any)?.kitId) {
+      const kitId = (req.body as any).kitId;
+      await sb.from('code_products').delete().eq('code_id', data.id);
+      const { data: items } = await sb.from('product_kit_items').select('product_id').eq('kit_id', kitId);
+      if (items?.length) {
+        await sb.from('code_products').insert(items.map((i: any) => ({ code_id: data.id, product_id: i.product_id })));
+      }
+      await sb.from('distributor_codes').update({ allow_all_products: false, product_filter_mode: 'kit' }).eq('id', data.id);
+    }
     return ok(res, { data: rowOut(data) }, 201);
   }
 
@@ -150,8 +160,19 @@ export default authed(async (req, res, ctx) => {
     if (b.allowAllProducts !== undefined) {
       patch.allow_all_products = !!b.allowAllProducts;
       patch.product_filter_mode = b.allowAllProducts ? 'all' : 'kit';
+      if (b.allowAllProducts) {
+        await sb.from('code_products').delete().eq('code_id', id);
+      }
     }
-    if (b.productIds !== undefined && Array.isArray(b.productIds)) {
+    if (b.kitId) {
+      await sb.from('code_products').delete().eq('code_id', id);
+      const { data: items } = await sb.from('product_kit_items').select('product_id').eq('kit_id', b.kitId);
+      if (items?.length) {
+        await sb.from('code_products').insert(items.map((i: any) => ({ code_id: id, product_id: i.product_id })));
+      }
+      patch.allow_all_products = false;
+      patch.product_filter_mode = 'kit';
+    } else if (b.productIds !== undefined && Array.isArray(b.productIds)) {
       await sb.from('code_products').delete().eq('code_id', id);
       if (b.productIds.length) {
         const rows = b.productIds.map((pid: string) => ({ code_id: id, product_id: pid }));

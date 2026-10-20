@@ -494,18 +494,15 @@ function codes(c: HTMLElement) {
             ...marketFields(),
             { name: 'maxUses', label: 'Max uses', type: 'number', min: 1 },
             { name: 'expiresAt', label: 'Expires', type: 'date' },
-            { name: 'allowAllProducts', label: 'Allow access to ALL company products', type: 'switch', value: true, help: 'Turn off to create a product kit with multiple products.' },
-            { name: 'productIds', label: 'Product kit (select multiple)', type: 'select', options: [], multiple: true }
+            { name: 'kitId', label: 'Product Kit', type: 'select', options: [], help: 'Select a kit (bundles multiple products). Leave empty for All products.' },
+            { name: 'allowAllProducts', label: 'Allow access to ALL company products', type: 'switch', value: true, help: 'Switch off if using a kit.' }
           ],
           onMount: async (body) => {
-            const res = await apiRequest('/products?pageSize=1000').catch(() => null);
-            const products: any[] = res?.success ? res.data || [] : [];
-            const sel = body.querySelector('select[name="productIds"]') as HTMLSelectElement | null;
-            if (sel) {
-              sel.setAttribute('multiple', 'multiple');
-              sel.setAttribute('size', Math.min(8, Math.max(4, products.length || 4)).toString());
-              sel.innerHTML = products.map((p: any) => `<option value="${esc(p.id)}">${esc(p.name || p.id.slice(0, 8))}</option>`).join('');
-              if ((window as any).wireFields) (window as any).wireFields(body, [{ name: 'productIds', label: 'Product kit (select multiple)', type: 'select', options: products.map((p: any) => ({ value: p.id, label: p.name })), multiple: true }]);
+            const kitRes = await apiRequest('/codes?action=kits').catch(() => null);
+            const kits = kitRes?.success ? kitRes.data || [] : [];
+            const kitSel = body.querySelector('select[name="kitId"]') as HTMLSelectElement | null;
+            if (kitSel) {
+              kitSel.innerHTML = '<option value="">-- No kit (all products) --</option>' + kits.map((k: any) => `<option value="${esc(k.id)}">${esc(k.name)}</option>`).join('');
             }
           },
           onSubmit: async (v) => {
@@ -531,26 +528,16 @@ function codes(c: HTMLElement) {
               ...marketFields(row),
               { name: 'maxUses', label: 'Max uses', type: 'number', min: 1, value: row.maxUses },
               { name: 'expiresAt', label: 'Expires', type: 'date', value: row.expiresAt ? row.expiresAt.split('T')[0] : '' },
-              { name: 'allowAllProducts', label: 'Allow access to ALL company products', type: 'switch', value: row.allowAllProducts !== false },
-              { name: 'productIds', label: 'Product kit (select multiple)', type: 'select', multiple: true, options: [] }
+              { name: 'kitId', label: 'Product Kit', type: 'select', options: [] },
+              { name: 'allowAllProducts', label: 'Allow access to ALL company products', type: 'switch', value: row.allowAllProducts !== false }
             ],
             onMount: async (body) => {
-              const [productsRes, kitRes] = await Promise.all([
-                apiRequest('/products?pageSize=1000').catch(() => null),
-                apiRequest(`/codes/${id}/products`).catch(() => null)
-              ]);
-              const products: any[] = productsRes?.success ? (productsRes.data || []) : [];
-              const selected = kitRes?.success && Array.isArray(kitRes.data?.productIds) ? kitRes.data.productIds : [];
-              const sel = body.querySelector('select[name="productIds"]') as HTMLSelectElement | null;
-              if (sel) {
-                sel.setAttribute('multiple', 'multiple');
-                sel.setAttribute('size', Math.min(10, Math.max(4, products.length || 4)).toString());
-                sel.innerHTML = products.map((p: any) => `<option value="${esc(p.id)}">${esc(p.name || p.id.slice(0, 8))}</option>`).join('');
-                Array.from(sel.options).forEach((o) => { if (selected.includes(o.value)) o.selected = true; });
+              const kitRes = await apiRequest('/codes?action=kits').catch(() => null);
+              const kits = kitRes?.success ? kitRes.data || [] : [];
+              const kitSel = body.querySelector('select[name="kitId"]') as HTMLSelectElement | null;
+              if (kitSel) {
+                kitSel.innerHTML = '<option value="">-- No kit (all products) --</option>' + kits.map((k: any) => `<option value="${esc(k.id)}">${esc(k.name)}</option>`).join('');
               }
-              // sync switch
-              const sw = body.querySelector('.switch input[name="allowAllProducts"]') as HTMLInputElement | null;
-              if (sw) sw.checked = selected.length === 0 && row.allowAllProducts !== false;
             },
             onSubmit: async (v) => {
               const res = await apiRequest(`/codes/${id}`, { method: 'PUT', body: JSON.stringify(v) });
@@ -561,27 +548,25 @@ function codes(c: HTMLElement) {
           });
         },
         kit: async (id) => {
-          const [productsRes, kitRes] = await Promise.all([
-            apiRequest('/products?pageSize=1000').catch(() => null),
-            apiRequest(`/codes/${id}/products`).catch(() => null)
-          ]);
-          const products: any[] = productsRes?.success ? (productsRes.data || []) : [];
-          const selected = kitRes?.success && Array.isArray(kitRes.data?.productIds) ? kitRes.data.productIds : [];
+          const kitRes = await apiRequest('/codes?action=kits').catch(() => null);
+          const kits = kitRes?.success ? kitRes.data || [] : [];
           openModal({
-            title: 'Edit product kit for this code',
+            title: 'Link product kit to this code',
             fields: [
-              { name: 'allowAll', label: 'Allow ALL company products', type: 'switch', value: selected.length === 0, help: 'Turn off to select multiple products for this kit.' },
-              { name: 'productIds', label: 'Product kit (select multiple)', type: 'select', multiple: true, options: products.map((p: any) => ({ value: p.id, label: p.name || p.id.slice(0, 8) })), value: selected }
+              { name: 'allowAll', label: 'Allow ALL company products', type: 'switch', value: true, help: 'Turn off to link a Product Kit.' },
+              { name: 'kitId', label: 'Product Kit', type: 'select', options: [] }
             ],
-            submitLabel: 'Save kit',
+            onMount: async (body) => {
+              const kitSel = body.querySelector('select[name="kitId"]') as HTMLSelectElement | null;
+              if (kitSel) {
+                kitSel.innerHTML = '<option value="">-- Select a kit --</option>' + kits.map((k: any) => `<option value="${esc(k.id)}">${esc(k.name)}</option>`).join('');
+              }
+            },
+            submitLabel: 'Save',
             onSubmit: async (v) => {
               const allowAll = !!v.allowAll;
-              let ids: string[] = [];
-              if (!allowAll) {
-                if (Array.isArray(v.productIds)) ids = v.productIds;
-                else if (typeof v.productIds === 'string' && v.productIds) ids = v.productIds.split(',').map((s: string) => s.trim()).filter(Boolean);
-              }
-              const res = await apiRequest(`/codes/${id}/products`, { method: 'PUT', body: JSON.stringify({ productIds: ids }) });
+              const kitId = allowAll ? '' : (v.kitId || '');
+              const res = await apiRequest(`/codes/${id}/kit`, { method: 'PUT', body: JSON.stringify({ kitId }) });
               if (!res.success) throw new Error(res.message);
               toast('Product kit updated', 'success');
               reload();
