@@ -87,12 +87,53 @@ function buildJsonLd(d: StorefrontData, url: string): any {
   };
 }
 
+/** FAQPage structured data (Google rich results). */
+function buildFaqLd(faq: { q: string; a: string }[]): any | null {
+  if (!faq || !faq.length) return null;
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faq.map((item) => ({
+      '@type': 'Question',
+      name: item.q,
+      acceptedAnswer: { '@type': 'Answer', text: item.a }
+    }))
+  };
+}
+
+const FONT_STACKS: Record<string, string> = {
+  system: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+  sora: "'Sora', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  inter: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+  playfair: "'Playfair Display', Georgia, 'Times New Roman', serif",
+  dmserif: "'DM Serif Display', Georgia, 'Times New Roman', serif"
+};
+
+/** Google Fonts stylesheet for the chosen storefront typeface (non-system only). */
+function fontLink(font: string): string {
+  const family =
+    font === 'sora'
+      ? 'Sora:wght@400;500;600;700;800'
+      : font === 'inter'
+        ? 'Inter:wght@400;500;600;700;800'
+        : font === 'playfair'
+          ? 'Playfair+Display:wght@500;600;700'
+          : font === 'dmserif'
+            ? 'DM+Serif+Display:ital@0;1'
+            : '';
+  if (!family) return '';
+  return `<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=${family}&display=swap">`;
+}
+
 function buildHead(d: StorefrontData, url: string): string {
   const sf = d.storefront;
   const title = sf.metaTitle || `${d.store.name}${sf.tagline ? ' — ' + sf.tagline : ''}`;
   const desc =
     sf.metaDescription || sf.tagline || (sf.about || '').slice(0, 160) || `Browse products from ${d.store.name}.`;
   const image = sf.banner || sf.logo || '';
+  const font = FONT_STACKS[sf.font] || FONT_STACKS.system;
+  const themeVars = `:root{--sf-accent:${esc(sf.themeColor)};--sf-accent-2:${esc(sf.secondaryColor || sf.themeColor)};--sf-font:${font}}body{font-family:var(--sf-font)}`;
+  const faqLd = buildFaqLd(sf.faq);
   return [
     `<meta charset="UTF-8">`,
     `<meta name="viewport" content="width=device-width, initial-scale=1.0">`,
@@ -112,7 +153,10 @@ function buildHead(d: StorefrontData, url: string): string {
     `<meta name="twitter:title" content="${esc(title)}">`,
     `<meta name="twitter:description" content="${esc(desc)}">`,
     image ? `<meta name="twitter:image" content="${esc(image)}">` : '',
-    `<script type="application/ld+json">${safeJson(buildJsonLd(d, url))}</script>`
+    fontLink(sf.font),
+    `<style>${themeVars}</style>`,
+    `<script type="application/ld+json">${safeJson(buildJsonLd(d, url))}</script>`,
+    faqLd ? `<script type="application/ld+json">${safeJson(faqLd)}</script>` : ''
   ]
     .filter(Boolean)
     .join('\n    ');
@@ -123,29 +167,91 @@ function renderBody(d: StorefrontData, url: string): string {
   const sf = d.storefront;
   const name = d.store.name;
   const wa = sf.whatsapp;
+  const sections = sf.sections || {};
   const ctaLabel = sf.ctaLabel || (wa ? 'Order on WhatsApp' : sf.phone ? 'Call us' : 'Contact us');
   const heroCta = wa
     ? `<a class="sf-btn sf-btn-primary" href="${esc(waLink(wa, `Hi ${name}, I'd like to place an order.`))}" target="_blank" rel="noopener">${esc(ctaLabel)}</a>`
     : sf.phone
       ? `<a class="sf-btn sf-btn-primary" href="tel:${esc(sf.phone)}">${esc(ctaLabel)}</a>`
       : '';
-  const showProducts = sf.showProducts && d.products.length > 0;
-  const products = d.products
-    .map(
-      (p) => `<article class="sf-product">
+
+  const isSplit = sf.heroStyle === 'split';
+  const isGradient = sf.heroStyle === 'gradient';
+  const heroBg = !isGradient && !isSplit && sf.banner
+    ? ` style="background-image:linear-gradient(rgba(10,10,12,.5),rgba(10,10,12,.7)),url('${esc(sf.banner)}')"`
+    : '';
+
+  const showProducts = sections.products !== false && sf.showProducts && d.products.length > 0;
+  const featuredIds = new Set(sf.featured || []);
+  const featured = showProducts ? d.products.filter((p) => featuredIds.has(p.id)) : [];
+  const featuredSet = new Set(featured.map((p) => p.id));
+  const rest = showProducts ? d.products.filter((p) => !featuredSet.has(p.id)) : [];
+
+  const productCard = (p: any) => {
+    const onSale = Number(p.comparePrice || 0) > Number(p.price || 0);
+    const badges = [
+      onSale ? `<span class="sf-tag sf-tag-sale">Sale</span>` : '',
+      featuredIds.has(p.id) ? `<span class="sf-tag sf-tag-star">★ Featured</span>` : '',
+      !p.inStock ? `<span class="sf-tag sf-tag-out">Sold out</span>` : ''
+    ].join('');
+    return `<article class="sf-product">
         <div class="sf-product-media">
           ${p.image ? `<img src="${esc(p.image)}" alt="${esc(p.name)}" loading="lazy" />` : `<div class="sf-product-ph">${esc((p.name || '?').charAt(0).toUpperCase())}</div>`}
-          ${!p.inStock ? `<span class="sf-out">Out of stock</span>` : ''}
+          ${badges ? `<div class="sf-tags">${badges}</div>` : ''}
         </div>
         <div class="sf-product-body">
           ${p.category ? `<span class="sf-cat">${esc(p.category)}</span>` : ''}
           <h3>${esc(p.name)}</h3>
           ${p.description ? `<p>${esc(String(p.description).slice(0, 120))}</p>` : ''}
-          <div class="sf-product-foot"><span class="sf-price">${esc(money(p.price))}</span></div>
+          <div class="sf-product-foot"><span class="sf-price">${esc(money(p.price))}</span>${onSale ? `<span class="sf-compare">${esc(money(p.comparePrice))}</span>` : ''}</div>
         </div>
-      </article>`
-    )
-    .join('');
+      </article>`;
+  };
+
+  const productGrid = d.products.map(productCard).join('');
+
+  // Category chips derived from product categories.
+  const categories = showProducts
+    ? [...new Set(d.products.map((p) => p.category).filter(Boolean))].slice(0, 12)
+    : [];
+  const categoriesHtml =
+    sections.categories !== false && categories.length > 1
+      ? `<section class="sf-section sf-cats-section"><div class="sf-cats">${categories
+          .map((c) => `<a class="sf-chip" href="#products">${esc(c)}</a>`)
+          .join('')}</div></section>`
+      : '';
+
+  const trustHtml =
+    sections.trust !== false && sf.badges && sf.badges.length
+      ? `<section class="sf-trust"><div class="sf-trust-inner">${sf.badges
+          .map((b: string) => `<span class="sf-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>${esc(b)}</span>`)
+          .join('')}</div></section>`
+      : '';
+
+  const featuredHtml =
+    sections.featured !== false && featured.length
+      ? `<section class="sf-section" id="featured"><h2>Featured</h2><div class="sf-grid sf-grid-featured">${featured
+          .map(productCard)
+          .join('')}</div></section>`
+      : '';
+
+  const gallery = (sf.gallery || []).filter((g: string) => typeof g === 'string');
+  const galleryHtml =
+    sections.gallery !== false && gallery.length
+      ? `<section class="sf-section" id="gallery"><h2>Gallery</h2><div class="sf-gallery">${gallery
+          .map((g: string) => `<a class="sf-gallery-item" href="${esc(g)}" target="_blank" rel="noopener"><img src="${esc(g)}" alt="" loading="lazy" /></a>`)
+          .join('')}</div></section>`
+      : '';
+
+  const faqHtml =
+    sections.faq !== false && sf.faq && sf.faq.length
+      ? `<section class="sf-section" id="faq"><h2>Frequently asked questions</h2><div class="sf-faq">${sf.faq
+          .map(
+            (f: { q: string; a: string }) => `<details class="sf-faq-item"><summary>${esc(f.q)}</summary><p>${esc(f.a)}</p></details>`
+          )
+          .join('')}</div></section>`
+      : '';
+
   const reviews = d.reviews
     .map(
       (r) => `<article class="sf-review">
@@ -155,27 +261,46 @@ function renderBody(d: StorefrontData, url: string): string {
     )
     .join('');
 
+  const navLinks = [
+    featured.length ? '<a href="#featured">Featured</a>' : '',
+    showProducts ? '<a href="#products">Products</a>' : '',
+    gallery.length ? '<a href="#gallery">Gallery</a>' : '',
+    sf.about ? '<a href="#about">About</a>' : '',
+    d.ratings.count ? '<a href="#reviews">Reviews</a>' : '',
+    sf.faq && sf.faq.length ? '<a href="#faq">FAQ</a>' : '',
+    '<a href="#contact">Contact</a>'
+  ]
+    .filter(Boolean)
+    .join('');
+
   return `
+    ${sf.announcement ? `<div class="sf-announce"><div class="sf-announce-inner">${esc(sf.announcement)}</div></div>` : ''}
     <header class="sf-header">
       <a class="sf-brand" href="${esc(url)}">${sf.logo ? `<img src="${esc(sf.logo)}" alt="${esc(name)} logo" />` : '<span class="sf-brand-dot"></span>'}<span>${esc(name)}</span></a>
-      <nav>${showProducts ? '<a href="#products">Products</a>' : ''}${sf.about ? '<a href="#about">About</a>' : ''}${d.ratings.count ? '<a href="#reviews">Reviews</a>' : ''}<a href="#contact">Contact</a></nav>
+      <nav>${navLinks}</nav>
     </header>
-    <section class="sf-hero"${sf.banner ? ` style="background-image:linear-gradient(rgba(10,10,12,.55),rgba(10,10,12,.72)),url('${esc(sf.banner)}')"` : ''}>
+    <section class="sf-hero sf-hero-${esc(sf.heroStyle)}"${heroBg}>
       <div class="sf-hero-inner">
-        ${sf.logo ? `<img class="sf-hero-logo" src="${esc(sf.logo)}" alt="${esc(name)}" />` : ''}
-        <h1>${esc(name)}</h1>
-        ${sf.tagline ? `<p class="sf-tagline">${esc(sf.tagline)}</p>` : ''}
-        <div class="sf-hero-cta">${heroCta}</div>
+        ${
+          isSplit
+            ? `<div class="sf-hero-copy">${sf.logo ? `<img class="sf-hero-logo" src="${esc(sf.logo)}" alt="${esc(name)}" />` : ''}<h1>${esc(name)}</h1>${sf.tagline ? `<p class="sf-tagline">${esc(sf.tagline)}</p>` : ''}<div class="sf-hero-cta">${heroCta}</div></div>${sf.banner ? `<div class="sf-hero-media"><img src="${esc(sf.banner)}" alt="" /></div>` : ''}`
+            : `${sf.logo ? `<img class="sf-hero-logo" src="${esc(sf.logo)}" alt="${esc(name)}" />` : ''}<h1>${esc(name)}</h1>${sf.tagline ? `<p class="sf-tagline">${esc(sf.tagline)}</p>` : ''}<div class="sf-hero-cta">${heroCta}</div>`
+        }
       </div>
     </section>
+    ${trustHtml}
     <main class="sf-main">
-      ${showProducts ? `<section class="sf-section" id="products"><h2>Products</h2><div class="sf-grid">${products}</div></section>` : ''}
+      ${categoriesHtml}
+      ${featuredHtml}
+      ${showProducts ? `<section class="sf-section" id="products"><h2>Products</h2><div class="sf-grid">${rest.length ? rest.map(productCard).join('') : productGrid}</div></section>` : ''}
+      ${galleryHtml}
       ${sf.about ? `<section class="sf-section" id="about"><h2>About ${esc(name)}</h2><p>${esc(sf.about).replace(/\n/g, '<br />')}</p></section>` : ''}
       ${
         d.ratings.count
           ? `<section class="sf-section" id="reviews"><h2>Reviews</h2><div class="sf-rating-summary"><strong>${Number(d.ratings.average).toFixed(1)}</strong><span class="sf-muted">${d.ratings.count} review${d.ratings.count === 1 ? '' : 's'}</span></div><div class="sf-reviews">${reviews}</div></section>`
           : ''
       }
+      ${faqHtml}
     </main>
     <section class="sf-contact" id="contact">
       <div class="sf-contact-inner">

@@ -1006,11 +1006,23 @@ function sfPreview(host: HTMLElement, store: any): string {
   };
   const on = (n: string) => !!(host.querySelector(`[name="${n}"]`) as HTMLInputElement | null)?.checked;
   const accent = val('themeColor') || '#e50914';
+  const accent2 = val('secondaryColor') || accent;
   const logo = val('logo');
   const banner = val('banner');
   const tagline = val('tagline');
   const about = val('about');
+  const announcement = val('announcement');
   const cta = val('ctaLabel') || 'Contact us';
+  const heroStyle = val('heroStyle') || 'image';
+  const layout = val('layout') || 'classic';
+  const badges = Array.from(host.querySelectorAll('[name="badges"]:checked')).map((el) => (el as HTMLInputElement).value);
+  const faqLines = String(val('faqText') || '')
+    .split('\n')
+    .map((l) => l.split('::')[0]?.trim())
+    .filter(Boolean)
+    .slice(0, 3);
+  const galleryVal = val('gallery');
+  const galleryCount = galleryVal ? galleryVal.split(/[,\s]+/).filter(Boolean).length : 0;
   const contact = [
     val('phone') ? `${icon('phone')} ${esc(val('phone'))}` : '',
     val('whatsapp') ? `${icon('message-circle')} ${esc(val('whatsapp'))}` : '',
@@ -1020,16 +1032,36 @@ function sfPreview(host: HTMLElement, store: any): string {
   ].filter(Boolean);
   const socials = (['facebook', 'instagram', 'tiktok', 'x'] as const).filter((k) => val(k));
 
+  const radius = layout === 'boutique' ? '18px' : layout === 'bold' ? '8px' : '14px';
+  const heroBg =
+    heroStyle === 'gradient'
+      ? `background:linear-gradient(135deg,${esc(accent)},${esc(accent2)})`
+      : heroStyle === 'split'
+        ? `background:#0e1013`
+        : banner
+          ? `background-image:linear-gradient(rgba(0,0,0,.5),rgba(0,0,0,.5)),url('${esc(banner)}');background-size:cover;background-position:center`
+          : `background:#0e1013`;
+
   return `<div class="sfp" style="--sf-accent:${esc(accent)}">
-    <div class="sfp-hero"${banner ? ` style="background-image:linear-gradient(rgba(0,0,0,.5),rgba(0,0,0,.5)),url('${esc(banner)}')"` : ''}>
+    ${announcement ? `<div class="sfp-announce" style="background:linear-gradient(90deg,${esc(accent)},${esc(accent2)});color:#fff;font-size:10px;font-weight:600;text-align:center;padding:5px 8px;border-radius:${radius} ${radius} 0 0">${esc(announcement)}</div>` : ''}
+    <div class="sfp-hero" style="${heroBg};border-radius:${radius}">
       ${logo ? `<img class="sfp-logo" src="${esc(logo)}" alt="" />` : ''}
       <h1>${esc(store?.name || 'Your store')}</h1>
       ${tagline ? `<p class="sfp-tag">${esc(tagline)}</p>` : ''}
       <span class="sfp-cta">${esc(cta)}</span>
     </div>
+    ${
+      on('secTrust') && badges.length
+        ? `<div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;padding:8px 4px">${badges
+            .map((b) => `<span style="font-size:9px;font-weight:600;color:${esc(accent)}">✓ ${esc(b)}</span>`)
+            .join('')}</div>`
+        : ''
+    }
     <div class="sfp-body">
       ${about ? `<p class="sfp-about">${esc(about)}</p>` : ''}
       ${on('showProducts') ? `<div class="sfp-products">${'<span class="sfp-prod"></span>'.repeat(3)}</div>` : ''}
+      ${on('secGallery') && galleryCount ? `<div style="display:flex;gap:4px;margin:6px 0">${'<span style="flex:1;aspect-ratio:1;background:rgba(127,127,127,.2);border-radius:6px"></span>'.repeat(Math.min(galleryCount, 4))}</div>` : ''}
+      ${on('secFaq') && faqLines.length ? `<div style="text-align:left;margin:6px 0">${faqLines.map((q) => `<div style="font-size:10px;font-weight:600;border-bottom:1px solid rgba(127,127,127,.2);padding:4px 0">${esc(q)} <span style="float:right;color:${esc(accent)}">+</span></div>`).join('')}</div>` : ''}
       ${contact.length ? `<ul class="sfp-contact">${contact.map((c) => `<li>${c}</li>`).join('')}</ul>` : ''}
       ${socials.length ? `<div class="sfp-socials">${socials.map((s) => `<span>${esc(s)}</span>`).join('')}</div>` : ''}
       ${!tagline && !about && !contact.length ? '<p class="sfp-empty">Fill in the form to see a live preview.</p>' : ''}
@@ -1054,7 +1086,54 @@ function editStorefront(r: any, done: () => void) {
       { name: 'logo', label: 'Logo', type: 'image', folder: 'stores', value: sf.logo || r.logo },
       { name: 'banner', label: 'Banner image', type: 'image', folder: 'stores', value: sf.banner || r.banner, help: 'Wide image shown behind the top of the page.' },
       { name: 'themeColor', label: 'Accent colour', type: 'color', value: sf.themeColor || '#e50914', help: 'Used for the hero and buttons on your page.' },
+      { name: 'secondaryColor', label: 'Secondary colour', type: 'color', value: sf.secondaryColor, help: 'Optional — creates a gradient with your accent colour.' },
       { name: 'ctaLabel', label: 'Main button label', value: sf.ctaLabel, placeholder: 'Order on WhatsApp' },
+
+      { name: 'secDesign', label: 'Design & layout', type: 'section' },
+      {
+        name: 'layout',
+        label: 'Layout style',
+        type: 'select',
+        value: sf.layout || 'classic',
+        options: [
+          { value: 'classic', label: 'Classic — clean and balanced' },
+          { value: 'boutique', label: 'Boutique — spacious and elegant' },
+          { value: 'bold', label: 'Bold — high contrast, punchy' }
+        ]
+      },
+      {
+        name: 'heroStyle',
+        label: 'Hero style',
+        type: 'select',
+        value: sf.heroStyle || 'image',
+        options: [
+          { value: 'image', label: 'Image — banner behind the title' },
+          { value: 'gradient', label: 'Gradient — coloured background' },
+          { value: 'split', label: 'Split — text beside image' }
+        ]
+      },
+      {
+        name: 'font',
+        label: 'Typeface',
+        type: 'select',
+        value: sf.font || 'system',
+        options: [
+          { value: 'system', label: 'System (fast, neutral)' },
+          { value: 'inter', label: 'Inter (modern sans)' },
+          { value: 'sora', label: 'Sora (geometric sans)' },
+          { value: 'playfair', label: 'Playfair (elegant serif)' },
+          { value: 'dmserif', label: 'DM Serif (editorial serif)' }
+        ]
+      },
+      { name: 'announcement', label: 'Announcement bar', value: sf.announcement, placeholder: 'Free delivery on orders over R500', help: 'Shown as a coloured strip at the very top.', full: true },
+      { name: 'badges', label: 'Trust badges', type: 'checkboxes', value: Array.isArray(sf.badges) ? sf.badges : [], help: 'Short claims shown under the hero.', options: ['Free delivery', 'Secure payment', 'Satisfaction guaranteed', 'Fast dispatch', 'Local pickup', 'Trusted since day one'].map((v) => ({ value: v, label: v })) },
+
+      { name: 'secSections', label: 'Page sections', type: 'section' },
+      { name: 'secTrust', label: 'Show trust badges', type: 'switch', value: (sf.sections?.trust) !== false },
+      { name: 'secCategories', label: 'Show category filters', type: 'switch', value: (sf.sections?.categories) !== false },
+      { name: 'secFeatured', label: 'Show featured products', type: 'switch', value: (sf.sections?.featured) !== false },
+      { name: 'secGallery', label: 'Show gallery', type: 'switch', value: (sf.sections?.gallery) !== false },
+      { name: 'secFaq', label: 'Show FAQ', type: 'switch', value: (sf.sections?.faq) !== false },
 
       { name: 'secContact', label: 'Contact details', type: 'section' },
       { name: 'phone', label: 'Phone', type: 'tel', value: sf.phone },
@@ -1068,6 +1147,21 @@ function editStorefront(r: any, done: () => void) {
       { name: 'instagram', label: 'Instagram URL', type: 'url', value: sf.social?.instagram, placeholder: 'https://instagram.com/…' },
       { name: 'tiktok', label: 'TikTok URL', type: 'url', value: sf.social?.tiktok, placeholder: 'https://tiktok.com/…' },
       { name: 'x', label: 'X (Twitter) URL', type: 'url', value: sf.social?.x, placeholder: 'https://x.com/…' },
+
+      { name: 'secGallery', label: 'Gallery images', type: 'section' },
+      { name: 'gallery', label: 'Gallery', type: 'gallery', folder: 'stores', value: Array.isArray(sf.gallery) ? sf.gallery : [], help: 'Extra images shown in a gallery section.', full: true },
+
+      { name: 'secFaq', label: 'FAQ', type: 'section' },
+      {
+        name: 'faqText',
+        label: 'Questions & answers',
+        type: 'textarea',
+        rows: 6,
+        value: (Array.isArray(sf.faq) ? sf.faq : []).map((f: any) => `${f.q} :: ${f.a}`).join('\n'),
+        placeholder: 'Do you deliver? :: Yes, nationwide within 3–5 days.\nHow do I pay? :: Secure card or EFT at checkout.',
+        help: 'One per line, as “Question :: Answer”. They appear as an accordion and in Google.',
+        full: true
+      },
 
       { name: 'secSeo', label: 'Search engine listing', type: 'section' },
       { name: 'metaTitle', label: 'SEO title', value: sf.metaTitle, placeholder: r.name, help: 'Shown in Google and link previews.', counter: 60, full: true },
@@ -1098,13 +1192,42 @@ function editStorefront(r: any, done: () => void) {
       refresh();
     },
     onSubmit: async (v) => {
+      const faq = String(v.faqText || '')
+        .split('\n')
+        .map((line: string) => {
+          const idx = line.indexOf('::');
+          if (idx < 0) return null;
+          const q = line.slice(0, idx).trim();
+          const a = line.slice(idx + 2).trim();
+          return q && a ? { q, a } : null;
+        })
+        .filter(Boolean);
       const next = {
         enabled: !!v.enabled,
+        layout: v.layout || 'classic',
+        heroStyle: v.heroStyle || 'image',
+        font: v.font || 'system',
         tagline: v.tagline || '',
         about: v.about || '',
         logo: v.logo || '',
         banner: v.banner || '',
         themeColor: v.themeColor || '#e50914',
+        secondaryColor: v.secondaryColor || '',
+        announcement: v.announcement || '',
+        badges: Array.isArray(v.badges) ? v.badges : sf.badges || [],
+        gallery: Array.isArray(v.gallery) ? v.gallery : sf.gallery || [],
+        faq,
+        sections: {
+          trust: !!v.secTrust,
+          categories: !!v.secCategories,
+          featured: !!v.secFeatured,
+          gallery: !!v.secGallery,
+          faq: !!v.secFaq,
+          products: !!v.showProducts,
+          about: true,
+          reviews: true,
+          contact: true
+        },
         ctaLabel: v.ctaLabel || '',
         phone: v.phone || '',
         whatsapp: v.whatsapp || '',

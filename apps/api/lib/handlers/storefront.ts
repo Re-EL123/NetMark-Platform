@@ -37,18 +37,71 @@ function str(v: any, max = 2000): string {
   return typeof v === 'string' ? v.slice(0, max) : '';
 }
 
+function oneOf<T extends string>(v: any, allowed: readonly T[], fallback: T): T {
+  return allowed.includes(v) ? (v as T) : fallback;
+}
+
+const LAYOUTS = ['classic', 'boutique', 'bold'] as const;
+const HERO_STYLES = ['image', 'gradient', 'split'] as const;
+const FONTS = ['system', 'sora', 'inter', 'playfair', 'dmserif'] as const;
+
 /** Whitelist + normalize the public-facing storefront config. */
 function publicStorefront(store: any) {
   const settings = store.settings || {};
   const sf = (settings.storefront && typeof settings.storefront === 'object' && settings.storefront) || {};
   const social = (sf.social && typeof sf.social === 'object' && sf.social) || {};
+
+  // Trust badges — short marketing claims shown as chips under the hero.
+  const badges = (Array.isArray(sf.badges) ? sf.badges : [])
+    .map((b: any) => str(b, 60).trim())
+    .filter(Boolean)
+    .slice(0, 8);
+
+  // FAQ entries — rendered as an accordion and as FAQPage structured data.
+  const faq = (Array.isArray(sf.faq) ? sf.faq : [])
+    .map((item: any) => ({
+      q: str(item?.q, 160).trim(),
+      a: str(item?.a, 1200).trim()
+    }))
+    .filter((item: any) => item.q && item.a)
+    .slice(0, 20);
+
+  // Gallery — extra images shown in a hero mosaic / showcase strip.
+  const gallery = (Array.isArray(sf.gallery) ? sf.gallery : [])
+    .map((g: any) => str(g, 500).trim())
+    .filter(Boolean)
+    .slice(0, 12);
+
+  // Section visibility toggles + ordering. Absent = shown (backward compatible).
+  const rawSections = (sf.sections && typeof sf.sections === 'object' && sf.sections) || {};
+  const sections: Record<string, boolean> = {
+    trust: rawSections.trust !== false,
+    categories: rawSections.categories !== false,
+    featured: rawSections.featured !== false,
+    products: rawSections.products !== false,
+    about: rawSections.about !== false,
+    reviews: rawSections.reviews !== false,
+    faq: rawSections.faq !== false,
+    contact: rawSections.contact !== false,
+    gallery: rawSections.gallery !== false
+  };
+
   return {
     enabled: sf.enabled !== false,
+    layout: oneOf(sf.layout, LAYOUTS, 'classic'),
+    heroStyle: oneOf(sf.heroStyle, HERO_STYLES, 'image'),
+    font: oneOf(sf.font, FONTS, 'system'),
     tagline: str(sf.tagline, 160),
     about: str(sf.about, 4000),
     logo: str(sf.logo) || str(store.logo) || null,
     banner: str(sf.banner) || str(store.banner) || null,
     themeColor: str(sf.themeColor, 32) || '#e50914',
+    secondaryColor: str(sf.secondaryColor, 32) || '',
+    announcement: str(sf.announcement, 200),
+    badges,
+    gallery,
+    faq,
+    sections,
     phone: str(sf.phone, 40),
     whatsapp: str(sf.whatsapp, 40),
     email: str(sf.email, 200),
@@ -140,12 +193,16 @@ export async function loadStorefront(sb: any, ref: string): Promise<StorefrontDa
         const p: any = pmap.get(l.product_id);
         if (!p) return null;
         const price = l.price != null ? Number(l.price) : Number(p.price || 0);
+        const compare = l.compare_price != null ? Number(l.compare_price) : Number(p.compare_price || 0);
+        const gallery = Array.isArray(p.gallery) ? p.gallery.filter((g: any) => typeof g === 'string').slice(0, 8) : [];
         return {
           id: l.id,
           productId: p.id,
           name: p.name || '',
           price,
-          image: p.image || (Array.isArray(p.gallery) && p.gallery[0]) || null,
+          comparePrice: compare > price ? compare : 0,
+          image: p.image || gallery[0] || null,
+          gallery,
           description: p.description || '',
           category: p.category || '',
           inStock: Number(p.stock || 0) > 0
