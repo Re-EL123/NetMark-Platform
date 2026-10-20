@@ -3058,6 +3058,10 @@ body.nav-locked {
     justify-content: flex-start;
   }
 
+  .sidebar-head .brand img {
+    height: 44px;
+  }
+
   .sidebar-toggle {
     display: none;
   }
