@@ -1807,7 +1807,7 @@ async function renderNavigation(c: HTMLElement) {
   const rowsHtml = navItems
     .map((n) => {
       const chk = (role: string) => {
-        const ov = overrides.find((o: any) => (o.role === role && o.navKey === n.id));
+        const ov = (Array.isArray(overrides) ? overrides : []).find((o: any) => (o && o.role === role && o.navKey === n.id));
         const visible = ov ? ov.visible !== false : true;
         return `<label style="display:flex;align-items:center;gap:4px"><input type="checkbox" data-nav="${n.id}" data-role="${role}" ${visible ? 'checked' : ''}> ${role}</label>`;
       };
