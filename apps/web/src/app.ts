@@ -376,7 +376,7 @@ export async function initPanel(opts: PanelOptions) {
     if (e.key === 'Escape') closeMobileNav();
   });
   window.addEventListener('resize', () => {
-    if (window.innerWidth > 720) closeMobileNav();
+    if (window.innerWidth > 1024) closeMobileNav();
   });
 
   function currentRoute(): string {

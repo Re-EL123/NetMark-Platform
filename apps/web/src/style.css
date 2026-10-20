@@ -3018,7 +3018,7 @@ body.nav-locked {
   overflow: hidden;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 1024px) {
   .panel-burger {
     display: flex;
   }
