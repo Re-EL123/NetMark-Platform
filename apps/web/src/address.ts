@@ -1,17 +1,20 @@
 import { icon, iconify } from './icons';
 
 /**
- * Address autocomplete powered by Photon (photon.komoot.io) — a free, OSM-based
- * geocoder that returns house-number level results and needs no API key.
+ * Address autocomplete backed by two free, OSM-based geocoders:
  *
- * The browser calls Photon directly with no location bias, using Photon's own
- * relevance ranking (landmarks and POIs included). If Photon is unreachable
- * (offline, blocked) every control silently stays a normal free-text address
- * box, so an address can always be typed by hand.
+ *   - Photon (photon.komoot.io) — fast, great at landmarks/POIs, no key.
+ *   - Nominatim (nominatim.openstreetmap.org) — far more precise for real
+ *     street/house addresses.
+ *
+ * Both are queried in parallel and the hits are merged (addresses first, then
+ * places), de-duplicated. If one is unreachable the other still answers, and if
+ * both fail the control silently stays a normal free-text address box.
  */
 
 const PHOTON_URL = 'https://photon.komoot.io/api/';
 const PHOTON_REVERSE_URL = 'https://photon.komoot.io/reverse';
+const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const TIMEOUT_MS = 6000;
 
 export interface Place {
@@ -28,6 +31,8 @@ export interface Place {
   lon: number | null;
   /** True when Photon resolved an actual house/street number. */
   isAddress: boolean;
+  /** Which geocoder produced this hit. */
+  source: 'photon' | 'nominatim';
 }
 
 interface PhotonFeature {
@@ -61,7 +66,8 @@ function toPlace(feature: PhotonFeature): Place {
     countryCode,
     lat: typeof coords?.[1] === 'number' ? coords[1] : null,
     lon: typeof coords?.[0] === 'number' ? coords[0] : null,
-    isAddress
+    isAddress,
+    source: 'photon'
   };
 }
 
@@ -86,21 +92,99 @@ export function placeLines(place: Place): string {
   return [head, tail, place.country].map(clean).filter(Boolean).join('\n');
 }
 
-async function fetchPlaces(query: string, signal: AbortSignal): Promise<Place[]> {
-  const hit = cache.get(query);
-  if (hit) return hit;
-  // Match Photon's natural relevance order (no lat/lon bias, no re-sorting) so
+async function fetchPhoton(query: string, signal: AbortSignal): Promise<Place[]> {
+  // Photon's natural relevance order (no lat/lon bias, no re-sorting) so
   // landmarks and POIs surface the same way they do elsewhere. `lang=en` keeps
   // place names in English.
   const params = new URLSearchParams({ q: query, limit: '7', lang: 'en' });
   const res = await fetch(`${PHOTON_URL}?${params.toString()}`, { signal });
   if (!res.ok) throw new Error(`Photon responded ${res.status}`);
   const body = (await res.json()) as { features?: PhotonFeature[] };
-  const places = (body.features || [])
-    .map(toPlace)
+  return (body.features || []).map(toPlace).filter((p) => p.street || p.city || p.suburb);
+}
+
+interface NominatimHit {
+  display_name?: string;
+  name?: string;
+  lat?: string;
+  lon?: string;
+  address?: Record<string, string>;
+}
+
+function nominatimToPlace(hit: NominatimHit): Place {
+  const a = hit.address || {};
+  const street = clean(a.road) || clean(a.pedestrian) || clean(a.footway) || clean(a.path);
+  const houseNumber = clean(a.house_number);
+  const name = clean(hit.name);
+  const type = clean(a.house_number) ? 'house' : street ? 'street' : '';
+  return {
+    label: name || street || clean(hit.display_name),
+    houseNumber,
+    street: street || name,
+    suburb: clean(a.suburb) || clean(a.neighbourhood) || clean(a.city_district),
+    city: clean(a.city) || clean(a.town) || clean(a.village) || clean(a.municipality),
+    state: clean(a.state) || clean(a.county),
+    postcode: clean(a.postcode),
+    country: clean(a.country),
+    countryCode: clean(a.country_code).toUpperCase(),
+    lat: hit.lat ? Number(hit.lat) : null,
+    lon: hit.lon ? Number(hit.lon) : null,
+    isAddress: type === 'house' || !!houseNumber,
+    source: 'nominatim'
+  };
+}
+
+async function fetchNominatim(query: string, signal: AbortSignal): Promise<Place[]> {
+  const params = new URLSearchParams({
+    q: query,
+    format: 'json',
+    limit: '6',
+    addressdetails: '1'
+  });
+  const res = await fetch(`${NOMINATIM_URL}?${params.toString()}`, {
+    headers: { Accept: 'application/json' },
+    signal
+  });
+  if (!res.ok) throw new Error(`Nominatim responded ${res.status}`);
+  const body = (await res.json()) as NominatimHit[];
+  return (body || [])
+    .map(nominatimToPlace)
     .filter((p) => p.street || p.city || p.suburb);
-  cache.set(query, places);
-  return places;
+}
+
+function dedupe(places: Place[]): Place[] {
+  const seen = new Set<string>();
+  const out: Place[] = [];
+  for (const p of places) {
+    const key = `${p.lat?.toFixed(4) ?? ''}|${p.lon?.toFixed(4) ?? ''}|${placeLine(p).toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(p);
+  }
+  return out;
+}
+
+async function fetchPlaces(query: string, signal: AbortSignal): Promise<Place[]> {
+  const hit = cache.get(query);
+  if (hit) return hit;
+
+  // Photon is fast and POI/landmark friendly; Nominatim is far more precise for
+  // real street addresses. Query both at once, then merge: addresses first, then
+  // interesting places — de-duplicated. If either service is down we still show
+  // the other's results.
+  const [photon, nominatim] = await Promise.all([
+    fetchPhoton(query, signal).catch(() => [] as Place[]),
+    fetchNominatim(query, signal).catch(() => [] as Place[])
+  ]);
+
+  const addresses = [...nominatim, ...photon].filter((p) => p.isAddress);
+  const places = [...nominatim, ...photon].filter((p) => !p.isAddress);
+
+  // Nominatim has no data for very partial queries; when it comes back empty and
+  // Photon had something, that's the better answer.
+  const merged = dedupe([...addresses, ...places]).slice(0, 8);
+  cache.set(query, merged);
+  return merged;
 }
 
 /* ------------------------------ suggestions ---------------------------- */
@@ -122,13 +206,18 @@ function renderSuggestions(anchor: HTMLElement, places: Place[], onPick: (place:
   box.innerHTML = places
     .map((place, i) => {
       const line = placeLine(place) || place.label;
-      const tag = place.isAddress ? 'Address' : place.city ? 'Area' : '';
+      const locality = [place.suburb, place.city, place.state, place.country]
+        .map(clean)
+        .filter((v, idx, arr) => v && arr.indexOf(v) === idx)
+        .join(', ');
+      const tag = place.isAddress ? 'Address' : place.city ? 'Area' : 'Place';
       return `<button type="button" class="addr-suggest-item" data-addr-pick="${i}">
         ${icon(place.isAddress ? 'map-pin' : 'compass')}
         <span class="addr-suggest-text">
           <span class="addr-suggest-main">${escapeHtml(line)}</span>
-          <span class="addr-suggest-sub">${escapeHtml([tag, place.country].filter(Boolean).join(' · '))}</span>
+          <span class="addr-suggest-sub">${escapeHtml(locality || [tag, place.country].filter(Boolean).join(' · '))}</span>
         </span>
+        <span class="addr-source">${place.source}</span>
       </button>`;
     })
     .join('');
@@ -146,6 +235,19 @@ function renderSuggestions(anchor: HTMLElement, places: Place[], onPick: (place:
 
 function escapeHtml(value: string): string {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function renderEmpty(anchor: HTMLElement): void {
+  closeAll();
+  const rect = anchor.getBoundingClientRect();
+  const box = document.createElement('div');
+  box.className = 'addr-suggest';
+  const width = Math.max(rect.width, 260);
+  box.style.width = `${width}px`;
+  box.style.left = `${Math.min(rect.left, window.innerWidth - width - 8)}px`;
+  box.style.top = `${rect.bottom + window.scrollY + 4}px`;
+  box.innerHTML = '<div class="addr-suggest-empty">No matching address — you can keep typing.</div>';
+  document.body.appendChild(box);
 }
 
 /* -------------------------------- wiring ------------------------------- */
@@ -215,13 +317,14 @@ export function attachAddressAutocomplete(group: HTMLElement, opts: AttachOption
       try {
         const places = await fetchPlaces(query, controller.signal);
         if (mySeq !== seq || !field.isConnected || document.activeElement !== field) return;
-        renderSuggestions(field, places, apply, query);
+        if (places.length) renderSuggestions(field, places, apply, query);
+        else renderEmpty(field);
       } catch {
         /* geocoder unreachable — free text still works */
       } finally {
         window.clearTimeout(timeout);
       }
-    }, 350);
+    }, 450);
   });
 
   field.addEventListener('blur', () => window.setTimeout(closeAll, 150));
