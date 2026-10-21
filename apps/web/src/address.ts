@@ -4,17 +4,15 @@ import { icon, iconify } from './icons';
  * Address autocomplete powered by Photon (photon.komoot.io) — a free, OSM-based
  * geocoder that returns house-number level results and needs no API key.
  *
- * The browser calls Photon directly. If it is unreachable (offline, blocked)
- * every control silently stays a normal free-text address box, so an address
- * can always be typed by hand.
+ * The browser calls Photon directly with no location bias, using Photon's own
+ * relevance ranking (landmarks and POIs included). If Photon is unreachable
+ * (offline, blocked) every control silently stays a normal free-text address
+ * box, so an address can always be typed by hand.
  */
 
 const PHOTON_URL = 'https://photon.komoot.io/api/';
 const PHOTON_REVERSE_URL = 'https://photon.komoot.io/reverse';
 const TIMEOUT_MS = 6000;
-
-/** Bias results to South Africa (all three stores are ZA today). */
-const BIAS = { lat: -29.0, lon: 24.0 };
 
 export interface Place {
   label: string;
@@ -91,15 +89,16 @@ export function placeLines(place: Place): string {
 async function fetchPlaces(query: string, signal: AbortSignal): Promise<Place[]> {
   const hit = cache.get(query);
   if (hit) return hit;
-  const params = new URLSearchParams({ q: query, limit: '7', lat: String(BIAS.lat), lon: String(BIAS.lon) });
+  // Match Photon's natural relevance order (no lat/lon bias, no re-sorting) so
+  // landmarks and POIs surface the same way they do elsewhere. `lang=en` keeps
+  // place names in English.
+  const params = new URLSearchParams({ q: query, limit: '7', lang: 'en' });
   const res = await fetch(`${PHOTON_URL}?${params.toString()}`, { signal });
   if (!res.ok) throw new Error(`Photon responded ${res.status}`);
   const body = (await res.json()) as { features?: PhotonFeature[] };
   const places = (body.features || [])
     .map(toPlace)
-    .filter((p) => p.street || p.city || p.suburb)
-    // Prefer real house/street hits over broad administrative areas.
-    .sort((a, b) => Number(b.isAddress) - Number(a.isAddress));
+    .filter((p) => p.street || p.city || p.suburb);
   cache.set(query, places);
   return places;
 }
