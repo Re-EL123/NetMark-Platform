@@ -5,6 +5,7 @@ import { recordAudit } from '../audit';
 import { notifyAll, notify } from '../notify';
 import { parseListQuery, runList } from '../paginate';
 import { ROLES } from '../permissions';
+import { ensureScopeForRole } from '../scope';
 
 function tempPassword(): string {
   return 'Nm-' + crypto.randomBytes(6).toString('base64url') + '!9';
@@ -130,6 +131,15 @@ export default authed(async (req, res, ctx) => {
         .select('*')
         .single();
       if (error) return fail(res, 'Could not create user record');
+      if ((role === 'owner') && !companyId) {
+        try {
+          const scope = await ensureScopeForRole(sb, { userId: user.id, role: 'owner', name, email });
+          user.company_id = scope.companyId;
+          user.tenant_id = scope.tenantId;
+        } catch (scopeErr) {
+          console.error('admin user create scope provisioning error', scopeErr);
+        }
+      }
       await recordAudit(req, {
         action: 'user.create',
         entityType: 'user',
@@ -160,6 +170,24 @@ export default authed(async (req, res, ctx) => {
       if (b.verificationStatus) patch.verification_status = b.verificationStatus;
       if (b.companyId !== undefined) patch.company_id = b.companyId || null;
       const { data: after } = await sb.from('users').update(patch).eq('id', id).select('*').single();
+
+      // A role (or assigned company) change can require a different scope:
+      // owners need a company, platform admins need none, everyone needs a tenant.
+      const roleChanged = !!patch.role && patch.role !== before.role;
+      const companyChanged = 'company_id' in patch && patch.company_id !== before.company_id;
+      if (roleChanged || companyChanged) {
+        try {
+          await ensureScopeForRole(sb, {
+            userId: id,
+            role: patch.role || after.role,
+            name: after.name,
+            email: after.email
+          });
+        } catch (scopeErr) {
+          console.error('admin user role scope provisioning error', scopeErr);
+        }
+      }
+
       await recordAudit(req, {
         action: 'user.update',
         entityType: 'user',
@@ -327,6 +355,37 @@ export default authed(async (req, res, ctx) => {
       }
       await recordAudit(req, { action: 'payout.process', entityType: 'payout', entityId: id, after: rowOut(payout) });
       return ok(res, { data: rowOut(payout) });
+    }
+  }
+
+  /* --------------------------- provision scope --------------------------- */
+  // Create / repair the company+tenant scope a user's role requires. Accepts
+  // either a userId or an email. Handy for accounts created before scope
+  // provisioning existed (e.g. an owner with no company).
+  if (section === 'provision-scope' && req.method === 'POST') {
+    const { userId, email } = req.body || {};
+    if (!userId && !email) return fail(res, 'userId or email is required');
+    let q = sb.from('users').select('*');
+    q = userId ? q.eq('id', userId) : q.eq('email', String(email).toLowerCase().trim());
+    const { data: target } = await q.maybeSingle();
+    if (!target) return fail(res, 'User not found', 404);
+    try {
+      const result = await ensureScopeForRole(sb, {
+        userId: target.id,
+        role: target.role,
+        name: target.name,
+        email: target.email
+      });
+      await recordAudit(req, {
+        action: 'user.provisionScope',
+        entityType: 'user',
+        entityId: target.id,
+        companyId: result.companyId,
+        metadata: { role: target.role, companyCreated: result.companyCreated }
+      });
+      return ok(res, { data: { userId: target.id, role: target.role, ...result } });
+    } catch (scopeErr: any) {
+      return fail(res, scopeErr?.message || 'Could not provision scope');
     }
   }
 

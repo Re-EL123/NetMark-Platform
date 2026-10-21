@@ -6,6 +6,7 @@ import { recordAudit } from '../audit';
 import { rateLimit, rateLimitFail } from '../rateLimit';
 import { entitlementsForCtx, withinLimit, limitMessage } from '../planLimits';
 import { ensureMembership } from '../ranks';
+import { ensureScopeForRole } from '../scope';
 
 function tempPassword() {
   return 'Nm-' + crypto.randomBytes(6).toString('base64url') + '!9';
@@ -105,6 +106,18 @@ export default authed(async (req, res, ctx) => {
       .select('*')
       .single();
     if (error) return fail(res, 'Could not create user record');
+
+    // An owner must own a company; provision one if none was supplied.
+    if (targetRole === 'owner' && !targetCompany) {
+      try {
+        const scope = await ensureScopeForRole(sb, { userId: user.id, role: 'owner', name, email });
+        user.company_id = scope.companyId;
+        user.tenant_id = scope.tenantId;
+      } catch (scopeErr) {
+        console.error('user create scope provisioning error', scopeErr);
+      }
+    }
+
     if (sponsor && targetCompany) {
       try {
         await ensureMembership(sb, { companyId: targetCompany, userId: user.id, sponsorId: sponsor, tenantId });
@@ -151,6 +164,24 @@ export default authed(async (req, res, ctx) => {
     }
 
     const { data: after } = await sb.from('users').update(patch).eq('id', id).select('*').single();
+
+    // A role (or platform-assigned company) change can require a different
+    // scope: owners need a company, admins need none, everyone needs a tenant.
+    const roleChanged = !!patch.role && patch.role !== before.role;
+    const companyChanged = 'company_id' in patch && patch.company_id !== before.company_id;
+    if (roleChanged || companyChanged) {
+      try {
+        await ensureScopeForRole(sb, {
+          userId: id,
+          role: patch.role || after.role,
+          name: after.name,
+          email: after.email
+        });
+      } catch (scopeErr) {
+        console.error('user role scope provisioning error', scopeErr);
+      }
+    }
+
     await recordAudit(req, { action: 'user.update', entityType: 'user', entityId: id, before: rowOut(before), after: rowOut(after) });
     return ok(res, { data: rowOut(after) });
   }
