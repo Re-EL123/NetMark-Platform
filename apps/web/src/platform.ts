@@ -203,6 +203,7 @@ function renderUsers(c: HTMLElement) {
     toolbar: () => `<button class="btn btn-sm" data-new>${icon('plus')}<span>New user</span></button>`,
     actions: (r) =>
       act('edit', r.id, 'Edit') +
+      act('scope', r.id, 'Provision scope') +
       (r.status === 'suspended' ? act('activate', r.id, 'Reactivate') : act('suspend', r.id, 'Suspend', 'danger')) +
       act('reset', r.id, 'Reset password') +
       act('delete', r.id, 'Delete', 'danger'),
@@ -210,6 +211,17 @@ function renderUsers(c: HTMLElement) {
       (root.querySelector('[data-new]') as HTMLElement).onclick = () => userModal(null, reload);
       wire(root, {
         edit: (id) => userModal(rows.find((r) => r.id === id), reload),
+        scope: async (id) => {
+          const user = rows.find((r) => r.id === id);
+          if (!confirm(`Create/repair company+tenant scope for ${user?.email || id}?`)) return;
+          const res = await apiRequest('/admin/provision-scope', { method: 'POST', body: JSON.stringify({ userId: id }) });
+          if (res.success) {
+            toast(res.data?.companyCreated ? 'Company created & scope provisioned' : 'Scope provisioned', 'success');
+            reload();
+          } else {
+            toast(res.message || 'Failed to provision scope', 'error');
+          }
+        },
         suspend: async (id) => {
           if (await confirmDialog('Suspend this user?', { danger: true, confirmLabel: 'Suspend' })) {
             await apiRequest(`/admin/users/${id}/suspend`, { method: 'POST' });
