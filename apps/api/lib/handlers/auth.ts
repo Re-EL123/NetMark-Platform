@@ -82,11 +82,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         password,
         role = 'customer',
         distributorCode,
-        driverInfo
+        driverInfo,
+        // journey extensions
+        location,
+        profileData,
+        businessName,
+        businessCategory,
+        businessType,
+        businessAddress,
+        registrationNumber,
+        teamSize,
+        howHeard,
+        payoutDetails,
+        bankDetails,
+        vehicleDetails,
+        licenseDetails,
+        emergencyContact,
+        consents,
+        marketingOptIn,
+        preferences
       } = req.body || {};
 
       if (!name || !email) {
         return res.status(400).json({ success: false, message: 'Missing required fields' });
+      }
+      if (role === 'owner' && !businessName && !name) {
+        // allow but prefer business name; not fatal
       }
 
       const { data: genSettings } = await sb
@@ -159,30 +180,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const uid = created.user.id;
 
-      // Only an owner is bound to a company (their own, created here). Every
-      // other account is independent: company membership is an invite granted
-      // by an owner/platform admin creating the user, never by self-signup. A
-      // referral code only records the referrer (and, for store owners, seeds a
-      // company link so they can browse that company's catalog).
       let resolvedCompanyId: string | null = null;
       let resolvedTenantId: string | null = null;
-      if (role === 'owner') {
-        const baseSlug =
-          String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') ||
-          `company-${Date.now().toString(36)}`;
-        const slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
-        const { data: newCompany } = await sb
-          .from('companies')
-          .insert({ name: `${name}'s Company`, slug, owner_id: uid, status: 'active' })
-          .select('*')
-          .single();
-        if (newCompany) {
-          resolvedCompanyId = newCompany.id;
-          // Share the company's tenant so owner-scoped tenant filtering lines up.
-          resolvedTenantId = newCompany.tenant_id || null;
+      if (role === 'owner' || role === 'storeOwner') {
+        // For owners create company; for store owners company may come via code/link later
+        if (role === 'owner') {
+          const baseName = businessName || name;
+          const baseSlug =
+            String(baseName).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') ||
+            `company-${Date.now().toString(36)}`;
+          const slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
+          const companyInsert: any = {
+            name: businessName || `${name}'s Company`,
+            slug,
+            owner_id: uid,
+            status: 'active'
+          };
+          if (businessAddress || location) companyInsert.address = businessAddress || location;
+          if (businessCategory || businessType || registrationNumber) {
+            companyInsert.settings = {
+              businessCategory: businessCategory || null,
+              businessType: businessType || null,
+              registrationNumber: registrationNumber || null,
+              teamSize: teamSize || null,
+              howHeard: howHeard || null
+            };
+          }
+          if (phone) companyInsert.contact = { phone };
+          const { data: newCompany } = await sb
+            .from('companies')
+            .insert(companyInsert)
+            .select('*')
+            .single();
+          if (newCompany) {
+            resolvedCompanyId = newCompany.id;
+            resolvedTenantId = newCompany.tenant_id || null;
+          }
         }
       }
       if (!resolvedTenantId) resolvedTenantId = randomUUID();
+
+      const mergedProfile = {
+        ...(profileData || {}),
+        location: location || profileData?.location || null,
+        howHeard: howHeard || profileData?.howHeard || null,
+        preferences: preferences || profileData?.preferences || null
+      };
 
       const { data: user, error: userErr } = await sb
         .from('users')
@@ -195,7 +238,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           company_id: resolvedCompanyId,
           tenant_id: resolvedTenantId,
           distributor_code: codeRow ? codeRow.code : null,
-          verification_status: role === 'platformAdmin' ? 'verified' : 'pending'
+          verification_status: role === 'platformAdmin' ? 'verified' : 'pending',
+          payout_details: payoutDetails || bankDetails || null,
+          profile_data: Object.keys(mergedProfile).some(k => mergedProfile[k]) ? mergedProfile : null,
+          marketing_opt_in: !!marketingOptIn
         })
         .select('*')
         .single();
@@ -267,20 +313,22 @@ If you didn't create this account, you can ignore this email.`
       }
 
       if (role === 'driver') {
+        const di = driverInfo || vehicleDetails || {};
+        const ld = licenseDetails || {};
+        const bd = bankDetails || di.bankDetails || null;
         const { error: driverErr } = await sb.from('drivers').insert({
           user_id: uid,
           company_id: null,
           status: 'pending',
           is_available: false,
-          vehicle_type: driverInfo?.vehicleType || null,
-          vehicle_number: driverInfo?.vehicleNumber || null,
-          vehicle_model: driverInfo?.vehicleModel || null,
-          license_number: driverInfo?.licenseNumber || null,
-          license_expiry: driverInfo?.driverExpiry
-            ? new Date(driverInfo.driverExpiry).toISOString().slice(0, 10)
-            : driverInfo?.licenseExpiry
-            ? new Date(driverInfo.licenseExpiry).toISOString().slice(0, 10)
-            : null
+          vehicle_type: di.vehicleType || vehicleDetails?.type || null,
+          vehicle_number: di.vehicleNumber || vehicleDetails?.registration || null,
+          vehicle_model: di.vehicleModel || vehicleDetails?.model || null,
+          license_number: ld.number || di.licenseNumber || null,
+          license_expiry: (ld.expiry || di.licenseExpiry || di.driverExpiry)
+            ? new Date(ld.expiry || di.licenseExpiry || di.driverExpiry).toISOString().slice(0, 10)
+            : null,
+          bank_details: bd
         });
         if (driverErr) console.error('register driver insert error', driverErr);
       }

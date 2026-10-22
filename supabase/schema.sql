@@ -45,6 +45,8 @@ create table if not exists public.users (
   profile_image text,
   distributor_code text,
   payout_details jsonb,
+  profile_data jsonb,
+  marketing_opt_in boolean not null default false,
   last_login timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

@@ -3,59 +3,167 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Create your NetMark Platform account to shop, manage a store, distribute or deliver.">
+  <meta name="description" content="Join NetMark — shop, run a store, build a company or deliver. A guided signup built around you.">
   <meta name="theme-color" content="#e50914">
-  <title>NetMark Platform - Register</title>
+  <title>Join NetMark — Create your account</title>
   <link rel="icon" type="image/png" href="/favicon.png">
   <link rel="apple-touch-icon" href="/favicon-180.png">
   <link rel="stylesheet" href="/src/style.css">
+  <link rel="stylesheet" href="/src/signup.css">
 </head>
 <body>
-  <div class="container login-bg">
-    <div class="login-card login-animate">
-      <img src="/netmark-logo.png" alt="NetMark" class="brand-logo">
-      <h1>NetMark Platform</h1>
-      <p class="subtitle">Create an account</p>
-      <div id="error" class="error" role="alert" aria-live="polite" style="display:none"></div>
-      <form id="registerForm">
-        <div class="form-group">
-          <label for="name">Full Name</label>
-          <input type="text" id="name" name="name" autocomplete="name" required>
-        </div>
-        <div class="form-group">
-          <label for="email">Email</label>
-          <input type="email" id="email" name="email" autocomplete="email" inputmode="email" required>
-        </div>
-        <div class="form-group">
-          <label for="phone">Phone</label>
-          <input type="tel" id="phone" name="phone" autocomplete="tel" inputmode="tel">
-        </div>
-        <div class="form-group">
-          <label for="password">Password</label>
-          <div class="pw-wrap">
-            <input type="password" id="password" name="password" autocomplete="new-password" required minlength="6">
-            <button type="button" class="pw-toggle" id="pwToggle" aria-label="Show password"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
-          </div>
-        </div>
-        <div class="form-group">
-          <label for="role">Role</label>
-          <select id="role" name="role">
-            <option value="customer">Customer</option>
-            <option value="storeOwner">Store Owner</option>
-            <option value="driver">Driver</option>
-            <option value="owner">Company Owner</option>
-          </select>
-        </div>
-        <div class="form-group" id="codeGroup" style="display:none">
-          <label for="distributorCode">Referral Code</label>
-          <input type="text" id="distributorCode" name="distributorCode" autocomplete="off" placeholder="Optional referral code">
-        </div>
-        <button type="submit" class="btn">Register</button>
-      </form>
-      <p class="footer">Already have an account? <a href="/">Sign In</a></p>
-      <p class="footer-links"><a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a> · <a href="/faq.html">FAQ</a> · <a href="/support.html">Support</a> · <a href="/feedback.html">Feedback</a></p>
+  <div class="signup-shell">
+    <header class="signup-top">
+      <a class="signup-brand" href="/">
+        <img src="/netmark-logo.png" alt="NetMark" class="signup-logo">
+      </a>
+      <a class="signup-login" href="/">Sign in</a>
+    </header>
+
+    <div class="signup-progress" aria-hidden="true">
+      <div class="signup-progress-bar"><span id="progressFill"></span></div>
+      <ol class="signup-steps" id="stepTrail">
+        <li data-step="0"><span class="dot">1</span><span class="lbl">You</span></li>
+        <li data-step="1"><span class="dot">2</span><span class="lbl">Your path</span></li>
+        <li data-step="2"><span class="dot">3</span><span class="lbl">Details</span></li>
+        <li data-step="3"><span class="dot">4</span><span class="lbl">Account</span></li>
+        <li data-step="4"><span class="dot">5</span><span class="lbl">Review</span></li>
+      </ol>
     </div>
+
+    <main class="signup-card" id="signupCard">
+      <div id="error" class="error" role="alert" aria-live="polite" style="display:none"></div>
+
+      <form id="signupForm" novalidate>
+
+        <!-- STEP 0 — About you -->
+        <section class="step" data-step="0">
+          <h1 class="step-title">Let's get to know you</h1>
+          <p class="step-sub">A few basics so we can personalise NetMark for you.</p>
+
+          <div class="field-grid">
+            <div class="form-group">
+              <label for="name">Full name</label>
+              <input type="text" id="name" name="name" autocomplete="name" required placeholder="e.g. Thandi Nkosi">
+            </div>
+            <div class="form-group">
+              <label for="email">Email</label>
+              <input type="email" id="email" name="email" autocomplete="email" inputmode="email" required placeholder="you@example.com">
+            </div>
+            <div class="form-group">
+              <label for="phone">Mobile number</label>
+              <input type="tel" id="phone" name="phone" autocomplete="tel" inputmode="tel" placeholder="082 123 4567">
+              <p class="hint">We use this for order updates and account security.</p>
+            </div>
+            <div class="form-group" data-address>
+              <label for="location">Where are you based?</label>
+              <input type="text" id="location" name="location" autocomplete="street-address" data-address-input placeholder="Start typing your city or address…">
+              <p class="hint">Helps us show local stores, delivery options and pricing.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- STEP 1 — Choose your path -->
+        <section class="step" data-step="1" hidden>
+          <h1 class="step-title">How do you want to use NetMark?</h1>
+          <p class="step-sub">Pick what fits today — you can add more later.</p>
+
+          <div class="role-cards" id="roleCards">
+            <button type="button" class="role-card" data-role="customer">
+              <span class="role-ico">🛍️</span>
+              <span class="role-name">Shop &amp; save</span>
+              <span class="role-desc">Buy from stores near you, track orders, earn rewards.</span>
+              <span class="role-pick">I'm a Customer</span>
+            </button>
+            <button type="button" class="role-card" data-role="storeOwner">
+              <span class="role-ico">🏪</span>
+              <span class="role-name">Sell products</span>
+              <span class="role-desc">Open a storefront, list catalogues, earn commissions.</span>
+              <span class="role-pick">I'm a Store Owner</span>
+            </button>
+            <button type="button" class="role-card" data-role="owner">
+              <span class="role-ico">🏢</span>
+              <span class="role-name">Grow a company</span>
+              <span class="role-desc">Manage a brand, team, inventory and distributors.</span>
+              <span class="role-pick">I'm a Company Owner</span>
+            </button>
+            <button type="button" class="role-card" data-role="driver">
+              <span class="role-ico">🚚</span>
+              <span class="role-name">Deliver &amp; earn</span>
+              <span class="role-desc">Take deliveries in your area and get paid per trip.</span>
+              <span class="role-pick">I'm a Driver</span>
+            </button>
+          </div>
+          <input type="hidden" id="role" name="role" value="">
+
+          <div class="form-group referral-group" id="codeGroup" style="display:none">
+            <label for="distributorCode">Referral code</label>
+            <input type="text" id="distributorCode" name="distributorCode" autocomplete="off" placeholder="Optional — e.g. REF-XXXX">
+            <p class="hint">Entered automatically if you arrived through an invite link.</p>
+          </div>
+        </section>
+
+        <!-- STEP 2 — Role-specific details (rendered dynamically) -->
+        <section class="step" data-step="2" hidden>
+          <h1 class="step-title" id="detailsTitle">A little more</h1>
+          <p class="step-sub" id="detailsSub">This helps us set you up properly.</p>
+          <div id="detailsBody"></div>
+        </section>
+
+        <!-- STEP 3 — Create account -->
+        <section class="step" data-step="3" hidden>
+          <h1 class="step-title">Secure your account</h1>
+          <p class="step-sub">Choose a strong password and accept our terms.</p>
+
+          <div class="form-group">
+            <label for="password">Password</label>
+            <div class="pw-wrap">
+              <input type="password" id="password" name="password" autocomplete="new-password" required minlength="8" placeholder="At least 8 characters">
+              <button type="button" class="pw-toggle" id="pwToggle" aria-label="Show password">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              </button>
+            </div>
+            <div class="pw-meter" id="pwMeter"><span></span></div>
+            <p class="hint" id="pwHint">Use 8+ characters with a mix of letters, numbers and symbols.</p>
+          </div>
+
+          <div class="form-group">
+            <label for="confirmPassword">Confirm password</label>
+            <input type="password" id="confirmPassword" name="confirmPassword" autocomplete="new-password" required placeholder="Re-enter your password">
+          </div>
+
+          <label class="check-row">
+            <input type="checkbox" id="acceptTerms">
+            <span>I agree to the <a href="/terms.html" target="_blank" rel="noopener">Terms</a> and <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span>
+          </label>
+          <label class="check-row">
+            <input type="checkbox" id="marketingOptIn">
+            <span>Send me product news, savings and tips (optional).</span>
+          </label>
+        </section>
+
+        <!-- STEP 4 — Review -->
+        <section class="step" data-step="4" hidden>
+          <h1 class="step-title">Looks good?</h1>
+          <p class="step-sub">Review your details, then create your account.</p>
+          <div class="review" id="reviewBody"></div>
+          <p class="review-note">We'll email you a verification link to confirm your address.</p>
+        </section>
+
+        <div class="step-actions">
+          <button type="button" class="btn btn-ghost" id="backBtn" hidden>Back</button>
+          <button type="button" class="btn" id="nextBtn">Continue</button>
+          <button type="submit" class="btn" id="submitBtn" hidden>Create account</button>
+        </div>
+      </form>
+    </main>
+
+    <p class="signup-foot">
+      Already have an account? <a href="/">Sign in</a>
+      <span class="signup-foot-links"><a href="/faq.html">FAQ</a> · <a href="/support.html">Support</a></span>
+    </p>
   </div>
+
   <script type="module" src="/src/register.ts"></script>
 </body>
 </html>
