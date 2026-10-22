@@ -186,6 +186,28 @@ async function loadFeatured() {
 }
 loadFeatured();
 
+/* ------------------------- lazy showcase video ------------------------- */
+const showcase = document.getElementById('showcaseVideo') as HTMLVideoElement | null;
+if (showcase && 'IntersectionObserver' in window && !reduced) {
+  const vio = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          if (!showcase.src) showcase.src = '/media/showcase.mp4';
+          showcase.play().catch(() => {});
+        } else {
+          showcase.pause();
+        }
+      });
+    },
+    { threshold: 0.25 }
+  );
+  vio.observe(showcase);
+} else if (showcase) {
+  showcase.preload = 'auto';
+  showcase.autoplay = true;
+}
+
 /* ------------------------------ guest mode ---------------------------- */
 const guestButtons = [document.getElementById('guestBtn'), document.getElementById('guestBtn2')];
 function enterGuest() {
