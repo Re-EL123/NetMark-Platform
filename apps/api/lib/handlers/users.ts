@@ -152,6 +152,11 @@ export default authed(async (req, res, ctx) => {
     if (b.phone !== undefined) patch.phone = b.phone;
     if (b.profileImage !== undefined) patch.profile_image = b.profileImage;
 
+    // Any authenticated user can update their own payout details. Admins
+    // can update anyone's payout details for payout processing.
+    if (b.payoutDetails !== undefined && (self || canWrite)) {
+      patch.payout_details = b.payoutDetails;
+    }
     if (!self && canWrite) {
       if (b.role && ROLES.includes(b.role)) {
         if (!ctx.isPlatform && !OWNER_CREATABLE.includes(b.role)) return fail(res, 'Cannot assign that role', 403);

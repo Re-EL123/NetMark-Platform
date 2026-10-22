@@ -69,10 +69,11 @@ export async function renderWallet(c: HTMLElement) {
             </div></div>`
           : ''
       }
-      <div class="toolbar" style="margin-top:12px">
+      <div class="toolbar" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-sm" id="payout-details">${icon('banknote')}<span>Bank / payout details</span></button>
         ${
           payoutsAllowed
-            ? `<button class="btn btn-sm" id="withdraw">${icon('banknote')}<span>Withdraw</span></button>`
+            ? `<button class="btn btn-sm" id="withdraw">${icon('arrow-down-circle')}<span>Withdraw</span></button>`
             : `<p class="empty">Withdrawals are not included in your current plan. Upgrade to enable payouts.</p>`
         }
       </div>
@@ -94,6 +95,32 @@ export async function renderWallet(c: HTMLElement) {
       }
     </div>`;
   iconify(c);
+
+  const pdBtn = c.querySelector('#payout-details') as HTMLElement | null;
+  if (pdBtn) {
+    pdBtn.onclick = async () => {
+      let me: any = null;
+      try { const r = await apiRequest('/users/me'); if (r.success) me = r.data; } catch {}
+      const p = me?.payoutDetails || {};
+      await openModal({
+        title: 'Bank / payout details',
+        fields: [
+          { name: 'accountHolder', label: 'Account holder name', value: p.accountHolder || me?.name || '' },
+          { name: 'bankName', label: 'Bank name', value: p.bankName || '' },
+          { name: 'accountType', label: 'Account type', type: 'select', options: [{ value: 'savings', label: 'Savings' }, { value: 'cheque', label: 'Cheque/Current' }, { value: 'transmission', label: 'Transmission' }], value: p.accountType || 'cheque' },
+          { name: 'accountNumber', label: 'Account number', value: p.accountNumber || '' },
+          { name: 'branchCode', label: 'Branch code / Universal branch code', value: p.branchCode || '' },
+          { name: 'swift', label: 'SWIFT/BIC (optional)', value: p.swift || '' },
+          { name: 'reference', label: 'Reference for payout (optional)', value: p.reference || '' }
+        ],
+        onSubmit: async (v) => {
+          const r = await apiRequest('/users/me', { method: 'PUT', body: JSON.stringify({ payoutDetails: v }) });
+          if (!r.success) throw new Error(r.message || 'Failed');
+          toast('Payout details saved', 'success');
+        }
+      });
+    };
+  }
 
   const btn = c.querySelector('#withdraw') as HTMLElement | null;
   if (btn) {

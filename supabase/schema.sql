@@ -44,6 +44,7 @@ create table if not exists public.users (
   company_id uuid references public.companies(id) on delete set null,
   profile_image text,
   distributor_code text,
+  payout_details jsonb,
   last_login timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
