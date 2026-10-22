@@ -3,38 +3,199 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="NetMark Platform - sign in to manage companies, stores, deliveries and orders.">
-  <meta name="theme-color" content="#e50914">
-  <title>NetMark Platform - Login</title>
+  <meta name="description" content="NetMark is the future of selling — connecting the world in real time. Shop, build a store, grow a company or deliver. The leaders of tomorrow are made here.">
+  <meta name="theme-color" content="#0a0a0b">
+  <title>NetMark — The future of selling</title>
   <link rel="icon" type="image/png" href="/favicon.png">
   <link rel="apple-touch-icon" href="/favicon-180.png">
   <link rel="stylesheet" href="/src/style.css">
+  <link rel="stylesheet" href="/src/landing.css">
+  <meta property="og:title" content="NetMark — The future of selling">
+  <meta property="og:description" content="Connecting the world in real time. The leaders of tomorrow are made here.">
+  <meta property="og:type" content="website">
 </head>
 <body>
-  <div class="container login-bg">
-    <div class="login-card login-animate">
-      <img src="/netmark-logo.png" alt="NetMark" class="brand-logo">
-      <h1>NetMark Platform</h1>
-      <p class="subtitle">Sign in to continue</p>
-      <div id="error" class="error" role="alert" aria-live="polite" style="display:none"></div>
-      <form id="loginForm">
-        <div class="form-group">
-          <label for="email">Email</label>
-          <input type="email" id="email" name="email" autocomplete="email" inputmode="email" required>
-        </div>
-        <div class="form-group">
-          <label for="password">Password</label>
-          <div class="pw-wrap">
-            <input type="password" id="password" name="password" autocomplete="current-password" required>
-            <button type="button" class="pw-toggle" id="pwToggle" aria-label="Show password"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
-          </div>
-        </div>
-        <button type="submit" class="btn">Sign In</button>
-      </form>
-      <p class="footer">Don't have an account? <a href="/register.html">Register</a></p>
-      <p class="footer-links"><a href="/terms.html">Terms</a> · <a href="/privacy.html">Privacy</a> · <a href="/faq.html">FAQ</a> · <a href="/support.html">Support</a> · <a href="/feedback.html">Feedback</a></p>
+<div class="landing">
+  <!-- Nav -->
+  <nav class="l-nav" id="nav">
+    <a href="/" aria-label="NetMark home"><img src="/netmark-logo.png" alt="NetMark" class="l-nav-logo"></a>
+    <div class="l-nav-links">
+      <a href="#live">Live stores</a>
+      <a href="#paths">Ways to earn</a>
+      <a href="#how">How it works</a>
+      <a href="#future">The future</a>
+    </div>
+    <div class="l-nav-actions">
+      <a class="l-btn l-btn-ghost" href="/login.html" id="signInBtn">Sign in</a>
+      <a class="l-btn l-btn-primary" href="/register.html" id="primaryCta">Get started</a>
+      <button class="l-menu-toggle" id="menuBtn" aria-label="Open menu" aria-expanded="false">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <header class="l-hero">
+    <video class="l-hero-video" src="/media/hero.mp4" autoplay muted loop playsinline aria-hidden="true"></video>
+    <span class="l-orb a"></span><span class="l-orb b"></span><span class="l-orb c"></span>
+    <div class="l-hero-inner">
+      <span class="l-eyebrow"><span class="l-live-dot"></span> Live now · real time commerce</span>
+      <h1>
+        The future of
+        <span class="l-rotate" id="rotate">
+          <span class="active">selling.</span>
+          <span>connecting.</span>
+          <span>shopping.</span>
+          <span>earning.</span>
+          <span>delivering.</span>
+        </span>
+      </h1>
+      <p class="lede">
+        NetMark connects the world in real time — one platform where people shop, stores sell,
+        companies grow and drivers deliver. The leaders of tomorrow are made here.
+      </p>
+      <div class="l-hero-cta">
+        <a class="l-btn l-btn-primary" href="/register.html">Start free — it takes 2 minutes</a>
+        <button class="l-btn l-btn-ghost" id="guestBtn">Explore as guest →</button>
+      </div>
+      <div class="l-hero-stats">
+        <div class="l-stat"><div class="num" data-count="1200" data-suffix="+">0</div><div class="lbl">Live storefronts</div></div>
+        <div class="l-stat"><div class="num" data-count="48000" data-suffix="+">0</div><div class="lbl">Products listed</div></div>
+        <div class="l-stat"><div class="num" data-count="99" data-suffix="%">0</div><div class="lbl">On-time deliveries</div></div>
+        <div class="l-stat"><div class="num" data-count="1" data-suffix=" platform">0</div><div class="lbl">One network, endless reach</div></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Marquee -->
+  <div class="l-marquee" aria-hidden="true">
+    <div class="l-marquee-track">
+      <span>Shop local</span><span>Sell globally</span><span>Real-time orders</span><span>Same-day delivery</span>
+      <span>Commission networks</span><span>Storefronts</span><span>Company workspaces</span><span>Driver payouts</span>
+      <span>Shop local</span><span>Sell globally</span><span>Real-time orders</span><span>Same-day delivery</span>
+      <span>Commission networks</span><span>Storefronts</span><span>Company workspaces</span><span>Driver payouts</span>
     </div>
   </div>
-  <script type="module" src="/src/login.ts"></script>
+
+  <!-- Live stores & products -->
+  <section class="l-section" id="live">
+    <div class="l-wrap">
+      <div class="l-section-head reveal">
+        <span class="l-eyebrow"><span class="l-live-dot"></span> Live on NetMark</span>
+        <h2>Real stores. Real products. Right now.</h2>
+        <p>These storefronts are live on the network today. Browse as a guest or join to buy, sell and deliver.</p>
+      </div>
+      <div class="l-live-grid" id="liveGrid">
+        <div class="l-skeleton"></div><div class="l-skeleton"></div><div class="l-skeleton"></div>
+      </div>
+      <p id="liveEmpty" style="display:none;color:var(--muted);margin-top:18px">
+        New storefronts go live every day — create yours and be first on this wall.
+      </p>
+    </div>
+  </section>
+
+  <!-- Paths -->
+  <section class="l-section" id="paths" style="padding-top:0">
+    <div class="l-wrap">
+      <div class="l-section-head reveal">
+        <span class="l-eyebrow">Ways to win</span>
+        <h2>Wherever you are, there's a path for you.</h2>
+        <p>One account unlocks the whole network. Start where you are and grow into more.</p>
+      </div>
+      <div class="l-roles">
+        <a class="l-role reveal" data-delay="1" href="/register.html?role=customer">
+          <div class="ico">🛍️</div><h3>Shop &amp; save</h3>
+          <p>Discover stores near you, track every order and earn rewards as you go.</p>
+          <div class="tag">JOIN AS CUSTOMER →</div>
+        </a>
+        <a class="l-role reveal" data-delay="2" href="/register.html?role=storeOwner">
+          <div class="ico">🏪</div><h3>Open a store</h3>
+          <p>Launch a beautiful storefront, list a catalogue and start earning commissions.</p>
+          <div class="tag">JOIN AS STORE OWNER →</div>
+        </a>
+        <a class="l-role reveal" data-delay="3" href="/register.html?role=owner">
+          <div class="ico">🏢</div><h3>Build a company</h3>
+          <p>Run a brand, manage teams, inventory and distributors from one workspace.</p>
+          <div class="tag">JOIN AS COMPANY →</div>
+        </a>
+        <a class="l-role reveal" data-delay="4" href="/register.html?role=driver">
+          <div class="ico">🚚</div><h3>Drive &amp; earn</h3>
+          <p>Take deliveries in your area, keep your own schedule and get paid out fast.</p>
+          <div class="tag">JOIN AS DRIVER →</div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Showcase motion video -->
+  <section class="l-section" style="padding-top:0">
+    <div class="l-wrap">
+      <div class="l-motion reveal">
+        <video src="/media/showcase.mp4" autoplay muted loop playsinline aria-hidden="true"></video>
+        <div class="l-motion-copy">
+          <span class="l-eyebrow">Built in motion</span>
+          <h2>Commerce that moves at the speed of now.</h2>
+          <p>Live inventory. Instant order routing. Deliveries matched in real time. NetMark turns every device into a storefront and every connection into an opportunity.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section class="l-section" id="how" style="padding-top:0">
+    <div class="l-wrap">
+      <div class="l-section-head reveal">
+        <span class="l-eyebrow">How it works</span>
+        <h2>From idea to income in three moves.</h2>
+      </div>
+      <div class="l-steps">
+        <div class="l-step reveal" data-delay="1"><h3>Create your account</h3><p>A guided signup learns what you do — shopper, store, company or driver — and sets up your workspace automatically.</p></div>
+        <div class="l-step reveal" data-delay="2"><h3>Add your products or offers</h3><p>List products, publish a storefront and share your link. Commissions and referrals start flowing the moment you go live.</p></div>
+        <div class="l-step reveal" data-delay="3"><h3>Get paid</h3><p>Track earnings in your wallet, add your banking details and withdraw — while drivers keep the network moving.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Quote / future -->
+  <section class="l-section" id="future" style="padding-top:0">
+    <div class="l-wrap l-quote reveal">
+      <blockquote>
+        “NetMark is the future of selling — connecting the world in real time.
+        <span class="hl">The leaders of tomorrow are made here.</span>”
+      </blockquote>
+      <div class="by">NetMark · The network for the next generation of commerce</div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="l-section" style="padding-top:0">
+    <div class="l-wrap">
+      <div class="l-cta reveal">
+        <h2>Your future starts with a click.</h2>
+        <p>Join thousands building, selling and delivering on NetMark. Free to start. Limitless to grow.</p>
+        <div class="l-cta-actions">
+          <a class="l-btn l-btn-primary" href="/register.html">Create your free account</a>
+          <button class="l-btn l-btn-ghost" id="guestBtn2">Browse as guest</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="l-foot">
+    <div class="l-foot-inner">
+      <span>© <span id="year"></span> NetMark. The future of selling.</span>
+      <nav class="l-foot-links">
+        <a href="/terms.html">Terms</a>
+        <a href="/privacy.html">Privacy</a>
+        <a href="/faq.html">FAQ</a>
+        <a href="/support.html">Support</a>
+        <a href="/feedback.html">Feedback</a>
+        <a href="/login.html">Sign in</a>
+      </nav>
+    </div>
+  </footer>
+</div>
+<script type="module" src="/src/landing.ts"></script>
 </body>
 </html>

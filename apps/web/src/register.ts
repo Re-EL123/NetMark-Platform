@@ -58,6 +58,14 @@ if (incomingRef && codeInput) {
 }
 
 /* Role selection ----------------------------------------------------------- */
+const PRESELECT_ROLE = new URLSearchParams(window.location.search).get('role') || '';
+if (PRESELECT_ROLE && ['customer', 'storeOwner', 'owner', 'driver'].includes(PRESELECT_ROLE)) {
+  roleInput.value = PRESELECT_ROLE;
+  const card = roleCards.querySelector<HTMLButtonElement>(`.role-card[data-role="${PRESELECT_ROLE}"]`);
+  card?.classList.add('selected');
+  codeGroup.style.display = ['customer', 'storeOwner'].includes(PRESELECT_ROLE) ? 'block' : 'none';
+}
+
 roleCards.querySelectorAll<HTMLButtonElement>('.role-card').forEach((card) => {
   card.addEventListener('click', () => {
     roleCards.querySelectorAll('.role-card').forEach((c) => c.classList.remove('selected'));
@@ -398,7 +406,7 @@ form.addEventListener('submit', async (e) => {
     errorDiv.textContent = "You're in! Check your email to verify your account. Taking you to sign in…";
     errorDiv.style.display = 'block';
     steps.forEach((s) => ((s as HTMLElement).hidden = true));
-    setTimeout(() => { window.location.href = `${import.meta.env.BASE_URL}`; }, 2600);
+    setTimeout(() => { window.location.href = `${import.meta.env.BASE_URL}login.html`; }, 2600);
   } catch (err: any) {
     restore();
     showError(err.message || 'Registration failed');

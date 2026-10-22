@@ -287,6 +287,46 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!ref) return res.status(400).json({ success: false, message: 'Missing store reference' });
 
+  // GET /api/storefront/featured -> public showcase of live storefronts for the
+  // landing page. Returns a handful of enabled stores with a few products each.
+  if (ref === 'featured') {
+    if (req.method !== 'GET') return res.status(405).json({ success: false, message: 'Method not allowed' });
+    const { data: stores } = await sb
+      .from('stores')
+      .select('id,slug,settings')
+      .eq('is_active', true)
+      .limit(40);
+    const live = (stores || [])
+      .filter((s: any) => s.slug && s.settings?.storefront?.enabled !== false)
+      .slice(0, 8);
+    const results = await Promise.all(
+      live.map(async (s: any) => {
+        const data = await loadStorefront(sb, s.slug).catch(() => null);
+        if (!data) return null;
+        return {
+          store: {
+            name: data.store.name || '',
+            slug: data.store.slug || data.store.id,
+            url: storefrontUrl(data.store.slug || data.store.id),
+            tagline: data.storefront.tagline,
+            themeColor: data.storefront.themeColor,
+            logo: data.storefront.logo,
+            banner: data.storefront.banner,
+            ratings: data.ratings
+          },
+          products: data.products.slice(0, 4).map((p: any) => ({
+            name: p.name,
+            price: p.price,
+            comparePrice: p.comparePrice,
+            image: p.image
+          }))
+        };
+      })
+    );
+    res.setHeader('Cache-Control', 'public, max-age=120, stale-while-revalidate=600');
+    return res.status(200).json({ success: true, data: results.filter(Boolean) });
+  }
+
   // POST /api/storefront/:slug/event — best-effort, anonymous analytics counter.
   if (String(slug[1] || '') === 'event') {
     if (req.method !== 'POST') return res.status(405).json({ success: false, message: 'Method not allowed' });

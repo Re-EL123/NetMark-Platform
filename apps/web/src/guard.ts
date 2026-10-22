@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { apiRequest } from './api';
 
-const loginUrl = () => `${import.meta.env.BASE_URL}`;
+const loginUrl = () => `${import.meta.env.BASE_URL}login.html`;
 
 export async function checkAuth(requiredRoles: string[]) {
   const { data } = await supabase.auth.getSession();

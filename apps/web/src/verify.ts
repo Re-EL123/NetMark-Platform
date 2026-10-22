@@ -38,7 +38,7 @@ async function run() {
 }
 
 goLogin.onclick = () => {
-  window.location.href = `${import.meta.env.BASE_URL}`;
+  window.location.href = `${import.meta.env.BASE_URL}login.html`;
 };
 
 run();

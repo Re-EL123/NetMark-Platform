@@ -1,12 +1,62 @@
 /* NetMark signup journey --------------------------------------------------- */
 
+/* Video backdrop shared by sign-in and sign-up ----------------------------- */
+.auth-video {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+  pointer-events: none;
+}
+.auth-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 560px at 20% 10%, rgba(229, 9, 20, 0.4), transparent 60%),
+    linear-gradient(180deg, rgba(10, 10, 11, 0.62), rgba(10, 10, 11, 0.82));
+  backdrop-filter: blur(2px);
+}
+.auth-stage {
+  position: relative;
+  z-index: 2;
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: 32px 16px;
+}
+.auth-panel { width: 100%; max-width: 420px; position: relative; }
+.auth-back {
+  position: absolute;
+  top: -40px;
+  left: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(250, 250, 250, 0.85);
+}
+.auth-back:hover { color: #fff; }
+
 .signup-shell {
+  position: relative;
+  z-index: 2;
   min-height: 100vh;
-  background: radial-gradient(1100px 520px at 50% -10%, var(--netmark-red-soft), transparent), var(--bg);
+  background: transparent;
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 24px 16px 48px;
+}
+.signup-card {
+  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(16px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-video { display: none; }
 }
 
 .signup-top {
