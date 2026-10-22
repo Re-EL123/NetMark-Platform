@@ -562,8 +562,8 @@
 @media (max-width: 560px) {
   .l-roles { grid-template-columns: 1fr; }
   .l-hero { padding-top: 96px; }
-  .l-nav-actions .l-btn-ghost { display: none; }
   .l-hero-stats { gap: 24px 40px; }
+  .l-nav-actions .l-btn { padding: 10px 16px; font-size: 13px; }
 }
 
 /* ---------- Reduced motion ---------- */
