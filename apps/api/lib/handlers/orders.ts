@@ -257,7 +257,7 @@ export default authed(async (req, res, ctx) => {
     if (!before) return fail(res, 'Not found', 404);
     const patch: any = { order_status: status };
     if (status === 'completed') patch.delivery_status = 'delivered';
-    if (status === 'in_transit' && before.delivery_status === 'unassigned') patch.delivery_status = 'in_transit';
+    if (status === 'in_transit' && before.assigned_driver_id) patch.delivery_status = 'in_transit';
     const { data: after } = await sb.from('orders').update(patch).eq('id', id).select('*').single();
     await recordAudit(req, { action: 'order.status', entityType: 'order', entityId: id, before: { status: before.order_status }, after: { status } });
     if (before.customer_id && ['confirmed', 'ready'].includes(status)) {
