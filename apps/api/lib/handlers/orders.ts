@@ -5,11 +5,11 @@ import { recordAudit } from '../audit';
 import { notify } from '../notify';
 import { storeIdsForUser } from '../scope';
 import { validLinkKeysForOwners } from '../companyLinks';
-import { payOrderCommissions, payStoreMargins, reverseCommissions } from '../commissionEngine';
-import { applyVolume } from '../ranks';
+import { reverseCommissions } from '../commissionEngine';
+import { settleOrder, cancelOrderSideEffects, stripDeliveryOtp } from '../orderLifecycle';
 import { dispatchWebhook } from '../webhooks';
 
-const ORDER_STATUSES = ['pending', 'confirmed', 'ready', 'completed', 'cancelled'];
+const ORDER_STATUSES = ['pending', 'confirmed', 'ready', 'in_transit', 'completed', 'cancelled'];
 
 function orderNumber() {
   return 'NM-' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 5).toUpperCase();
@@ -52,7 +52,9 @@ export default authed(async (req, res, ctx) => {
     if (req.query.status) q = q.eq('order_status', String(req.query.status));
     if (req.query.paymentStatus) q = q.eq('payment_status', String(req.query.paymentStatus));
     const result = await runList(q, list, { searchColumns: ['order_number', 'notes'] });
-    return ok(res, { data: rowsOut(result.data), meta: { count: result.count, page: result.page, pageSize: result.pageSize } });
+    const rows = rowsOut(result.data);
+    if (ctx.role === 'driver') rows.forEach((r: any) => stripDeliveryOtp(r));
+    return ok(res, { data: rows, meta: { count: result.count, page: result.page, pageSize: result.pageSize } });
   }
 
   // POST /orders
@@ -204,6 +206,9 @@ export default authed(async (req, res, ctx) => {
     if (distributor) {
       await notify({ userId: distributor, type: 'order', title: 'New referred order', body: `Order ${order.order_number} was placed by a customer you referred.`, data: { orderId: order.id } });
     }
+    if (store?.store_owner_id && store.store_owner_id !== ctx.userId) {
+      await notify({ userId: store.store_owner_id, type: 'order', title: 'New order', body: `Order ${order.order_number} was placed at ${store.name || 'your store'} (${total}).`, data: { orderId: order.id } });
+    }
     void dispatchWebhook('order.created', { orderId: order.id, orderNumber: order.order_number, total, customerId: ctx.userId, companyId: companyId || null }, ctx.tenantId, companyId);
     return ok(res, { data: rowOut(order) }, 201);
   }
@@ -220,7 +225,28 @@ export default authed(async (req, res, ctx) => {
     }
     const { data } = await q.maybeSingle();
     if (!data) return fail(res, 'Not found', 404);
-    return ok(res, { data: rowOut(data) });
+    const out: any = rowOut(data);
+    if (ctx.role === 'driver') {
+      stripDeliveryOtp(out);
+    } else if (data.assigned_driver_id) {
+      const { data: drv } = await sb.from('drivers').select('*').eq('id', data.assigned_driver_id).maybeSingle();
+      if (drv) {
+        let person: any = null;
+        if (drv.user_id) {
+          const { data: u } = await sb.from('users').select('id,name,phone').eq('id', drv.user_id).maybeSingle();
+          person = u || null;
+        }
+        out.driver = {
+          name: person?.name || null,
+          phone: person?.phone || null,
+          vehicleType: drv.vehicle_type || null,
+          vehicleNumber: drv.vehicle_number || null,
+          vehicleModel: drv.vehicle_model || null,
+          location: drv.current_location || null
+        };
+      }
+    }
+    return ok(res, { data: out });
   }
 
   if (id && slug[1] === 'status' && req.method === 'PUT') {
@@ -231,38 +257,38 @@ export default authed(async (req, res, ctx) => {
     if (!before) return fail(res, 'Not found', 404);
     const patch: any = { order_status: status };
     if (status === 'completed') patch.delivery_status = 'delivered';
+    if (status === 'in_transit' && before.delivery_status === 'unassigned') patch.delivery_status = 'in_transit';
     const { data: after } = await sb.from('orders').update(patch).eq('id', id).select('*').single();
     await recordAudit(req, { action: 'order.status', entityType: 'order', entityId: id, before: { status: before.order_status }, after: { status } });
-    if (before.customer_id && status === 'confirmed') {
-      await notify({ userId: before.customer_id, type: 'order', title: 'Order confirmed', body: `Order ${before.order_number} is confirmed.`, data: { orderId: id } });
+    if (before.customer_id && ['confirmed', 'ready'].includes(status)) {
+      await notify({
+        userId: before.customer_id,
+        type: 'order',
+        title: status === 'ready' ? 'Order ready' : 'Order confirmed',
+        body:
+          status === 'ready'
+            ? `Order ${before.order_number} is ready${before.order_type === 'pickup' ? ' for collection' : ' for delivery'}.`
+            : `Order ${before.order_number} is confirmed.`,
+        data: { orderId: id }
+      });
     }
     // 3-level retail override on the net-of-VAT base (driver earnings are paid
     // on delivery in drivers.ts). payOrderCommissions is idempotent, so a
     // completed -> confirmed -> completed toggle can never double-pay.
     if (status === 'completed' && before.order_status !== 'completed') {
-      try {
-        await payOrderCommissions(sb, before);
-        // Store owner's direct profit margin (add: retail-wholesale; wholesale: full retail).
-        await payStoreMargins(sb, before);
-        // Volume (BV) accrues to the buyer and their company downline.
-        await applyVolume(sb, {
-          companyId: before.company_id || null,
-          userId: before.customer_id || before.user_id,
-          bv: Number(before.subtotal_excl_vat ?? before.subtotal ?? 0),
-          tenantId: before.tenant_id || null
-        });
-      } catch (err: any) {
-        console.error('commission payout failed', id, err?.message || err);
-      }
-      void dispatchWebhook('order.completed', { orderId: id, orderNumber: before.order_number, total: before.total, status }, ctx.tenantId, before.company_id);
+      await settleOrder(sb, before);
     }
     // Cancelling an order claws back what it earned (pending or released).
     if (status === 'cancelled' && before.order_status !== 'cancelled') {
+      await cancelOrderSideEffects(sb, before);
       try {
         await reverseCommissions(sb, 'order', id, `Order ${before.order_number || ''} cancelled`.trim());
         await reverseCommissions(sb, 'order_margin', id, `Order ${before.order_number || ''} cancelled`.trim());
       } catch (err: any) {
         console.error('commission reversal failed', id, err?.message || err);
+      }
+      if (before.customer_id) {
+        await notify({ userId: before.customer_id, type: 'order', title: 'Order cancelled', body: `Order ${before.order_number} was cancelled.`, data: { orderId: id } });
       }
     }
     return ok(res, { data: rowOut(after) });
@@ -274,6 +300,8 @@ export default authed(async (req, res, ctx) => {
     if (!driverId) return fail(res, 'driverId is required');
     const { data: order } = await scope(sb.from('orders').select('*').eq('id', id)).maybeSingle();
     if (!order) return fail(res, 'Order not found', 404);
+    if (order.order_type === 'pickup') return fail(res, 'Pickup orders do not need a driver');
+    if (order.payment_status !== 'paid') return fail(res, 'Mark the order paid before dispatching a driver');
     const { data: driver } = await sb.from('drivers').select('*').eq('id', driverId).maybeSingle();
     if (!driver) return fail(res, 'Driver not found', 404);
     // An order belongs to one company; only that company's drivers may take it.
@@ -290,6 +318,9 @@ export default authed(async (req, res, ctx) => {
     if (driver.user_id) {
       await notify({ userId: driver.user_id, type: 'delivery', title: 'New delivery assigned', body: 'You have a new delivery assigned.', data: { orderId: id } });
     }
+    if (order.customer_id) {
+      await notify({ userId: order.customer_id, type: 'delivery', title: 'Driver assigned', body: `A driver is picking up order ${order.order_number}.`, data: { orderId: id } });
+    }
     return ok(res, { data: rowOut(after) });
   }
 
@@ -305,6 +336,7 @@ export default authed(async (req, res, ctx) => {
         if (!['pending', 'confirmed'].includes(before.order_status)) return fail(res, 'This order can no longer be cancelled');
         const { data: after } = await sb.from('orders').update({ order_status: 'cancelled' }).eq('id', id).select('*').single();
         await recordAudit(req, { action: 'order.cancel', entityType: 'order', entityId: id });
+        await cancelOrderSideEffects(sb, before);
         await reverseCommissions(sb, 'order', id, `Order ${before.order_number || ''} cancelled`.trim()).catch(() => {});
         await reverseCommissions(sb, 'order_margin', id, `Order ${before.order_number || ''} cancelled`.trim()).catch(() => {});
         return ok(res, { data: rowOut(after) });
@@ -318,11 +350,22 @@ export default authed(async (req, res, ctx) => {
     if (b.deliveryStatus) patch.delivery_status = b.deliveryStatus;
     if (b.notes !== undefined) patch.notes = b.notes;
     if (b.address !== undefined) patch.address = b.address;
+    if (b.paymentStatus && ['unpaid', 'paid', 'refunded'].includes(String(b.paymentStatus))) {
+      patch.payment_status = String(b.paymentStatus);
+      if (patch.payment_status === 'paid') {
+        patch.payment_method = String(b.paymentMethod || 'manual');
+        if (before.order_status === 'pending') patch.order_status = 'confirmed';
+      }
+    }
     const { data: after } = await sb.from('orders').update(patch).eq('id', id).select('*').single();
     await recordAudit(req, { action: 'order.update', entityType: 'order', entityId: id, before: rowOut(before), after: rowOut(after) });
     if (patch.order_status === 'cancelled' && before.order_status !== 'cancelled') {
+      await cancelOrderSideEffects(sb, before);
       await reverseCommissions(sb, 'order', id, `Order ${before.order_number || ''} cancelled`.trim()).catch(() => {});
       await reverseCommissions(sb, 'order_margin', id, `Order ${before.order_number || ''} cancelled`.trim()).catch(() => {});
+    }
+    if (patch.payment_status === 'paid' && before.payment_status !== 'paid' && before.customer_id) {
+      await notify({ userId: before.customer_id, type: 'payment', title: 'Payment received', body: `Payment for order ${before.order_number} was recorded.`, data: { orderId: id } });
     }
     return ok(res, { data: rowOut(after) });
   }
@@ -350,6 +393,9 @@ export default authed(async (req, res, ctx) => {
   if (id && req.method === 'DELETE') {
     if (!ctx.isPlatform) return fail(res, 'Forbidden', 403);
     const { data: before } = await sb.from('orders').select('*').eq('id', id).maybeSingle();
+    if (before && before.order_status !== 'cancelled') {
+      await cancelOrderSideEffects(sb, before);
+    }
     await sb.from('orders').delete().eq('id', id);
     await recordAudit(req, { action: 'order.delete', entityType: 'order', entityId: id, before: before ? rowOut(before) : null });
     return ok(res, { message: 'Deleted' });

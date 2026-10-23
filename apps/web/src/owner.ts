@@ -357,7 +357,7 @@ function orders(c: HTMLElement) {
     searchPlaceholder: 'Search orders…',
     onData: (r) => (rows = r),
     filters: () => [
-      { name: 'status', label: 'Status', options: opts(['pending', 'confirmed', 'ready', 'completed', 'cancelled']) },
+      { name: 'status', label: 'Status', options: opts(['pending', 'confirmed', 'ready', 'in_transit', 'completed', 'cancelled']) },
       { name: 'paymentStatus', label: 'Payment', options: opts(['unpaid', 'paid', 'refunded']) }
     ],
     columns: [
@@ -368,13 +368,16 @@ function orders(c: HTMLElement) {
       { key: 'deliveryStatus', label: 'Delivery', render: (r) => statusBadge(r.deliveryStatus) },
       { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) }
     ],
-    actions: (r) => act('status', r.id, 'Status') + act('assign', r.id, 'Assign'),
+    actions: (r) =>
+      act('status', r.id, 'Status') +
+      (r.orderType === 'pickup' ? '' : act('assign', r.id, 'Assign')) +
+      (r.paymentStatus !== 'paid' && r.orderStatus !== 'cancelled' ? act('paid', r.id, 'Mark paid') : ''),
     bind: (root, reload) => {
       wire(root, {
         status: async (id) =>
           openModal({
             title: 'Update order status',
-            fields: [{ name: 'status', label: 'Status', type: 'select', options: opts(['pending', 'confirmed', 'ready', 'completed', 'cancelled']), value: rows.find((r) => r.id === id)?.orderStatus }],
+            fields: [{ name: 'status', label: 'Status', type: 'select', options: opts(['pending', 'confirmed', 'ready', 'in_transit', 'completed', 'cancelled']), value: rows.find((r) => r.id === id)?.orderStatus }],
             onSubmit: async (v) => {
               const res = await apiRequest(`/orders/${id}/status`, { method: 'PUT', body: JSON.stringify(v) });
               if (!res.success) throw new Error(res.message);
@@ -382,6 +385,15 @@ function orders(c: HTMLElement) {
               reload();
             }
           }),
+        paid: async (id) => {
+          const res = await apiRequest(`/orders/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ paymentStatus: 'paid', paymentMethod: 'manual' })
+          });
+          if (!res.success) return toast(res.message || 'Failed', 'error');
+          toast('Marked paid', 'success');
+          reload();
+        },
         assign: async (id) => {
           const res = await apiRequest('/drivers?status=approved&pageSize=100');
           const drivers = (res.data || []).map((d: any) => ({ value: d.id, label: d.user?.name || d.id.slice(0, 8) }));

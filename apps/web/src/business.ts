@@ -682,7 +682,7 @@ function orders(c: HTMLElement) {
     endpoint: '/orders',
     onData: (r) => (rows = r),
     filters: () => [
-      { name: 'status', label: 'Status', options: opts(['pending', 'confirmed', 'ready', 'completed', 'cancelled']) },
+      { name: 'status', label: 'Status', options: opts(['pending', 'confirmed', 'ready', 'in_transit', 'completed', 'cancelled']) },
       { name: 'paymentStatus', label: 'Payment', options: opts(['unpaid', 'paid', 'refunded']) }
     ],
     columns: [
@@ -692,13 +692,26 @@ function orders(c: HTMLElement) {
       { key: 'orderStatus', label: 'Status', render: (r) => statusBadge(r.orderStatus) },
       { key: 'createdAt', label: 'Created', render: (r) => formatDate(r.createdAt) }
     ],
-    actions: writable ? (r) => act('status', r.id, 'Status') : undefined,
+    actions: writable
+      ? (r) =>
+          act('status', r.id, 'Status') +
+          (r.paymentStatus !== 'paid' && r.orderStatus !== 'cancelled' ? act('paid', r.id, 'Mark paid') : '')
+      : undefined,
     bind: (root, reload) => {
       wire(root, {
+        paid: async (id) => {
+          const res = await apiRequest(`/orders/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ paymentStatus: 'paid', paymentMethod: 'manual' })
+          });
+          if (!res.success) return toast(res.message || 'Failed', 'error');
+          toast('Marked paid', 'success');
+          reload();
+        },
         status: async (id) =>
           openModal({
             title: 'Update order status',
-            fields: [{ name: 'status', label: 'Status', type: 'select', options: opts(['pending', 'confirmed', 'ready', 'completed', 'cancelled']), value: rows.find((r) => r.id === id)?.orderStatus }],
+            fields: [{ name: 'status', label: 'Status', type: 'select', options: opts(['pending', 'confirmed', 'ready', 'in_transit', 'completed', 'cancelled']), value: rows.find((r) => r.id === id)?.orderStatus }],
             onSubmit: async (v) => {
               await apiRequest(`/orders/${id}/status`, { method: 'PUT', body: JSON.stringify(v) });
               toast('Updated', 'success');

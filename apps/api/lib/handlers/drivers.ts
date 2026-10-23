@@ -1,9 +1,29 @@
 import { VercelRequest, VercelResponse } from '@vercel/node';
 import { getSupabase, rowOut, rowsOut } from '../db';
 import { verifySupabaseToken, loadUser } from '../middleware';
+import { settleOrder, stripDeliveryOtp } from '../orderLifecycle';
+import { notify } from '../notify';
 
 function generateOtp(): string {
   return String(Math.floor(1000 + Math.random() * 9000));
+}
+
+/** Drivers never receive the customer's proof-of-delivery code. */
+function forDriver(row: any) {
+  return stripDeliveryOtp(rowOut(row));
+}
+
+/** Attach the customer's contact details so the driver can reach them. */
+async function attachCustomers(sb: any, list: any[]) {
+  const ids = [...new Set(list.map((o) => o.customerId || o.userId).filter(Boolean))];
+  if (!ids.length) return list;
+  const { data: users } = await sb.from('users').select('id,name,phone').in('id', ids);
+  const byId = Object.fromEntries((users || []).map((u: any) => [u.id, u]));
+  for (const o of list) {
+    const u = byId[o.customerId || o.userId];
+    o.customer = u ? { name: u.name || null, phone: u.phone || null } : null;
+  }
+  return list;
 }
 
 const AVAILABLE_ORDER_STATUSES = ['ready', 'confirmed', 'preparing', 'pending'];
@@ -133,12 +153,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .from('orders')
           .select('*')
           .eq('delivery_status', 'unassigned')
+          .eq('order_type', 'delivery')
+          .eq('payment_status', 'paid')
           .in('order_status', AVAILABLE_ORDER_STATUSES)
           .order('created_at', { ascending: true });
         if (driver.company_id) q = q.eq('company_id', driver.company_id);
         const { data, error } = await q;
         if (error) return res.status(500).json({ success: false, message: 'Server error' });
-        return res.status(200).json({ success: true, data: { orders: rowsOut(data) } });
+        const orders = rowsOut(data).map((o: any) => stripDeliveryOtp(o));
+        return res.status(200).json({ success: true, data: { orders } });
       }
 
       // ---- /drivers/deliveries/mine ----
@@ -150,7 +173,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .eq('assigned_driver_id', driver.id)
           .order('created_at', { ascending: false });
         if (error) return res.status(500).json({ success: false, message: 'Server error' });
-        return res.status(200).json({ success: true, data: { orders: rowsOut(data) } });
+        const orders = await attachCustomers(sb, rowsOut(data));
+        orders.forEach((o: any) => stripDeliveryOtp(o));
+        return res.status(200).json({ success: true, data: { orders } });
       }
 
       // ---- /drivers/deliveries/:orderId/accept ----
@@ -171,18 +196,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           })
           .eq('id', orderId)
           .eq('delivery_status', 'unassigned')
+          .eq('order_type', 'delivery')
+          .eq('payment_status', 'paid')
           .is('assigned_driver_id', null);
         if (driver.company_id) q = q.eq('company_id', driver.company_id);
         const { data: claimed } = await q.select('*').maybeSingle();
         if (!claimed) {
           return res.status(409).json({ success: false, message: 'Delivery no longer available' });
         }
-        let order = claimed;
-        if (!order.delivery_otp) {
-          order.delivery_otp = generateOtp();
-          await sb.from('orders').update({ delivery_otp: order.delivery_otp }).eq('id', order.id);
+        // Always rotate the code so a previous driver's code stops working.
+        const otp = generateOtp();
+        await sb.from('orders').update({ delivery_otp: otp }).eq('id', claimed.id);
+        claimed.delivery_otp = otp;
+        if (claimed.customer_id) {
+          await notify({
+            userId: claimed.customer_id,
+            type: 'delivery',
+            title: 'Driver on the way',
+            body: `A driver accepted order ${claimed.order_number || claimed.id}. Your delivery code is ${otp}.`,
+            data: { orderId: claimed.id }
+          });
         }
-        return res.status(200).json({ success: true, data: { order: rowOut(order) } });
+        return res.status(200).json({ success: true, data: { order: forDriver(claimed) } });
       }
 
       // ---- /drivers/deliveries/:orderId/status ----
@@ -194,15 +229,78 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!allowed.includes(status)) {
           return res.status(400).json({ success: false, message: 'Invalid status' });
         }
+        const { data: current } = await sb
+          .from('orders')
+          .select('*')
+          .eq('id', orderId)
+          .eq('assigned_driver_id', driver.id)
+          .maybeSingle();
+        if (!current) {
+          return res.status(404).json({ success: false, message: 'Delivery not found' });
+        }
+        if (current.delivery_status === 'delivered') {
+          return res.status(400).json({ success: false, message: 'Delivery already completed' });
+        }
+
+        // A failed attempt goes back into the dispatch pool so another driver
+        // can retry instead of the order dying with this driver.
+        if (status === 'failed') {
+          const attempts = Number(current.data?.deliveryAttempts || 0) + 1;
+          const { data: repooled } = await sb
+            .from('orders')
+            .update({
+              assigned_driver_id: null,
+              delivery_status: 'unassigned',
+              order_status: 'ready',
+              delivery_notes: note || current.delivery_notes || null,
+              data: { ...(current.data || {}), deliveryAttempts: attempts }
+            })
+            .eq('id', orderId)
+            .select('*')
+            .maybeSingle();
+          if (current.customer_id) {
+            await notify({
+              userId: current.customer_id,
+              type: 'delivery',
+              title: 'Delivery attempt failed',
+              body: `We could not deliver order ${current.order_number || current.id}${note ? ` (${note})` : ''}. We're finding another driver.`,
+              data: { orderId: orderId }
+            });
+          }
+          if (current.company_id) {
+            await notify({
+              role: 'owner',
+              companyId: current.company_id,
+              type: 'delivery',
+              title: 'Delivery failed — re-dispatch needed',
+              body: `Order ${current.order_number || current.id} failed delivery and is back in the pool.`,
+              data: { orderId: orderId }
+            });
+          }
+          return res.status(200).json({ success: true, data: { order: forDriver(repooled) } });
+        }
+
+        const orderStatus = status === 'assigned' ? current.order_status : 'in_transit';
         const { data } = await sb
           .from('orders')
-          .update({ delivery_status: status, order_status: status, delivery_notes: note || null })
+          .update({ delivery_status: status, order_status: orderStatus, delivery_notes: note || current.delivery_notes || null })
           .eq('id', orderId)
           .eq('assigned_driver_id', driver.id)
           .select('*')
           .maybeSingle();
-        if (!data) return res.status(404).json({ success: false, message: 'Delivery not found' });
-        return res.status(200).json({ success: true, data: { order: rowOut(data) } });
+        if (!data) {
+          return res.status(404).json({ success: false, message: 'Delivery not found' });
+        }
+        if (current.customer_id && ['picked_up', 'in_transit'].includes(status)) {
+          await notify({
+            userId: current.customer_id,
+            type: 'delivery',
+            title: status === 'picked_up' ? 'Order collected' : 'Order on the way',
+            body: `Order ${current.order_number || current.id} is ${status === 'picked_up' ? 'picked up' : 'on the way to you'}.`,
+            data: { orderId: orderId }
+          });
+        }
+        return res.status(200).json({ success: true, data: { order: forDriver(data) } });
       }
 
       // ---- /drivers/deliveries/:orderId/complete ----
@@ -223,9 +321,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (orderRow.delivery_otp && orderRow.delivery_otp !== otp) {
           return res.status(400).json({ success: false, message: 'Invalid delivery OTP' });
         }
+        if (orderRow.delivery_status === 'failed') {
+          return res.status(400).json({ success: false, message: 'This delivery was returned to the pool' });
+        }
         const orderPatch: any = {
           delivery_status: 'delivered',
-          order_status: 'delivered',
+          // Delivery is the point of sale: settle immediately so commissions,
+          // margins and rank volume post without an owner action.
+          order_status: 'completed',
           delivered_at: new Date().toISOString()
         };
         if (notes) orderPatch.delivery_notes = notes;
@@ -235,6 +338,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .eq('id', orderId)
           .select('*')
           .single();
+
+        await settleOrder(sb, updated);
 
         const order = rowOut(updated);
         const { data: cfg } = await sb
@@ -260,6 +365,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         stats.totalEarnings = (stats.totalEarnings || 0) + amount;
         await sb.from('drivers').update({ stats }).eq('id', driver.id);
 
+        if (orderRow.customer_id) {
+          await notify({
+            userId: orderRow.customer_id,
+            type: 'delivery',
+            title: 'Order delivered',
+            body: `Order ${orderRow.order_number || orderRow.id} has been delivered. Thanks for shopping with NetMark — you can leave a review from My Orders.`,
+            data: { orderId: orderId }
+          });
+        }
+
+        stripDeliveryOtp(order);
         return res.status(200).json({ success: true, message: 'Delivery completed', data: { order } });
       }
 

@@ -185,7 +185,7 @@ async function manageDelivery(order: any, ctx: any) {
           <div><span class="detail-label">Status</span><span>${statusBadge(order.orderStatus)}</span></div>
           <div><span class="detail-label">Delivery</span><span>${statusBadge(order.deliveryStatus)}</span></div>
           <div><span class="detail-label">Address</span><span>${esc(addressOf(order.address))}</span></div>
-          <div><span class="detail-label">OTP</span><span>${esc(order.deliveryOtp || '')}</span></div>
+          <div><span class="detail-label">Customer</span><span>${esc(order.customer?.name || '—')}${order.customer?.phone ? ` · <a href="tel:${esc(order.customer.phone)}">${esc(order.customer.phone)}</a>` : ''}</span></div>
         </div>
         ${
           order.deliveryStatus === 'delivered'
@@ -216,7 +216,10 @@ async function manageDelivery(order: any, ctx: any) {
     close();
     openModal({
       title: 'Complete delivery',
-      fields: [{ name: 'otp', label: 'Delivery OTP', required: true }, { name: 'notes', label: 'Notes', type: 'textarea' }],
+      fields: [
+        { name: 'otp', label: 'Delivery code from customer', required: true, help: 'Ask the customer for the 4-digit code shown in their My Orders tracking screen.' },
+        { name: 'notes', label: 'Notes', type: 'textarea' }
+      ],
       submitLabel: 'Confirm delivery',
       onSubmit: async (v) => {
         const r = await apiRequest(`/drivers/deliveries/${order.id}/complete`, { method: 'POST', body: JSON.stringify(v) });

@@ -320,6 +320,63 @@ async function startPayFast(orderId: string) {
   submitPayFast(processUrl, fields);
 }
 
+/* ------------------------------- tracking ------------------------------ */
+function addressText(address: any): string {
+  if (!address) return '—';
+  if (typeof address === 'string') return address;
+  return [address.line1, address.line2, address.suburb, address.city, address.province, address.postalCode]
+    .filter(Boolean)
+    .join(', ') || address.formattedAddress || '—';
+}
+
+async function openTracking(id: string) {
+  const res = await apiRequest(`/orders/${id}`);
+  if (!res.success) return toast(res.message || 'Could not load order', 'error');
+  const o: any = res.data;
+  const delivered = o.deliveryStatus === 'delivered' || o.orderStatus === 'completed';
+  const steps: [string, boolean][] = [
+    ['Order placed', true],
+    ['Payment confirmed', o.paymentStatus === 'paid'],
+    ['Order confirmed', ['confirmed', 'ready', 'in_transit', 'completed'].includes(o.orderStatus) || o.paymentStatus === 'paid'],
+    ['Ready for dispatch', ['ready', 'in_transit', 'completed'].includes(o.orderStatus)],
+    ['Driver assigned', !!o.driver || ['assigned', 'picked_up', 'in_transit', 'delivered'].includes(o.deliveryStatus)],
+    ['Picked up', ['picked_up', 'in_transit', 'delivered'].includes(o.deliveryStatus)],
+    ['On the way', ['in_transit', 'delivered'].includes(o.deliveryStatus)],
+    ['Delivered', delivered]
+  ];
+  const doneCount = steps.filter(([, done]) => done).length;
+  const otp =
+    o.deliveryOtp && ['assigned', 'picked_up', 'in_transit'].includes(o.deliveryStatus) ? String(o.deliveryOtp) : '';
+  const items = Array.isArray(o.items) ? o.items : [];
+  const html = `
+    <div class="track-steps">
+      ${steps
+        .map(
+          ([label, done], i) =>
+            `<div class="track-step ${done ? 'done' : ''} ${i === doneCount - 1 && !delivered ? 'current' : ''}">
+              <span class="track-dot">${done ? icon('check') : ''}</span>
+              <span class="track-label">${esc(label)}</span>
+            </div>`
+        )
+        .join('')}
+    </div>
+    ${otp ? `<div class="otp-box"><div class="otp-label">Delivery code</div><div class="otp-code">${esc(otp)}</div><div class="otp-note">Give this code to your driver only when your order arrives.</div></div>` : ''}
+    ${
+      o.driver
+        ? `<div class="driver-card"><div><div class="driver-name">${esc(o.driver.name || 'Your driver')}</div><div class="empty">${esc([o.driver.vehicleModel, o.driver.vehicleNumber].filter(Boolean).join(' · ') || 'Delivery partner')}</div></div>${o.driver.phone ? `<a class="btn btn-sm btn-ghost" href="tel:${esc(o.driver.phone)}">${icon('phone')}<span>Call</span></a>` : ''}</div>`
+        : ''
+    }
+    <div class="detail-grid" style="margin-top:16px">
+      <div><span class="detail-label">Deliver to</span><span>${esc(addressText(o.address))}</span></div>
+      <div><span class="detail-label">Total</span><span>${money(o.total)}</span></div>
+    </div>
+    <div style="margin-top:16px">
+      <span class="detail-label">Items</span>
+      ${items.map((l: any) => `<div class="cart-line"><div><div class="name">${esc(l.name)}</div><div class="empty">Qty ${Number(l.quantity || 1)}</div></div><div class="price">${money(l.lineTotal ?? Number(l.price || 0) * Number(l.quantity || 1))}</div></div>`).join('') || '<p class="empty">No items recorded.</p>'}
+    </div>`;
+  await openModal({ title: `Order ${o.orderNumber || o.id.slice(0, 8)}`, html, submitLabel: 'Done', onSubmit: () => {} });
+}
+
 /* -------------------------------- orders ------------------------------- */
 async function orders(c: HTMLElement, ctx: any) {
   const res = await apiRequest('/orders/my/all?pageSize=100');
@@ -334,11 +391,12 @@ async function orders(c: HTMLElement, ctx: any) {
                 (o: any) => `<div class="cart-line">
         <div>
           <div class="name">${esc(o.orderNumber || o.id.slice(0, 8))}</div>
-          <div class="empty">${formatDate(o.createdAt)} · ${statusBadge(o.orderStatus)} ${statusBadge(o.paymentStatus)}</div>
+          <div class="empty">${formatDate(o.createdAt)} · ${statusBadge(o.orderStatus)} ${statusBadge(o.paymentStatus)}${o.deliveryStatus ? ' ' + statusBadge(o.deliveryStatus) : ''}</div>
         </div>
         <div style="text-align:right">
           <div class="price">${money(o.total)}</div>
           ${o.paymentStatus !== 'paid' && o.orderStatus !== 'cancelled' ? `<button class="btn btn-sm" data-pay="${esc(o.id)}">${icon('credit-card')}<span>Pay</span></button>` : ''}
+          ${o.orderType !== 'pickup' && o.orderStatus !== 'cancelled' ? `<button class="link-btn" data-track="${esc(o.id)}">${icon('map-pin')}<span>Track</span></button>` : ''}
           ${['pending', 'confirmed'].includes(o.orderStatus) ? `<button class="link-btn danger" data-cancel="${esc(o.id)}">${icon('ban')}<span>Cancel</span></button>` : ''}
           ${o.orderStatus === 'completed' ? `<button class="link-btn" data-review="${esc(o.id)}">${icon('star')}<span>Review</span></button>` : ''}
         </div>
@@ -349,6 +407,9 @@ async function orders(c: HTMLElement, ctx: any) {
       }
     </div>`;
   c.querySelectorAll('[data-pay]').forEach((b) => b.addEventListener('click', () => startPayFast((b as HTMLElement).dataset.pay!)));
+  c.querySelectorAll('[data-track]').forEach((b) =>
+    b.addEventListener('click', () => openTracking((b as HTMLElement).dataset.track!))
+  );
   c.querySelectorAll('[data-cancel]').forEach((b) =>
     b.addEventListener('click', async () => {
       if (await confirmDialog('Cancel this order?', { danger: true, confirmLabel: 'Cancel order' })) {
