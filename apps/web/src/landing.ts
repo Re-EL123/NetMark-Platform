@@ -84,16 +84,22 @@ function animateStat(el: HTMLElement, target: number, suffix: string) {
   requestAnimationFrame(tick);
 }
 
-function applyStats(stats: { storefronts?: number; products?: number; onTimeRate?: number; platform?: number }) {
-  const map: [string, number, string][] = [
-    ['storefronts', Number(stats?.storefronts || 0), '+'],
-    ['products', Number(stats?.products || 0), '+'],
-    ['onTimeRate', Number(stats?.onTimeRate || 0), '%'],
-    ['platform', Number(stats?.platform || 1), '']
+function applyStats(stats: { storefronts?: number; products?: number; onTimeRate?: number | null; platform?: number }) {
+  const map: [string, number | null, string][] = [
+    ['storefronts', stats?.storefronts ?? 0, '+'],
+    ['products', stats?.products ?? 0, '+'],
+    ['onTimeRate', stats?.onTimeRate ?? null, '%'],
+    ['platform', stats?.platform ?? 1, '']
   ];
   for (const [key, value, suffix] of map) {
     const el = document.querySelector<HTMLElement>(`[data-stat="${key}"]`);
-    if (el) animateStat(el, value, suffix);
+    if (!el) continue;
+    if (value == null) {
+      el.textContent = '—';
+      el.title = 'No deliveries recorded yet';
+      continue;
+    }
+    animateStat(el, Number(value), suffix);
   }
 }
 

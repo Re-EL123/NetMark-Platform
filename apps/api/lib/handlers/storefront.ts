@@ -318,10 +318,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .from('stores')
       .select('id,slug,settings')
       .eq('is_active', true)
-      .limit(40);
-    const live = (stores || [])
-      .filter((s: any) => s.slug && s.settings?.storefront?.enabled !== false)
-      .slice(0, 8);
+      .limit(2000);
+    const allLive = (stores || []).filter(
+      (s: any) => s.slug && s.settings?.storefront?.enabled !== false
+    );
+    const live = allLive.slice(0, 8);
     const results = await Promise.all(
       live.map(async (s: any) => {
         const data = await loadStorefront(sb, s.slug).catch(() => null);
@@ -348,14 +349,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     );
 
     // Real network stats for the hero counters.
-    let storefrontCount = live.length;
+    let storefrontCount = allLive.length;
     let productCount = 0;
     try {
-      const { count: sc } = await sb
-        .from('stores')
-        .select('id', { count: 'exact', head: true })
-        .eq('is_active', true);
-      storefrontCount = sc || storefrontCount;
       const { count: pc } = await sb
         .from('products')
         .select('id', { count: 'exact', head: true })
@@ -365,7 +361,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       /* counts are best-effort */
     }
 
-    let onTimeRate = 0;
+    let onTimeRate: number | null = null;
     try {
       const { data: orders } = await sb
         .from('orders')
