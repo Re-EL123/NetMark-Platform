@@ -18,7 +18,16 @@
   background:
     radial-gradient(900px 560px at 20% 10%, rgba(229, 9, 20, 0.4), transparent 60%),
     linear-gradient(180deg, rgba(10, 10, 11, 0.62), rgba(10, 10, 11, 0.82));
-  backdrop-filter: blur(2px);
+}
+/* Keep the sign-in card crisp: no backdrop blur and no lingering transform
+   (the entry animation's `both` fill on a scale() can rasterise text softly). */
+.auth-stage .login-card {
+  background: var(--surface);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.login-animate {
+  animation-fill-mode: none;
 }
 .auth-stage {
   position: relative;

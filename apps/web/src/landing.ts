@@ -1,6 +1,10 @@
 import { API_BASE_URL, STOREFRONT_BASE_URL } from './config';
 import { supabase } from './supabase';
 import { apiRequest } from './api';
+import { iconify } from './icons';
+
+/* ------------------------------- icons --------------------------------- */
+iconify(document);
 
 /* ----------------------------- nav + menu ------------------------------ */
 const nav = document.getElementById('nav') as HTMLElement;
@@ -42,30 +46,8 @@ if (rotate) {
   }
 }
 
-/* ------------------------------ counters ------------------------------- */
-function animateCount(el: HTMLElement) {
-  const target = Number(el.dataset.count || 0);
-  const suffix = el.dataset.suffix || '';
-  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (reduced) {
-    el.innerHTML = `${target.toLocaleString('en-ZA')}<span class="suffix">${suffix}</span>`;
-    return;
-  }
-  const start = performance.now();
-  const dur = 1400;
-  const tick = (now: number) => {
-    const p = Math.min(1, (now - start) / dur);
-    const eased = 1 - Math.pow(1 - p, 3);
-    const value = Math.round(target * eased);
-    el.innerHTML = `${value.toLocaleString('en-ZA')}<span class="suffix">${suffix}</span>`;
-    if (p < 1) requestAnimationFrame(tick);
-  };
-  requestAnimationFrame(tick);
-}
-
 /* --------------------------- scroll reveal ----------------------------- */
 const revealEls = Array.from(document.querySelectorAll<HTMLElement>('.reveal'));
-const counters = Array.from(document.querySelectorAll<HTMLElement>('[data-count]'));
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 if ('IntersectionObserver' in window && !reduced) {
@@ -80,21 +62,39 @@ if ('IntersectionObserver' in window && !reduced) {
     { threshold: 0.14 }
   );
   revealEls.forEach((el) => io.observe(el));
-
-  const cio = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return;
-        animateCount(entry.target as HTMLElement);
-        cio.unobserve(entry.target);
-      });
-    },
-    { threshold: 0.6 }
-  );
-  counters.forEach((el) => cio.observe(el));
 } else {
   revealEls.forEach((el) => el.classList.add('in'));
-  counters.forEach(animateCount);
+}
+
+/* ------------------------------- stats --------------------------------- */
+function animateStat(el: HTMLElement, target: number, suffix: string) {
+  if (!Number.isFinite(target)) target = 0;
+  if (reduced) {
+    el.innerHTML = `${target.toLocaleString('en-ZA')}<span class="suffix">${suffix}</span>`;
+    return;
+  }
+  const start = performance.now();
+  const dur = 1300;
+  const tick = (now: number) => {
+    const p = Math.min(1, (now - start) / dur);
+    const eased = 1 - Math.pow(1 - p, 3);
+    el.innerHTML = `${Math.round(target * eased).toLocaleString('en-ZA')}<span class="suffix">${suffix}</span>`;
+    if (p < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+function applyStats(stats: { storefronts?: number; products?: number; onTimeRate?: number; platform?: number }) {
+  const map: [string, number, string][] = [
+    ['storefronts', Number(stats?.storefronts || 0), '+'],
+    ['products', Number(stats?.products || 0), '+'],
+    ['onTimeRate', Number(stats?.onTimeRate || 0), '%'],
+    ['platform', Number(stats?.platform || 1), '']
+  ];
+  for (const [key, value, suffix] of map) {
+    const el = document.querySelector<HTMLElement>(`[data-stat="${key}"]`);
+    if (el) animateStat(el, value, suffix);
+  }
 }
 
 /* ----------------------------- helpers --------------------------------- */
@@ -171,6 +171,7 @@ async function loadFeatured() {
     const res = await fetch(`${API_BASE_URL}/storefront/featured`, { headers: { Accept: 'application/json' } });
     const body = await res.json();
     const data: FeaturedStore[] = body?.success ? body.data || [] : [];
+    if (body?.stats) applyStats(body.stats);
     if (!data.length) {
       grid.innerHTML = '';
       if (empty) empty.style.display = 'block';
@@ -185,6 +186,34 @@ async function loadFeatured() {
   }
 }
 loadFeatured();
+
+/* --------------------- admin-editable hero appearance ------------------ */
+const landingRoot = document.querySelector<HTMLElement>('.landing');
+const heroVideo = document.querySelector<HTMLVideoElement>('.l-hero-video');
+
+async function loadLandingConfig() {
+  try {
+    const res = await fetch(`${API_BASE_URL}/storefront/landing`, { headers: { Accept: 'application/json' } });
+    const body = await res.json();
+    const c = body?.success ? body.data : null;
+    if (!c) return;
+    if (landingRoot) {
+      if (c.headingColor) landingRoot.style.setProperty('--l-heading', c.headingColor);
+      if (c.accentColor) landingRoot.style.setProperty('--l-accent', c.accentColor);
+      if (c.accentColor2) landingRoot.style.setProperty('--l-accent2', c.accentColor2);
+      if (c.textColor) landingRoot.style.setProperty('--l-text', c.textColor);
+      if (c.heroVideoOpacity != null) landingRoot.style.setProperty('--l-video-opacity', String(c.heroVideoOpacity));
+    }
+    if (heroVideo && c.heroVideo && c.heroVideo !== heroVideo.getAttribute('src')) {
+      heroVideo.src = c.heroVideo;
+      heroVideo.load();
+      heroVideo.play().catch(() => {});
+    }
+  } catch {
+    /* keep the built-in hero */
+  }
+}
+loadLandingConfig();
 
 /* ------------------------- lazy showcase video ------------------------- */
 const showcase = document.getElementById('showcaseVideo') as HTMLVideoElement | null;

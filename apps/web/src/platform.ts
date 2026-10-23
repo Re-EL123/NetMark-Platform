@@ -73,6 +73,7 @@ const nav: NavItem[] = [
   { id: 'announcements', label: 'Announcements', group: 'Platform', icon: 'bell' },
   { id: 'audit', label: 'Audit Log', group: 'Platform', icon: 'shield-check' },
   { id: 'navigation', label: 'Navigation', group: 'Platform', icon: 'menu' },
+  { id: 'landing', label: 'Landing Page', group: 'Platform', icon: 'layout-grid' },
   { id: 'settings', label: 'Settings', group: 'Platform', icon: 'settings' }
 ];
 
@@ -115,6 +116,7 @@ initPanel({
     if (route === 'announcements') return renderAnnouncements(c);
     if (route === 'audit') return renderAudit(c);
     if (route === 'navigation') return renderNavigation(c);
+    if (route === 'landing') return renderLanding(c);
     if (route === 'settings') return renderSettings(c);
   }
 });
@@ -1095,6 +1097,66 @@ function renderAudit(c: HTMLElement) {
       { key: 'entityType', label: 'Entity' },
       { key: 'createdAt', label: 'When', render: (r) => new Date(r.createdAt).toLocaleString() }
     ]
+  });
+}
+
+/* ---------------------------- landing page ----------------------------- */
+async function renderLanding(c: HTMLElement) {
+  const res = await apiRequest('/settings/landing');
+  const s = res.success ? res.data.platform || {} : {};
+  c.innerHTML = `
+    <div class="card">
+      <h3>Landing page appearance</h3>
+      <p class="empty" style="margin-bottom:16px">These control the public homepage hero. Text colours apply immediately to the headline, animated word and intro text.</p>
+      <div id="landingForm"></div>
+    </div>`;
+
+  const fields: Field[] = [
+    {
+      name: 'heroVideo',
+      label: 'Hero video',
+      type: 'video',
+      folder: 'platform',
+      value: s.heroVideo || '/media/hero.mp4',
+      help: 'Upload an MP4 or paste a URL. Leave as /media/hero.mp4 for the default.',
+      full: true
+    },
+    {
+      name: 'heroVideoOpacity',
+      label: 'Hero video opacity',
+      type: 'number',
+      min: 0,
+      max: 1,
+      step: '0.05',
+      value: s.heroVideoOpacity ?? 0.42,
+      help: '0 = hidden, 1 = fully visible. Lower values keep text easy to read.'
+    },
+    { name: 'headingColor', label: 'Headline colour', type: 'color', value: s.headingColor || '#fafafa' },
+    { name: 'accentColor', label: 'Animated word colour', type: 'color', value: s.accentColor || '#e50914' },
+    { name: 'accentColor2', label: 'Animated word colour (end)', type: 'color', value: s.accentColor2 || '#f5c451' },
+    { name: 'textColor', label: 'Intro text colour', type: 'color', value: s.textColor || '#a1a1aa' }
+  ];
+
+  const host = document.getElementById('landingForm')!;
+  const form = document.createElement('form');
+  form.innerHTML =
+    fieldsHtml(fields) +
+    `<div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-sm" type="submit">${icon('check')}<span>Save landing page</span></button>
+      <a class="btn btn-sm btn-ghost" href="/" target="_blank" rel="noopener">${icon('external-link')}<span>Preview</span></a>
+    </div>`;
+  host.appendChild(form);
+  iconify(form);
+  wireFields(form, fields);
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const value = readFields(form, fields);
+    const r = await apiRequest('/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ scope: 'platform', key: 'landing', value })
+    });
+    if (r.success) toast('Landing page saved', 'success');
+    else toast(r.message || 'Failed', 'error');
   });
 }
 

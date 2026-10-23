@@ -285,6 +285,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .send(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls}</urlset>`);
   }
 
+  // GET /api/storefront/landing -> public hero/landing appearance config set by
+  // a platform admin (text colours, hero video). Safe to expose; no secrets.
+  if (ref === 'landing') {
+    if (req.method !== 'GET') return res.status(405).json({ success: false, message: 'Method not allowed' });
+    const LANDING_DEFAULTS = {
+      heroVideo: '/media/hero.mp4',
+      heroVideoOpacity: 0.42,
+      headingColor: '#fafafa',
+      accentColor: '#e50914',
+      accentColor2: '#f5c451',
+      textColor: '#a1a1aa'
+    };
+    const { data } = await sb
+      .from('settings')
+      .select('value')
+      .eq('scope', 'platform')
+      .eq('key', 'landing')
+      .is('company_id', null)
+      .maybeSingle();
+    res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+    return res.status(200).json({ success: true, data: { ...LANDING_DEFAULTS, ...(data?.value || {}) } });
+  }
+
   if (!ref) return res.status(400).json({ success: false, message: 'Missing store reference' });
 
   // GET /api/storefront/featured -> public showcase of live storefronts for the
@@ -323,8 +346,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         };
       })
     );
+
+    // Real network stats for the hero counters.
+    let storefrontCount = live.length;
+    let productCount = 0;
+    try {
+      const { count: sc } = await sb
+        .from('stores')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_active', true);
+      storefrontCount = sc || storefrontCount;
+      const { count: pc } = await sb
+        .from('products')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_active', true);
+      productCount = pc || 0;
+    } catch {
+      /* counts are best-effort */
+    }
+
+    let onTimeRate = 0;
+    try {
+      const { data: orders } = await sb
+        .from('orders')
+        .select('created_at, delivered_at, delivery_status')
+        .eq('delivery_status', 'delivered')
+        .not('delivered_at', 'is', null)
+        .limit(2000);
+      const rows = (orders || []).filter((o: any) => o.delivered_at && o.created_at);
+      if (rows.length) {
+        // "On time" = delivered within 48h of being placed (default SLA).
+        const SLA_MS = 48 * 60 * 60 * 1000;
+        const onTime = rows.filter(
+          (o: any) => new Date(o.delivered_at).getTime() - new Date(o.created_at).getTime() <= SLA_MS
+        ).length;
+        onTimeRate = Math.round((onTime / rows.length) * 100);
+      }
+    } catch {
+      /* deliveries data may not exist yet */
+    }
+
     res.setHeader('Cache-Control', 'public, max-age=120, stale-while-revalidate=600');
-    return res.status(200).json({ success: true, data: results.filter(Boolean) });
+    return res.status(200).json({
+      success: true,
+      data: results.filter(Boolean),
+      stats: { storefronts: storefrontCount, products: productCount, onTimeRate, platform: 1 }
+    });
   }
 
   // POST /api/storefront/:slug/event — best-effort, anonymous analytics counter.
