@@ -1,6 +1,7 @@
 import { API_BASE_URL } from './config';
 import { getReferralCode, clearReferralCode } from './referralStore';
 import { wireAddressFields } from './address';
+import { iconify } from './icons';
 
 /* Elements ----------------------------------------------------------------- */
 const form = document.getElementById('signupForm') as HTMLFormElement;
@@ -197,6 +198,7 @@ function renderDetails(): void {
   detailsSub.textContent = meta.sub;
   detailsBody.innerHTML = `<div class="field-grid">${meta.fields.map(fieldHtml).join('')}</div>`;
   wireAddressFields(detailsBody);
+  iconify(detailsBody);
 }
 
 /* Collect form data -------------------------------------------------------- */
@@ -406,6 +408,8 @@ form.addEventListener('submit', async (e) => {
     errorDiv.textContent = "You're in! Check your email to verify your account. Taking you to sign in…";
     errorDiv.style.display = 'block';
     steps.forEach((s) => ((s as HTMLElement).hidden = true));
+    const actions = form.querySelector<HTMLElement>('.step-actions');
+    if (actions) actions.hidden = true;
     setTimeout(() => { window.location.href = `${import.meta.env.BASE_URL}login.html`; }, 2600);
   } catch (err: any) {
     restore();
@@ -415,4 +419,13 @@ form.addEventListener('submit', async (e) => {
 
 /* Init --------------------------------------------------------------------- */
 renderDetails();
+iconify(document);
 go(0);
+
+/* Enter advances instead of submitting a half-filled form. */
+form.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || current === LAST) return;
+  if ((e.target as HTMLElement).tagName === 'TEXTAREA') return;
+  e.preventDefault();
+  nextBtn.click();
+});
