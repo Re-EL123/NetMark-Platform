@@ -308,9 +308,12 @@ export default authed(async (req, res, ctx) => {
     if (!ctx.isPlatform && ctx.role === 'owner' && driver.company_id !== ctx.companyId) {
       return fail(res, 'That driver belongs to another company', 403);
     }
+    // Owner dispatch must create the proof-of-delivery code too, otherwise the
+    // driver would have nothing to request from the customer at the door.
+    const otp = String(Math.floor(1000 + Math.random() * 9000));
     const { data: after } = await sb
       .from('orders')
-      .update({ assigned_driver_id: driverId, delivery_status: 'assigned' })
+      .update({ assigned_driver_id: driverId, delivery_status: 'assigned', delivery_otp: otp })
       .eq('id', id)
       .select('*')
       .single();
@@ -319,7 +322,13 @@ export default authed(async (req, res, ctx) => {
       await notify({ userId: driver.user_id, type: 'delivery', title: 'New delivery assigned', body: 'You have a new delivery assigned.', data: { orderId: id } });
     }
     if (order.customer_id) {
-      await notify({ userId: order.customer_id, type: 'delivery', title: 'Driver assigned', body: `A driver is picking up order ${order.order_number}.`, data: { orderId: id } });
+      await notify({
+        userId: order.customer_id,
+        type: 'delivery',
+        title: 'Driver assigned',
+        body: `A driver is picking up order ${order.order_number}. Your delivery code is ${otp}.`,
+        data: { orderId: id }
+      });
     }
     return ok(res, { data: rowOut(after) });
   }
